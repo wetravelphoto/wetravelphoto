@@ -1,0 +1,87 @@
+/* Galleries index */
+
+.gallery-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.gallery-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.gallery-card { padding: 0; overflow: hidden; }
+
+.gallery-card-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  background: #e8e5e0;
+  overflow: hidden;
+}
+
+.gallery-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gallery-card-media:hover img { transform: scale(1.03); }
+
+.gallery-card-body { padding: 0.85rem; }
+
+.gallery-card-title {
+  display: block;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.95rem;
+  color: var(--admin-ink);
+  margin-bottom: 0.5rem;
+}
+
+.gallery-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+/* Three equal columns so the row fills the card at any width */
+.gallery-card-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+  border-top: 0.5px solid var(--admin-line);
+  padding-top: 0.7rem;
+}
+
+.gallery-card-actions > * {
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/* A non-public gallery keeps the View slot, greyed out */
+.gallery-card-actions [data-disabled='true'] {
+  opacity: 0.35;
+  pointer-events: none;
+}

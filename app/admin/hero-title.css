@@ -1,0 +1,12 @@
+/* Hero slot rename field */
+
+.hero-slot-wrap { display: block; }
+.hero-slot-wrap[data-dragging='true'] { opacity: 0.4; }
+.hero-slot-wrap[data-over='true'] { outline: 2px solid var(--admin-accent); outline-offset: -1px; }
+
+.hero-slot-rename {
+  margin-top: 0;
+  border-top: none;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.5rem;
+}

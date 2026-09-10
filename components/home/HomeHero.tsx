@@ -6,23 +6,28 @@ import Link from 'next/link'
 export type HeroItem = {
   slug: string
   title: string
-  category: string | null
+  subtitle: string | null
   imageUrl: string | null
 }
 
 /**
  * Full-screen hero. The image cross-fades as you hover the titles along the
- * bottom. No autoplay — it stays on whichever story you land on.
+ * bottom; it holds on whichever story you land on.
  */
-export default function HomeHero({ items }: { items: HeroItem[] }) {
+export default function HomeHero({
+  items,
+  styleVars,
+}: {
+  items: HeroItem[]
+  styleVars?: React.CSSProperties
+}) {
   const [active, setActive] = useState(0)
 
   if (items.length === 0) return null
   const current = items[active]
 
   return (
-    <section className="hero">
-      {/* Every layer stays mounted so switching is a fade, not a reload */}
+    <section className="hero" style={styleVars}>
       {items.map((item, i) => (
         <div key={item.slug} className="hero-layer" data-active={i === active} aria-hidden={i !== active}>
           {item.imageUrl && (
@@ -35,10 +40,10 @@ export default function HomeHero({ items }: { items: HeroItem[] }) {
       <div className="hero-scrim" />
 
       <div className="hero-center">
-        {current.category && <p className="hero-kicker">{current.category}</p>}
         <h1 className="hero-title">
           <Link href={`/journal/${current.slug}`}>{current.title}</Link>
         </h1>
+        {current.subtitle && <p className="hero-sub">{current.subtitle}</p>}
         <Link href={`/journal/${current.slug}`} className="hero-cta">
           Read the story
         </Link>

@@ -40,17 +40,24 @@ export async function updateHomepage(formData: FormData) {
   const count = parseInt((formData.get('journal_count') as string) ?? '3', 10)
 
   // Hero display names, keyed by story id — the story's own title is untouched
-  let heroTitles: Record<string, string> = {}
-  try {
-    heroTitles = JSON.parse((formData.get('hero_titles') as string) || '{}')
-  } catch {
-    heroTitles = {}
+  const parseJson = <T,>(key: string, fallback: T): T => {
+    try {
+      return JSON.parse((formData.get(key) as string) || 'null') ?? fallback
+    } catch {
+      return fallback
+    }
   }
+
+  const heroTitles = parseJson<Record<string, string>>('hero_titles', {})
+  const heroSubtitles = parseJson<Record<string, string>>('hero_subtitles', {})
+  const typeStyles = parseJson<Record<string, unknown>>('type_styles', {})
 
   await patch(
     {
       featured_post_ids: featuredIds,
       hero_titles: heroTitles,
+      hero_subtitles: heroSubtitles,
+      type_styles: typeStyles,
       hero_kicker: text(formData, 'hero_kicker'),
 
       show_intro: on(formData, 'show_intro'),
@@ -69,6 +76,7 @@ export async function updateHomepage(formData: FormData) {
 
       show_contact_section: on(formData, 'show_contact_section'),
       contact_heading: text(formData, 'contact_heading'),
+      contact_image_path: text(formData, 'contact_image_path'),
     },
     ['/', '/admin/pages/home']
   )

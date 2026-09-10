@@ -11,6 +11,7 @@ export type SiteSettings = {
 
   featured_post_ids: string[]
   hero_titles: Record<string, string>
+  hero_subtitles: Record<string, string>
   hero_kicker: string | null
 
   show_intro: boolean
@@ -29,6 +30,8 @@ export type SiteSettings = {
 
   show_contact_section: boolean
   contact_heading: string | null
+  contact_image_path: string | null
+  type_styles: Record<string, { font?: string; color?: string; scale?: number }>
 
   show_newsletter: boolean
   newsletter_heading: string | null
@@ -45,6 +48,7 @@ const FALLBACK: SiteSettings = {
   email_public: null,
   featured_post_ids: [],
   hero_titles: {},
+  hero_subtitles: {},
   hero_kicker: null,
   show_intro: true,
   intro_kicker: null,
@@ -59,6 +63,8 @@ const FALLBACK: SiteSettings = {
   journal_count: 3,
   show_contact_section: true,
   contact_heading: null,
+  contact_image_path: null,
+  type_styles: {},
   show_newsletter: true,
   newsletter_heading: null,
   newsletter_body: null,

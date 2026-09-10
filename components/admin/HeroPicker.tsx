@@ -17,19 +17,24 @@ export default function HeroPicker({
   posts,
   initialIds,
   initialTitles,
+  initialSubtitles,
   publicUrl,
   onChange,
   onTitlesChange,
+  onSubtitlesChange,
 }: {
   posts: PostOption[]
   initialIds: string[]
   initialTitles: Record<string, string>
+  initialSubtitles: Record<string, string>
   publicUrl: string
   onChange?: (ids: string[]) => void
   onTitlesChange?: (titles: Record<string, string>) => void
+  onSubtitlesChange?: (subtitles: Record<string, string>) => void
 }) {
   const [selected, setSelected] = useState<string[]>(initialIds.filter((id) => posts.some((p) => p.id === id)))
   const [titles, setTitles] = useState<Record<string, string>>(initialTitles ?? {})
+  const [subtitles, setSubtitles] = useState<Record<string, string>>(initialSubtitles ?? {})
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -47,6 +52,14 @@ export default function HeroPicker({
     else delete next[id]
     setTitles(next)
     onTitlesChange?.(next)
+  }
+
+  function setSubtitle(id: string, value: string) {
+    const next = { ...subtitles }
+    if (value.trim()) next[id] = value
+    else delete next[id]
+    setSubtitles(next)
+    onSubtitlesChange?.(next)
   }
 
   const byId = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts])
@@ -69,6 +82,7 @@ export default function HeroPicker({
   function remove(id: string) {
     update(selected.filter((s) => s !== id))
     setTitle(id, '')
+    setSubtitle(id, '')
   }
 
   function drop(target: number) {
@@ -168,6 +182,15 @@ export default function HeroPicker({
                 className="admin-input hero-slot-rename"
                 autoComplete="off"
               />
+
+              <input
+                type="text"
+                value={subtitles[post.id] ?? ''}
+                onChange={(e) => setSubtitle(post.id, e.target.value)}
+                placeholder="Subtitle (optional)"
+                className="admin-input hero-slot-rename"
+                autoComplete="off"
+              />
             </div>
           )
         })}
@@ -239,6 +262,7 @@ export default function HeroPicker({
 
       <input type="hidden" name="featured_post_ids" value={selected.join(',')} />
       <input type="hidden" name="hero_titles" value={JSON.stringify(titles)} />
+      <input type="hidden" name="hero_subtitles" value={JSON.stringify(subtitles)} />
     </div>
   )
 }

@@ -1,0 +1,317 @@
+/* ---------- Section typography, driven by CSS variables ---------- */
+
+.sec-styled {
+  --sec-font: var(--font-display), sans-serif;
+  --sec-weight: 400;
+  --sec-case: uppercase;
+  --sec-track: 0.02em;
+  --sec-color: #14100e;
+  --sec-scale: 1;
+}
+
+.sec-heading {
+  font-family: var(--sec-font);
+  font-weight: var(--sec-weight);
+  text-transform: var(--sec-case);
+  letter-spacing: var(--sec-track);
+  color: var(--sec-color);
+}
+
+/* ---------- HERO ---------- */
+
+.hero-title {
+  font-family: var(--sec-font, var(--font-display));
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.01em);
+  color: var(--sec-color, #faf9f6);
+  font-size: calc(clamp(2rem, 6vw, 4.2rem) * var(--sec-scale, 1));
+  line-height: 1;
+  margin: 0;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.4);
+}
+
+.hero-sub {
+  font-family: var(--font-body), sans-serif;
+  font-size: clamp(0.85rem, 1.3vw, 1.05rem);
+  line-height: 1.7;
+  margin: 1rem auto 0;
+  max-width: 46ch;
+  color: var(--sec-color, #faf9f6);
+  opacity: 0.82;
+}
+
+.hero-cta {
+  display: inline-block;
+  margin-top: 1.6rem;
+  font-family: var(--sec-font, var(--font-display));
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  padding: 0.75em 1.9em;
+  border: 1px solid currentColor;
+  color: var(--sec-color, #faf9f6);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.hero-cta:hover { background: var(--sec-color, #faf9f6); color: #14100e; }
+
+/* ---------- INTRO ---------- */
+
+.intro-kicker {
+  font-family: var(--sec-font, var(--font-display));
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.68rem;
+  color: var(--ember);
+  margin: 0 0 1rem;
+}
+
+.intro-heading {
+  font-family: var(--sec-font, var(--font-display));
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.01em);
+  color: var(--sec-color, #14100e);
+  font-size: calc(clamp(1.5rem, 3.2vw, 2.4rem) * var(--sec-scale, 1));
+  line-height: 1.1;
+  margin: 0 0 1.25rem;
+}
+
+/* ---------- CAROUSEL ---------- */
+
+.carousel-section {
+  background: #0f0d0c;
+  color: var(--surface);
+  padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(3rem, 7vw, 5rem);
+}
+
+.carousel-head {
+  max-width: 1240px;
+  margin: 0 auto clamp(1.5rem, 3vw, 2.5rem);
+  padding: 0 clamp(1.25rem, 4vw, 3rem);
+}
+
+.carousel-head h2 {
+  font-family: var(--sec-font, var(--font-display));
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.02em);
+  color: var(--sec-color, #faf9f6);
+  font-size: calc(clamp(1.3rem, 3vw, 2rem) * var(--sec-scale, 1));
+  margin: 0;
+}
+
+/* Sizing and motion are set inline by DragCarousel so the layout can't drift
+   out of step with this stylesheet. Only appearance is styled here. */
+
+/* The mat holds the print and the vertical album name. A single padding
+   value keeps the border identical on all four sides. */
+/* The mat frames each gallery's own cover composition. One padding value
+   keeps the border identical on all four sides. */
+.carousel-mat {
+  --mat-pad: clamp(1.4rem, 3vw, 2.8rem);
+
+  position: relative;
+  background-color: #e8e5df;
+  background-image:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 55%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.28'/%3E%3C/svg%3E");
+  background-blend-mode: normal, multiply;
+  padding: var(--mat-pad);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+}
+
+.carousel-cover {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: #14100e;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+}
+
+.carousel-cover img { transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1); }
+.carousel-card:hover .carousel-cover img { transform: scale(1.03); }
+
+.carousel-view {
+  display: block;
+  width: fit-content;
+  margin: 1.25rem auto 0;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  color: rgba(250, 249, 246, 0.85);
+  border: 1px solid rgba(250, 249, 246, 0.45);
+  padding: 0.7em 1.9em;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+.carousel-card:hover .carousel-view {
+  background: #faf9f6;
+  border-color: #faf9f6;
+  color: #14100e;
+}
+
+/* ---------- JOURNAL ---------- */
+
+.journal-section-head {
+  margin-bottom: clamp(2rem, 4.5vw, 3.5rem);
+}
+
+.section-title {
+  font-family: var(--sec-font, var(--font-display));
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.02em);
+  color: var(--sec-color, #14100e);
+  font-size: calc(clamp(1.3rem, 3vw, 2rem) * var(--sec-scale, 1));
+  margin: 0;
+}
+
+.trio-title {
+  font-family: var(--sec-font, var(--font-display));
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.02em);
+  font-size: clamp(1rem, 1.7vw, 1.3rem);
+  line-height: 1.2;
+  margin: 1.1rem 0 0;
+  color: var(--ink);
+}
+
+/* ---------- CONTACT ---------- */
+
+.contact-editorial {
+  padding: clamp(4rem, 11vw, 9rem) clamp(1.25rem, 4vw, 3rem);
+  background: var(--surface);
+  border-top: 0.5px solid var(--line);
+}
+
+.contact-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(2.5rem, 7vw, 7rem);
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .contact-inner { grid-template-columns: 1fr; }
+}
+
+.contact-eyebrow {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  font-size: 0.66rem;
+  color: var(--ember);
+  margin: 0 0 1.25rem;
+}
+
+.contact-heading {
+  font-family: var(--sec-font, var(--font-display));
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.01em);
+  color: var(--sec-color, #14100e);
+  /* Deliberately oversized — the type is the design here */
+  font-size: calc(clamp(2.2rem, 7vw, 4.4rem) * var(--sec-scale, 1));
+  line-height: 0.98;
+  margin: 0 0 1.5rem;
+}
+
+.contact-copy {
+  color: var(--ink-soft);
+  line-height: 1.9;
+  max-width: 34ch;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.contact-direct {
+  margin-top: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.contact-direct-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  border-top: 0.5px solid var(--line);
+  padding-top: 0.75rem;
+}
+
+.contact-direct-label {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.6rem;
+  color: var(--ink-mute);
+  width: 5.5em;
+  flex-shrink: 0;
+}
+
+.contact-direct-row a {
+  font-size: 0.95rem;
+  color: var(--ink);
+  border-bottom: 0.5px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.contact-direct-row a:hover { border-bottom-color: var(--ink); }
+
+/* Hairline fields — no boxes */
+.contact-form-line { padding-top: 0.4rem; }
+
+.contact-form-line input,
+.contact-form-line textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 0.5px solid var(--line);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 1.05rem 0 0.65rem;
+  margin-bottom: 0.4rem;
+  transition: border-color 0.25s ease;
+}
+
+.contact-form-line textarea { resize: vertical; line-height: 1.7; }
+
+.contact-form-line input:focus,
+.contact-form-line textarea:focus {
+  outline: none;
+  border-bottom-color: var(--ink);
+}
+
+.contact-form-line input::placeholder,
+.contact-form-line textarea::placeholder {
+  color: var(--ink-mute);
+  font-size: 0.92rem;
+}
+
+.contact-form-line button {
+  margin-top: 1.5rem;
+  padding: 0.95rem 2.6rem;
+  background: var(--ink);
+  color: var(--surface);
+  border: 1px solid var(--ink);
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.contact-form-line button:hover { background: transparent; color: var(--ink); }
+
+.contact-sent {
+  border-top: 0.5px solid var(--line);
+  padding: 2.5rem 0;
+}

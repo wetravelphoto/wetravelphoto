@@ -4,11 +4,14 @@ import { useState } from 'react'
 import HeroPicker, { type PostOption } from '@/components/admin/HeroPicker'
 import ImagePickerModal from '@/components/admin/ImagePickerModal'
 import HomePreview, { type PreviewGallery } from '@/components/admin/HomePreview'
+import TypographyControls from '@/components/admin/TypographyControls'
+import { styleFor, type TypeStyles } from '@/lib/type-styles'
 import type { BlockImage } from '@/lib/blocks'
 
 type Settings = {
   featured_post_ids: string[]
   hero_titles: Record<string, string>
+  hero_subtitles: Record<string, string>
   hero_kicker: string | null
   show_intro: boolean
   intro_kicker: string | null
@@ -23,6 +26,7 @@ type Settings = {
   journal_count: number
   show_contact_section: boolean
   contact_heading: string | null
+  type_styles: TypeStyles
 }
 
 export default function HomepageEditor({
@@ -40,6 +44,9 @@ export default function HomepageEditor({
 }) {
   const [heroIds, setHeroIds] = useState<string[]>(settings.featured_post_ids ?? [])
   const [heroTitles, setHeroTitles] = useState<Record<string, string>>(settings.hero_titles ?? {})
+  const [heroSubtitles, setHeroSubtitles] = useState<Record<string, string>>(settings.hero_subtitles ?? {})
+  const [typeStyles, setTypeStyles] = useState<TypeStyles>(settings.type_styles ?? {})
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [showIntro, setShowIntro] = useState(settings.show_intro !== false)
   const [showGalleries, setShowGalleries] = useState(settings.show_galleries !== false)
   const [showJournal, setShowJournal] = useState(settings.show_journal !== false)
@@ -48,7 +55,6 @@ export default function HomepageEditor({
   const [introSide, setIntroSide] = useState(settings.intro_image_side || 'left')
   const [introHeading, setIntroHeading] = useState(settings.intro_heading ?? '')
   const [journalCount, setJournalCount] = useState(settings.journal_count ?? 3)
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [openSection, setOpenSection] = useState<string | null>('hero')
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [heroKicker, setHeroKicker] = useState(settings.hero_kicker ?? '')
@@ -64,6 +70,10 @@ export default function HomepageEditor({
 
   const fallbackPosts = posts.slice(0, 3)
   const previewHero = heroPosts.length > 0 ? heroPosts : fallbackPosts
+
+  function setStyle(section: string, next: { font: string; color: string; scale: number }) {
+    setTypeStyles((prev) => ({ ...prev, [section]: next }))
+  }
 
   function toggle(id: string) {
     setOpenSection((cur) => (cur === id ? null : id))
@@ -85,10 +95,21 @@ export default function HomepageEditor({
             posts={posts}
             initialIds={settings.featured_post_ids ?? []}
             initialTitles={settings.hero_titles ?? {}}
+            initialSubtitles={settings.hero_subtitles ?? {}}
             publicUrl={publicUrl}
             onChange={setHeroIds}
             onTitlesChange={setHeroTitles}
+            onSubtitlesChange={setHeroSubtitles}
           />
+
+          <div className="type-block">
+            <p className="type-block-label">Typography</p>
+            <TypographyControls
+              value={styleFor(typeStyles, 'hero')}
+              onChange={(next) => setStyle('hero', next)}
+              colorLabel="Title colour"
+            />
+          </div>
 
           <label className="admin-field" style={{ marginTop: '1rem' }}>
             Kicker
@@ -200,6 +221,14 @@ export default function HomepageEditor({
               style={{ resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}
             />
           </label>
+
+          <div className="type-block">
+            <p className="type-block-label">Typography</p>
+            <p className="admin-meta" style={{ margin: '0 0 0.6rem' }}>
+              Also styles the galleries heading below.
+            </p>
+            <TypographyControls value={styleFor(typeStyles, 'intro')} onChange={(next) => setStyle('intro', next)} />
+          </div>
         </Section>
 
         {/* ---------- GALLERIES ---------- */}
@@ -269,6 +298,11 @@ export default function HomepageEditor({
               <option value={9}>9</option>
             </select>
           </label>
+
+          <div className="type-block">
+            <p className="type-block-label">Typography</p>
+            <TypographyControls value={styleFor(typeStyles, 'journal')} onChange={(next) => setStyle('journal', next)} />
+          </div>
         </Section>
 
         {/* ---------- CONTACT ---------- */}
@@ -294,6 +328,14 @@ export default function HomepageEditor({
               className="admin-input"
             />
           </label>
+          <div className="type-block">
+            <p className="type-block-label">Typography</p>
+            <TypographyControls
+              value={styleFor(typeStyles, 'contact')}
+              onChange={(next) => setStyle('contact', next)}
+            />
+          </div>
+
           <p className="admin-meta" style={{ margin: 0 }}>
             Intro copy and public email live on the contact page.
           </p>
@@ -329,7 +371,11 @@ export default function HomepageEditor({
             <HomePreview
               device={device}
               publicUrl={publicUrl}
-              heroPosts={previewHero.map((post) => ({ ...post, title: heroTitles[post.id] || post.title }))}
+              heroPosts={previewHero.map((post) => ({
+                ...post,
+                title: heroTitles[post.id] || post.title,
+                category: heroSubtitles[post.id] || null,
+              }))}
               heroKicker={heroKicker}
               showIntro={showIntro}
               introKicker={introKicker}
@@ -364,6 +410,8 @@ export default function HomepageEditor({
           }}
         />
       )}
+
+      <input type="hidden" name="type_styles" value={JSON.stringify(typeStyles)} />
     </div>
   )
 }

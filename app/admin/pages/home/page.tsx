@@ -75,6 +75,8 @@ export default async function HomePageEditor() {
           settings={{
             featured_post_ids: settings.featured_post_ids ?? [],
             hero_titles: settings.hero_titles ?? {},
+            hero_subtitles: settings.hero_subtitles ?? {},
+            type_styles: settings.type_styles ?? {},
             hero_kicker: settings.hero_kicker,
             show_intro: settings.show_intro,
             intro_kicker: settings.intro_kicker,

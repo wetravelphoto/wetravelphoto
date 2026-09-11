@@ -21,11 +21,9 @@ export default function ContactForm({ variant = 'boxed' }: { variant?: 'boxed' |
     }
   }
 
-  const line = variant === 'line'
-
   if (status === 'sent') {
     return (
-      <div className={line ? 'contact-sent' : ''} style={line ? undefined : boxedSent}>
+      <div className="contact-sent">
         <p className="display" style={{ fontSize: '1.3rem', margin: '0 0 0.5rem' }}>
           Message sent
         </p>
@@ -36,42 +34,15 @@ export default function ContactForm({ variant = 'boxed' }: { variant?: 'boxed' |
     )
   }
 
-  const boxedField: React.CSSProperties = {
-    width: '100%',
-    padding: '0.7rem',
-    border: '0.5px solid var(--line)',
-    background: 'transparent',
-    fontFamily: 'inherit',
-    fontSize: '0.92rem',
-    color: 'var(--ink)',
-    marginBottom: '0.75rem',
-  }
-
   return (
-    <form action={handleSubmit} className={line ? 'contact-form-line' : ''}>
-      <input
-        type="text"
-        name="name"
-        placeholder="Your name"
-        required
-        style={line ? undefined : boxedField}
-        autoComplete="name"
-      />
-      <input
-        type="email"
-        name="email"
-        placeholder="Your email"
-        required
-        style={line ? undefined : boxedField}
-        autoComplete="email"
-      />
-      <textarea
-        name="message"
-        placeholder="Tell me about it"
-        required
-        rows={line ? 3 : 6}
-        style={line ? undefined : { ...boxedField, resize: 'vertical' }}
-      />
+    <form action={handleSubmit} className="contact-fields">
+      <div className="contact-field-row">
+        <input type="text" name="name" placeholder="Name" required autoComplete="name" />
+        <input type="email" name="email" placeholder="Email" required autoComplete="email" />
+      </div>
+
+      <input type="text" name="subject" placeholder="Subject" autoComplete="off" />
+      <textarea name="message" placeholder="Message" required rows={5} />
 
       {/* Hidden from people, tempting to bots */}
       <input
@@ -83,34 +54,18 @@ export default function ContactForm({ variant = 'boxed' }: { variant?: 'boxed' |
         aria-hidden="true"
       />
 
-      {error && <p style={{ color: 'var(--ember)', fontSize: '0.82rem', margin: '0.75rem 0 0' }}>{error}</p>}
+      {error && <p className="contact-error">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={status === 'sending'}
-        className={line ? undefined : 'display'}
-        style={
-          line
-            ? undefined
-            : {
-                padding: '0.75rem 1.75rem',
-                background: 'var(--ink)',
-                color: 'var(--surface)',
-                border: 'none',
-                fontSize: '0.8rem',
-                letterSpacing: '0.1em',
-                cursor: 'pointer',
-              }
-        }
-      >
-        {status === 'sending' ? 'Sending…' : 'Send message'}
-      </button>
+      <div className="contact-submit-row">
+        <button type="submit" disabled={status === 'sending'}>
+          <span>{status === 'sending' ? 'Sending' : 'Send inquiry'}</span>
+          <svg width="20" height="10" viewBox="0 0 20 10" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden="true">
+            <path d="M0 5h18M14 1l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        <span className="contact-note">Response within 48 hours.</span>
+      </div>
     </form>
   )
-}
-
-const boxedSent: React.CSSProperties = {
-  border: '0.5px solid var(--line)',
-  padding: '2rem',
-  textAlign: 'center',
 }

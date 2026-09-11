@@ -2,15 +2,20 @@ import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
 import { formatTripDate } from '@/lib/dates'
 import { getSiteSettings } from '@/lib/site'
+import { getInstagramFeed } from '@/lib/instagram'
+import InstagramFeed from '@/components/home/InstagramFeed'
 import { styleVars, type TypeStyles } from '@/lib/type-styles'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
 import DragCarousel, { type CarouselItem } from '@/components/home/DragCarousel'
 import ContactForm from '@/components/ContactForm'
+import Icon from '@/components/SocialIcons'
 import Link from 'next/link'
 import './home.css'
 import './home-polish.css'
+import './instagram.css'
+import './contact-footer.css'
 
 export const revalidate = 60
 
@@ -131,6 +136,8 @@ export default async function HomePage() {
 
   const introParagraphs = (settings.intro_body ?? '').split('\n\n').filter(Boolean)
 
+  const instagramPosts = settings.show_instagram ? await getInstagramFeed(9) : []
+
   return (
     <main>
       <SiteHeader overHero={heroItems.length > 0} />
@@ -226,33 +233,65 @@ export default async function HomePage() {
         </section>
       )}
 
+      {settings.show_instagram && (
+        <InstagramFeed
+          posts={instagramPosts}
+          heading={settings.instagram_heading}
+          handle={settings.instagram_handle}
+        />
+      )}
+
       {settings.show_contact_section !== false && (
         <section className="contact-editorial" style={styleVars(styles, 'contact')}>
           <div className="contact-inner">
-            <div>
-              <p className="contact-eyebrow">Say hello</p>
-              <h2 className="contact-heading">{settings.contact_heading || 'Get in touch'}</h2>
-              {settings.contact_intro && <p className="contact-copy">{settings.contact_intro}</p>}
+            <p className="contact-eyebrow">Let&apos;s keep in touch</p>
+            <h2 className="contact-heading">{settings.contact_heading || 'Get in touch'}</h2>
+            {settings.contact_intro && <p className="contact-copy">{settings.contact_intro}</p>}
 
-              <div className="contact-direct">
-                {settings.email_public && (
-                  <div className="contact-direct-row">
-                    <span className="contact-direct-label">Email</span>
-                    <a href={`mailto:${settings.email_public}`}>{settings.email_public}</a>
-                  </div>
-                )}
-                {settings.instagram_url && (
-                  <div className="contact-direct-row">
-                    <span className="contact-direct-label">Instagram</span>
-                    <a href={settings.instagram_url} target="_blank" rel="noopener">
-                      Follow along
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
+            <ContactForm />
+          </div>
 
-            <ContactForm variant="line" />
+          <div className="contact-direct">
+            {settings.instagram_url && (
+              <a href={settings.instagram_url} target="_blank" rel="noopener">
+                <Icon name="instagram" />
+                {settings.instagram_handle ? `@${settings.instagram_handle.replace('@', '')}` : 'Instagram'}
+              </a>
+            )}
+
+            {settings.facebook_url && (
+              <a href={settings.facebook_url} target="_blank" rel="noopener">
+                <Icon name="facebook" />
+                Facebook
+              </a>
+            )}
+
+            {settings.youtube_url && (
+              <a href={settings.youtube_url} target="_blank" rel="noopener">
+                <Icon name="youtube" />
+                YouTube
+              </a>
+            )}
+
+            {settings.email_public && (
+              <>
+                <span className="contact-divider" />
+                <a href={`mailto:${settings.email_public}`}>
+                  <Icon name="mail" />
+                  {settings.email_public}
+                </a>
+              </>
+            )}
+
+            {settings.tagline && (
+              <>
+                <span className="contact-divider" />
+                <span className="contact-tagline">
+                  <Icon name="pin" />
+                  {settings.tagline}
+                </span>
+              </>
+            )}
           </div>
         </section>
       )}

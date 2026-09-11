@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSiteSettings } from '@/lib/site'
 import NewsletterForm from '@/components/NewsletterForm'
+import Icon from '@/components/SocialIcons'
 
 export default async function SiteFooter({ showNewsletter = false }: { showNewsletter?: boolean }) {
   const settings = await getSiteSettings()
@@ -24,34 +25,34 @@ export default async function SiteFooter({ showNewsletter = false }: { showNewsl
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <div>
-            <p className="footer-brand">WeTravelPhoto</p>
-            <p style={{ fontSize: '0.85rem', lineHeight: 1.7, margin: 0, maxWidth: '30ch', opacity: 0.75 }}>
-              {settings.tagline || 'Travel photography and field notes.'}
-            </p>
-          </div>
+          <p className="footer-brand">WeTravelPhoto</p>
 
-          <div className="footer-col">
-            <h3>Explore</h3>
-            <Link href="/">Home</Link>
-            <Link href="/trips">Trips</Link>
+          <nav className="footer-nav">
+            <Link href="/trips">Galleries</Link>
             <Link href="/journal">Journal</Link>
-          </div>
-
-          <div className="footer-col">
-            <h3>Get in touch</h3>
+            <Link href="/about">About</Link>
             <Link href="/contact">Contact</Link>
-            {settings.email_public && <a href={`mailto:${settings.email_public}`}>{settings.email_public}</a>}
+          </nav>
+
+          <div className="footer-social">
             {settings.instagram_url && (
-              <a href={settings.instagram_url} target="_blank" rel="noopener">
-                Instagram
+              <a href={settings.instagram_url} target="_blank" rel="noopener" aria-label="Instagram">
+                <Icon name="instagram" size={16} />
+              </a>
+            )}
+            {settings.facebook_url && (
+              <a href={settings.facebook_url} target="_blank" rel="noopener" aria-label="Facebook">
+                <Icon name="facebook" size={16} />
+              </a>
+            )}
+            {settings.youtube_url && (
+              <a href={settings.youtube_url} target="_blank" rel="noopener" aria-label="YouTube">
+                <Icon name="youtube" size={16} />
               </a>
             )}
           </div>
-        </div>
 
-        <div className="footer-bottom">
-          <span>© {new Date().getFullYear()} WeTravelPhoto. All photographs by Gonzalo Mata.</span>
+          <span className="footer-legal">© {new Date().getFullYear()} Gonzalo Mata</span>
         </div>
       </footer>
     </>

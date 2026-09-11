@@ -46,7 +46,20 @@ export default async function MessagesPage() {
                 </span>
               </div>
 
-              <p style={{ margin: '0.85rem 0', fontSize: '0.9rem', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+              {msg.subject && (
+                <p style={{ margin: '0.85rem 0 0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                  {msg.subject}
+                </p>
+              )}
+
+              <p
+                style={{
+                  margin: msg.subject ? '0 0 0.85rem' : '0.85rem 0',
+                  fontSize: '0.9rem',
+                  lineHeight: 1.65,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
                 {msg.message}
               </p>
 

@@ -1,0 +1,95 @@
+/* Instagram feed */
+
+/* A shade deeper than the page so the grid reads as its own block, without
+   the weight of a full dark band. */
+.ig-section {
+  padding: clamp(3rem, 8vw, 6rem) clamp(1.25rem, 4vw, 3rem);
+  background: #f1efe9;
+}
+
+.ig-head {
+  max-width: 1240px;
+  margin: 0 auto clamp(1.5rem, 3vw, 2.5rem);
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.ig-heading {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-weight: 400;
+  font-size: clamp(0.85rem, 1.6vw, 1.05rem);
+  color: var(--ink);
+  margin: 0;
+}
+
+.ig-handle {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  border-bottom: 0.5px solid transparent;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.ig-handle:hover { color: var(--ink); border-bottom-color: var(--ink); }
+
+/* Five columns, three rows, nine posts. Two tiles span 2x2 — one anchoring
+   the top-left, one the bottom-right — and the seven singles fill the rest,
+   using all 15 cells so the block is a clean rectangle.
+
+   Row 1:  [ A A ] [ s ] [ s ] [ s ]
+   Row 2:  [ A A ] [ s ] [ B   B   ]
+   Row 3:  [ s ] [ s ] [ s ] [ B  B ]  */
+.ig-grid {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: clamp(0.45rem, 1.05vw, 1rem);
+}
+
+/* Three columns below the breakpoint: nine singles tile exactly as 3x3 */
+@media (max-width: 900px) {
+  .ig-grid { grid-template-columns: repeat(3, 1fr); }
+  .ig-item[data-feature='true'] { grid-column: span 1; grid-row: span 1; }
+}
+
+.ig-item {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: #e5e1d9;
+  aspect-ratio: 1;
+}
+
+.ig-item[data-feature='true'] {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.ig-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+}
+
+.ig-item:hover img { transform: scale(1.04); opacity: 0.92; }
+
+.ig-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.55rem;
+  color: #faf9f6;
+  background: rgba(12, 10, 9, 0.6);
+  padding: 0.15rem 0.4rem;
+}

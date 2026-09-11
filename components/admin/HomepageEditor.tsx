@@ -26,6 +26,8 @@ type Settings = {
   journal_count: number
   show_contact_section: boolean
   contact_heading: string | null
+  show_instagram: boolean
+  instagram_heading: string | null
   type_styles: TypeStyles
 }
 
@@ -35,12 +37,16 @@ export default function HomepageEditor({
   publicUrl,
   galleryCount,
   galleries,
+  instagramCount,
+  instagramConnected,
 }: {
   posts: PostOption[]
   settings: Settings
   publicUrl: string
   galleryCount: number
   galleries: PreviewGallery[]
+  instagramCount: number
+  instagramConnected: boolean
 }) {
   const [heroIds, setHeroIds] = useState<string[]>(settings.featured_post_ids ?? [])
   const [heroTitles, setHeroTitles] = useState<Record<string, string>>(settings.hero_titles ?? {})
@@ -63,6 +69,8 @@ export default function HomepageEditor({
   const [galleryHeading, setGalleryHeading] = useState(settings.carousel_heading ?? '')
   const [journalHeading, setJournalHeading] = useState(settings.journal_heading ?? '')
   const [contactHeading, setContactHeading] = useState(settings.contact_heading ?? '')
+  const [showInstagram, setShowInstagram] = useState(settings.show_instagram === true)
+  const [instagramHeading, setInstagramHeading] = useState(settings.instagram_heading ?? '')
 
   const heroPosts = heroIds
     .map((id) => posts.find((p) => p.id === id))
@@ -305,10 +313,53 @@ export default function HomepageEditor({
           </div>
         </Section>
 
+        {/* ---------- INSTAGRAM ---------- */}
+        <Section
+          id="instagram"
+          index={5}
+          title="Instagram"
+          summary="Recent posts in a grid above the footer"
+          open={openSection === 'instagram'}
+          onToggle={toggle}
+          enabled={showInstagram}
+          onEnabledChange={setShowInstagram}
+          enabledName="show_instagram"
+        >
+          <label className="admin-field">
+            Heading
+            <input
+              type="text"
+              name="instagram_heading"
+              value={instagramHeading}
+              onChange={(e) => setInstagramHeading(e.target.value)}
+              placeholder="Instagram"
+              className="admin-input"
+            />
+          </label>
+
+          {instagramConnected ? (
+            <p className="admin-meta" style={{ margin: 0, lineHeight: 1.6 }}>
+              {instagramCount} post{instagramCount === 1 ? '' : 's'} cached. Shows your nine most recent.
+              Connection and syncing are managed in{' '}
+              <a href="/admin/settings" style={{ borderBottom: '0.5px solid currentColor' }}>
+                settings
+              </a>
+              .
+            </p>
+          ) : (
+            <p className="admin-meta" style={{ margin: 0, lineHeight: 1.6, color: 'var(--admin-accent)' }}>
+              Not connected yet — add an access token in{' '}
+              <a href="/admin/settings" style={{ borderBottom: '0.5px solid currentColor' }}>
+                settings
+              </a>{' '}
+              before turning this on.
+            </p>
+          )}
+        </Section>
         {/* ---------- CONTACT ---------- */}
         <Section
           id="contact"
-          index={5}
+          index={6}
           title="Contact"
           summary="Form at the foot of the page"
           open={openSection === 'contact'}
@@ -340,6 +391,7 @@ export default function HomepageEditor({
             Intro copy and public email live on the contact page.
           </p>
         </Section>
+
       </div>
 
       {/* ---------- PREVIEW ---------- */}
@@ -391,6 +443,9 @@ export default function HomepageEditor({
               journalPosts={posts.slice(0, journalCount)}
               showContact={showContact}
               contactHeading={contactHeading}
+              showInstagram={showInstagram}
+              instagramHeading={instagramHeading}
+              instagramCount={instagramCount}
             />
           </div>
 

@@ -27,6 +27,9 @@ export default function HomePreview({
   journalPosts,
   showContact,
   contactHeading,
+  showInstagram,
+  instagramHeading,
+  instagramCount,
 }: {
   device: 'desktop' | 'mobile'
   publicUrl: string
@@ -46,6 +49,9 @@ export default function HomePreview({
   journalPosts: PostOption[]
   showContact: boolean
   contactHeading: string
+  showInstagram?: boolean
+  instagramHeading?: string
+  instagramCount?: number
 }) {
   const hero = heroPosts[0]
   const introParas = introBody.split('\n\n').filter(Boolean).slice(0, 2)
@@ -153,6 +159,20 @@ export default function HomePreview({
           </div>
           <div className="hp-cta-row">
             <span className="hp-btn-dark">View all stories</span>
+          </div>
+        </div>
+      )}
+
+      {/* ---- INSTAGRAM ---- */}
+      {showInstagram && (
+        <div className="hp-section">
+          <p className="hp-heading" style={{ textAlign: 'center', letterSpacing: '0.2em', fontSize: '0.55rem' }}>
+            {instagramHeading || 'Instagram'}
+          </p>
+          <div className="hp-ig-grid">
+            {Array.from({ length: Math.min(9, instagramCount || 9) }).map((_, i) => (
+              <span key={i} data-feature={i === 0} />
+            ))}
           </div>
         </div>
       )}

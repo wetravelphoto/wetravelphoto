@@ -16,6 +16,10 @@ export default async function HomePageEditor() {
     .eq('status', 'published')
     .order('published_at', { ascending: false })
 
+  const { count: instagramCount } = await supabase
+    .from('instagram_media')
+    .select('id', { count: 'exact', head: true })
+
   const { data: albumRows, count: galleryCount } = await supabase
     .from('albums')
     .select('id, title, location, cover_photo_id, cover_custom_path, photos!photos_album_id_fkey(id, storage_path)', {
@@ -72,6 +76,8 @@ export default async function HomePageEditor() {
           publicUrl={publicUrl}
           galleryCount={galleryCount ?? 0}
           galleries={galleries}
+          instagramCount={instagramCount ?? 0}
+          instagramConnected={!!settings.instagram_token}
           settings={{
             featured_post_ids: settings.featured_post_ids ?? [],
             hero_titles: settings.hero_titles ?? {},
@@ -91,6 +97,8 @@ export default async function HomePageEditor() {
             journal_count: settings.journal_count,
             show_contact_section: settings.show_contact_section,
             contact_heading: settings.contact_heading,
+            show_instagram: settings.show_instagram,
+            instagram_heading: settings.instagram_heading,
           }}
         />
 

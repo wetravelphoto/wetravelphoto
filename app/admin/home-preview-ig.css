@@ -1,0 +1,22 @@
+/* Instagram block inside the homepage preview */
+
+.hp-ig-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  max-width: 78%;
+  margin: 0 auto;
+}
+
+.hp-ig-grid span {
+  aspect-ratio: 1;
+  background: #d8d4cd;
+  display: block;
+}
+
+.hp-ig-grid span[data-feature='true'] {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.hp[data-device='mobile'] .hp-ig-grid { grid-template-columns: repeat(2, 1fr); }

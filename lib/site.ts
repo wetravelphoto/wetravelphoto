@@ -7,6 +7,8 @@ export type SiteSettings = {
   about_body: string | null
   contact_intro: string | null
   instagram_url: string | null
+  facebook_url: string | null
+  youtube_url: string | null
   email_public: string | null
 
   featured_post_ids: string[]
@@ -36,6 +38,13 @@ export type SiteSettings = {
   show_newsletter: boolean
   newsletter_heading: string | null
   newsletter_body: string | null
+
+  show_instagram: boolean
+  instagram_heading: string | null
+  instagram_handle: string | null
+  instagram_token: string | null
+  instagram_token_expires: string | null
+  instagram_synced_at: string | null
 }
 
 const FALLBACK: SiteSettings = {
@@ -45,6 +54,8 @@ const FALLBACK: SiteSettings = {
   about_body: null,
   contact_intro: null,
   instagram_url: null,
+  facebook_url: null,
+  youtube_url: null,
   email_public: null,
   featured_post_ids: [],
   hero_titles: {},
@@ -68,6 +79,12 @@ const FALLBACK: SiteSettings = {
   show_newsletter: true,
   newsletter_heading: null,
   newsletter_body: null,
+  show_instagram: false,
+  instagram_heading: null,
+  instagram_handle: null,
+  instagram_token: null,
+  instagram_token_expires: null,
+  instagram_synced_at: null,
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {

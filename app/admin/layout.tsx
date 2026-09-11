@@ -7,6 +7,7 @@ import './gallery.css'
 import './home-editor.css'
 import './home-preview.css'
 import './hero-title.css'
+import './home-preview-ig.css'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()

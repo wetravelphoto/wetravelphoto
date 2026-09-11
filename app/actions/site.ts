@@ -26,6 +26,8 @@ export async function updateIdentity(formData: FormData) {
       tagline: text(formData, 'tagline'),
       email_public: text(formData, 'email_public'),
       instagram_url: text(formData, 'instagram_url'),
+      facebook_url: text(formData, 'facebook_url'),
+      youtube_url: text(formData, 'youtube_url'),
     },
     ['/', '/about', '/contact']
   )
@@ -76,7 +78,9 @@ export async function updateHomepage(formData: FormData) {
 
       show_contact_section: on(formData, 'show_contact_section'),
       contact_heading: text(formData, 'contact_heading'),
-      contact_image_path: text(formData, 'contact_image_path'),
+
+      show_instagram: on(formData, 'show_instagram'),
+      instagram_heading: text(formData, 'instagram_heading'),
     },
     ['/', '/admin/pages/home']
   )

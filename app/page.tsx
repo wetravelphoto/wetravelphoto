@@ -8,12 +8,14 @@ import { styleVars, type TypeStyles } from '@/lib/type-styles'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
+import FixedHero from '@/components/home/FixedHero'
 import DragCarousel, { type CarouselItem } from '@/components/home/DragCarousel'
-import ContactForm from '@/components/ContactForm'
-import Icon from '@/components/SocialIcons'
+import ContactSection from '@/components/ContactSection'
+import BirdBadge from '@/components/BirdBadge'
 import Link from 'next/link'
 import './home.css'
 import './home-polish.css'
+import './hero.css'
 import './instagram.css'
 import './contact-footer.css'
 
@@ -77,13 +79,24 @@ export default async function HomePage() {
   const heroTitles = (settings.hero_titles ?? {}) as Record<string, string>
   const heroSubtitles = (settings.hero_subtitles ?? {}) as Record<string, string>
 
-  const heroItems: HeroItem[] = featured.slice(0, 3).map((post) => ({
-    slug: post.slug,
-    // Display name and subtitle override the story's own copy in the hero only
-    title: heroTitles[post.id] || post.title,
-    subtitle: heroSubtitles[post.id] || null,
-    imageUrl: post.featured_custom_path ? photoUrl(post.featured_custom_path) : null,
-  }))
+  const heroFocal = (settings.hero_focal ?? {}) as Record<
+    string,
+    { x: number; y: number; mx: number; my: number }
+  >
+
+  const heroItems: HeroItem[] = featured.slice(0, 3).map((post) => {
+    const point = heroFocal[post.id] ?? { x: 0.5, y: 0.5, mx: 0.5, my: 0.5 }
+
+    return {
+      slug: post.slug,
+      // Display name and subtitle override the story's own copy in the hero only
+      title: heroTitles[post.id] || post.title,
+      subtitle: heroSubtitles[post.id] || null,
+      imageUrl: post.featured_custom_path ? photoUrl(post.featured_custom_path) : null,
+      focal: { x: point.x, y: point.y },
+      focalMobile: { x: point.mx, y: point.my },
+    }
+  })
 
   const latestPosts = posts.slice(0, settings.journal_count ?? 3)
 
@@ -142,13 +155,38 @@ export default async function HomePage() {
     <main>
       <SiteHeader overHero={heroItems.length > 0} />
 
-      {heroItems.length > 0 ? (
-        <HomeHero items={heroItems} styleVars={styleVars(styles, 'hero')} />
+      {/* Fall back to the standing image whenever there are no stories to show */}
+      {settings.hero_mode === 'fixed' || heroItems.length === 0 ? (
+        <FixedHero
+          imageUrl={settings.hero_image_path ? photoUrl(settings.hero_image_path) : null}
+          title={settings.hero_fixed_title}
+          subtitle={settings.hero_fixed_subtitle}
+          ctaLabel={settings.hero_fixed_cta_label}
+          ctaHref={settings.hero_fixed_cta_href}
+          focal={{
+            x: settings.hero_fixed_focal?.x ?? 0.5,
+            y: settings.hero_fixed_focal?.y ?? 0.5,
+          }}
+          focalMobile={{
+            x: settings.hero_fixed_focal?.mx ?? 0.5,
+            y: settings.hero_fixed_focal?.my ?? 0.5,
+          }}
+          showMark={settings.hero_show_mark !== false}
+          markPosition={settings.hero_title_position ?? 'center'}
+          logoUrl={settings.logo_header_path ? photoUrl(settings.logo_header_path) : null}
+          siteTitle={settings.site_title}
+          styleVars={styleVars(styles, 'hero')}
+        />
       ) : (
-        <div style={{ height: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <p className="meta">Publish a story with a featured image to fill the hero.</p>
-        </div>
+        <HomeHero
+          items={heroItems}
+          titlePosition={settings.hero_title_position ?? 'center'}
+          showMark={settings.hero_show_mark !== false}
+          styleVars={styleVars(styles, 'hero')}
+        />
       )}
+
+      <BirdBadge />
 
       {settings.show_intro !== false &&
         (settings.intro_heading || introParagraphs.length > 0 || settings.intro_image_path) && (
@@ -242,61 +280,26 @@ export default async function HomePage() {
       )}
 
       {settings.show_contact_section !== false && (
-        <section className="contact-editorial" style={styleVars(styles, 'contact')}>
-          <div className="contact-inner">
-            <p className="contact-eyebrow">Let&apos;s keep in touch</p>
-            <h2 className="contact-heading">{settings.contact_heading || 'Get in touch'}</h2>
-            {settings.contact_intro && <p className="contact-copy">{settings.contact_intro}</p>}
-
-            <ContactForm />
-          </div>
-
-          <div className="contact-direct">
-            {settings.instagram_url && (
-              <a href={settings.instagram_url} target="_blank" rel="noopener">
-                <Icon name="instagram" />
-                {settings.instagram_handle ? `@${settings.instagram_handle.replace('@', '')}` : 'Instagram'}
-              </a>
-            )}
-
-            {settings.facebook_url && (
-              <a href={settings.facebook_url} target="_blank" rel="noopener">
-                <Icon name="facebook" />
-                Facebook
-              </a>
-            )}
-
-            {settings.youtube_url && (
-              <a href={settings.youtube_url} target="_blank" rel="noopener">
-                <Icon name="youtube" />
-                YouTube
-              </a>
-            )}
-
-            {settings.email_public && (
-              <>
-                <span className="contact-divider" />
-                <a href={`mailto:${settings.email_public}`}>
-                  <Icon name="mail" />
-                  {settings.email_public}
-                </a>
-              </>
-            )}
-
-            {settings.tagline && (
-              <>
-                <span className="contact-divider" />
-                <span className="contact-tagline">
-                  <Icon name="pin" />
-                  {settings.tagline}
-                </span>
-              </>
-            )}
-          </div>
-        </section>
+        <ContactSection
+          styleVars={styleVars(styles, 'contact')}
+          settings={{
+            eyebrow: settings.contact_eyebrow,
+            heading: settings.contact_heading,
+            intro: settings.contact_intro,
+            note: settings.contact_note,
+            tagline: settings.contact_tagline,
+            imageUrl: settings.contact_image_path ? photoUrl(settings.contact_image_path) : null,
+            imageSide: settings.contact_image_side ?? 'left',
+            instagramUrl: settings.instagram_url,
+            instagramHandle: settings.instagram_handle,
+            facebookUrl: settings.facebook_url,
+            youtubeUrl: settings.youtube_url,
+            email: settings.email_public,
+          }}
+        />
       )}
 
-      <SiteFooter showNewsletter />
+      <SiteFooter />
     </main>
   )
 }

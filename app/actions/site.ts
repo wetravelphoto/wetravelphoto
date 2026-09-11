@@ -53,12 +53,25 @@ export async function updateHomepage(formData: FormData) {
   const heroTitles = parseJson<Record<string, string>>('hero_titles', {})
   const heroSubtitles = parseJson<Record<string, string>>('hero_subtitles', {})
   const typeStyles = parseJson<Record<string, unknown>>('type_styles', {})
+  const heroFocal = parseJson<Record<string, unknown>>('hero_focal', {})
+  const heroFixedFocal = parseJson<Record<string, unknown>>('hero_fixed_focal', {})
 
   await patch(
     {
       featured_post_ids: featuredIds,
       hero_titles: heroTitles,
       hero_subtitles: heroSubtitles,
+      hero_focal: heroFocal,
+      hero_title_position: text(formData, 'hero_title_position') ?? 'center',
+      hero_show_mark: on(formData, 'hero_show_mark'),
+
+      hero_mode: text(formData, 'hero_mode') ?? 'stories',
+      hero_image_path: text(formData, 'hero_image_path'),
+      hero_fixed_title: text(formData, 'hero_fixed_title'),
+      hero_fixed_subtitle: text(formData, 'hero_fixed_subtitle'),
+      hero_fixed_cta_label: text(formData, 'hero_fixed_cta_label'),
+      hero_fixed_cta_href: text(formData, 'hero_fixed_cta_href'),
+      hero_fixed_focal: heroFixedFocal,
       type_styles: typeStyles,
       hero_kicker: text(formData, 'hero_kicker'),
 
@@ -78,6 +91,11 @@ export async function updateHomepage(formData: FormData) {
 
       show_contact_section: on(formData, 'show_contact_section'),
       contact_heading: text(formData, 'contact_heading'),
+      contact_eyebrow: text(formData, 'contact_eyebrow'),
+      contact_note: text(formData, 'contact_note'),
+      contact_tagline: text(formData, 'contact_tagline'),
+      contact_image_path: text(formData, 'contact_image_path'),
+      contact_image_side: text(formData, 'contact_image_side') ?? 'left',
 
       show_instagram: on(formData, 'show_instagram'),
       instagram_heading: text(formData, 'instagram_heading'),
@@ -112,6 +130,7 @@ export async function updateNewsletter(formData: FormData) {
       show_newsletter: on(formData, 'show_newsletter'),
       newsletter_heading: text(formData, 'newsletter_heading'),
       newsletter_body: text(formData, 'newsletter_body'),
+      footer_note: text(formData, 'footer_note'),
     },
     ['/']
   )

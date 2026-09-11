@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import HeroPicker, { type PostOption } from '@/components/admin/HeroPicker'
+import FocalPicker from '@/components/admin/FocalPicker'
 import ImagePickerModal from '@/components/admin/ImagePickerModal'
 import HomePreview, { type PreviewGallery } from '@/components/admin/HomePreview'
 import TypographyControls from '@/components/admin/TypographyControls'
+import SaveBar from '@/components/admin/SaveBar'
 import { styleFor, type TypeStyles } from '@/lib/type-styles'
 import type { BlockImage } from '@/lib/blocks'
 
@@ -12,6 +14,16 @@ type Settings = {
   featured_post_ids: string[]
   hero_titles: Record<string, string>
   hero_subtitles: Record<string, string>
+  hero_focal: Record<string, { x: number; y: number; mx: number; my: number }>
+  hero_title_position: string
+  hero_show_mark: boolean
+  hero_mode: string
+  hero_image_path: string | null
+  hero_fixed_title: string | null
+  hero_fixed_subtitle: string | null
+  hero_fixed_cta_label: string | null
+  hero_fixed_cta_href: string | null
+  hero_fixed_focal: { x?: number; y?: number; mx?: number; my?: number }
   hero_kicker: string | null
   show_intro: boolean
   intro_kicker: string | null
@@ -26,6 +38,13 @@ type Settings = {
   journal_count: number
   show_contact_section: boolean
   contact_heading: string | null
+  contact_eyebrow: string | null
+  contact_intro: string | null
+  contact_note: string | null
+  contact_tagline: string | null
+  contact_image_path: string | null
+  contact_image_side: string
+  footer_note: string | null
   show_instagram: boolean
   instagram_heading: string | null
   type_styles: TypeStyles
@@ -49,10 +68,13 @@ export default function HomepageEditor({
   instagramConnected: boolean
 }) {
   const [heroIds, setHeroIds] = useState<string[]>(settings.featured_post_ids ?? [])
+  const [heroMode, setHeroMode] = useState(settings.hero_mode || 'stories')
+  const [heroImage, setHeroImage] = useState<string | null>(settings.hero_image_path)
+  const [heroFixedFocal, setHeroFixedFocal] = useState(settings.hero_fixed_focal ?? {})
   const [heroTitles, setHeroTitles] = useState<Record<string, string>>(settings.hero_titles ?? {})
   const [heroSubtitles, setHeroSubtitles] = useState<Record<string, string>>(settings.hero_subtitles ?? {})
   const [typeStyles, setTypeStyles] = useState<TypeStyles>(settings.type_styles ?? {})
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerTarget, setPickerTarget] = useState<'intro' | 'contact' | 'hero' | null>(null)
   const [showIntro, setShowIntro] = useState(settings.show_intro !== false)
   const [showGalleries, setShowGalleries] = useState(settings.show_galleries !== false)
   const [showJournal, setShowJournal] = useState(settings.show_journal !== false)
@@ -69,6 +91,8 @@ export default function HomepageEditor({
   const [galleryHeading, setGalleryHeading] = useState(settings.carousel_heading ?? '')
   const [journalHeading, setJournalHeading] = useState(settings.journal_heading ?? '')
   const [contactHeading, setContactHeading] = useState(settings.contact_heading ?? '')
+  const [contactImage, setContactImage] = useState<string | null>(settings.contact_image_path)
+  const [contactSide, setContactSide] = useState(settings.contact_image_side || 'left')
   const [showInstagram, setShowInstagram] = useState(settings.show_instagram === true)
   const [instagramHeading, setInstagramHeading] = useState(settings.instagram_heading ?? '')
 
@@ -88,6 +112,9 @@ export default function HomepageEditor({
   }
 
   return (
+    <>
+    <SaveBar label="Save homepage" title="Homepage" />
+
     <div className="home-editor">
       <div className="home-editor-main">
         {/* ---------- HERO ---------- */}
@@ -99,27 +126,218 @@ export default function HomepageEditor({
           open={openSection === 'hero'}
           onToggle={toggle}
         >
+          <div className="admin-field">
+            What the hero shows
+
+            <div className="mode-choice">
+              <button
+                type="button"
+                className="mode-card"
+                data-active={heroMode === 'stories'}
+                onClick={() => setHeroMode('stories')}
+              >
+                <span className="mode-card-art" data-kind="stories" />
+                <span className="mode-card-title">Featured stories</span>
+                <span className="mode-card-note">
+                  Up to three stories. Their images fill the screen and swap as visitors hover the titles
+                  along the bottom.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="mode-card"
+                data-active={heroMode === 'fixed'}
+                onClick={() => setHeroMode('fixed')}
+              >
+                <span className="mode-card-art" data-kind="fixed" />
+                <span className="mode-card-title">One standing image</span>
+                <span className="mode-card-note">
+                  A single photograph with its own heading and button. Steady, and never depends on what
+                  you&apos;ve published.
+                </span>
+              </button>
+            </div>
+
+            <input type="hidden" name="hero_mode" value={heroMode} />
+
+            <p className="admin-meta" style={{ margin: 0, lineHeight: 1.55 }}>
+              Whichever you pick, the standing image is used automatically if no published story has a
+              featured image — so the hero can never come up empty.
+            </p>
+          </div>
+
+          <div>
+            <div className="admin-field">
+              Standing image
+              {heroImage ? (
+                <div style={{ marginTop: '0.4rem' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`${publicUrl}/${heroImage}`}
+                    alt=""
+                    style={{ width: '100%', maxWidth: 260, display: 'block' }}
+                  />
+                  <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setPickerTarget('hero')}
+                      className="admin-btn admin-btn-sm admin-btn-ghost"
+                    >
+                      Change
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHeroImage(null)}
+                      className="admin-btn admin-btn-sm admin-btn-danger"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <FocalPicker
+                      imageUrl={`${publicUrl}/${heroImage}`}
+                      desktop={{ x: heroFixedFocal.x ?? 0.5, y: heroFixedFocal.y ?? 0.5 }}
+                      mobile={{ x: heroFixedFocal.mx ?? 0.5, y: heroFixedFocal.my ?? 0.5 }}
+                      onChange={(next) =>
+                        setHeroFixedFocal({
+                          x: next.desktop.x,
+                          y: next.desktop.y,
+                          mx: next.mobile.x,
+                          my: next.mobile.y,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPickerTarget('hero')}
+                  style={{
+                    width: '100%',
+                    maxWidth: 260,
+                    marginTop: '0.4rem',
+                    border: '1px dashed var(--admin-line)',
+                    background: 'none',
+                    cursor: 'pointer',
+                    padding: '1.75rem 1rem',
+                    color: 'var(--admin-mute)',
+                    fontFamily: 'inherit',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  Choose a photo
+                </button>
+              )}
+              <input type="hidden" name="hero_image_path" value={heroImage ?? ''} />
+              <input type="hidden" name="hero_fixed_focal" value={JSON.stringify(heroFixedFocal)} />
+
+              <p className="admin-meta" style={{ margin: '0.5rem 0 0', lineHeight: 1.55 }}>
+                Used whenever the hero is set to one standing image, and as the fallback if no published
+                story has a featured image.
+              </p>
+            </div>
+
+            <div hidden={heroMode !== 'fixed'}>
+            <label className="admin-field">
+              Heading
+              <input
+                type="text"
+                name="hero_fixed_title"
+                defaultValue={settings.hero_fixed_title ?? ''}
+                className="admin-input"
+              />
+            </label>
+
+            <label className="admin-field">
+              Subtitle
+              <input
+                type="text"
+                name="hero_fixed_subtitle"
+                defaultValue={settings.hero_fixed_subtitle ?? ''}
+                className="admin-input"
+              />
+            </label>
+
+            <div className="size-row">
+              <label className="admin-field">
+                Button label
+                <input
+                  type="text"
+                  name="hero_fixed_cta_label"
+                  defaultValue={settings.hero_fixed_cta_label ?? ''}
+                  placeholder="View galleries"
+                  className="admin-input"
+                />
+              </label>
+
+              <label className="admin-field">
+                Button link
+                <input
+                  type="text"
+                  name="hero_fixed_cta_href"
+                  defaultValue={settings.hero_fixed_cta_href ?? ''}
+                  placeholder="/trips"
+                  className="admin-input"
+                />
+              </label>
+            </div>
+            </div>
+          </div>
+
+          <div hidden={heroMode === 'fixed'}>
           <HeroPicker
             posts={posts}
             initialIds={settings.featured_post_ids ?? []}
             initialTitles={settings.hero_titles ?? {}}
             initialSubtitles={settings.hero_subtitles ?? {}}
+            initialFocal={settings.hero_focal ?? {}}
             publicUrl={publicUrl}
             onChange={setHeroIds}
             onTitlesChange={setHeroTitles}
             onSubtitlesChange={setHeroSubtitles}
           />
+          </div>
 
           <div className="type-block">
             <p className="type-block-label">Typography</p>
             <TypographyControls
               value={styleFor(typeStyles, 'hero')}
               onChange={(next) => setStyle('hero', next)}
-              colorLabel="Title colour"
             />
           </div>
 
-          <label className="admin-field" style={{ marginTop: '1rem' }}>
+          <label
+            className="admin-field"
+            style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <input
+              type="checkbox"
+              name="hero_show_mark"
+              defaultChecked={settings.hero_show_mark !== false}
+            />
+            Show the wordmark over the image
+          </label>
+
+          <label className="admin-field">
+            Wordmark position
+            <select
+              name="hero_title_position"
+              defaultValue={settings.hero_title_position || 'center'}
+              className="admin-select"
+            >
+              <option value="upper">Upper third</option>
+              <option value="center">Centre</option>
+              <option value="lower">Lower third</option>
+            </select>
+            <span className="admin-meta" style={{ display: 'block', marginTop: '0.3rem', lineHeight: 1.55 }}>
+              The site wordmark sits over the photograph; each story is named along the bottom.
+            </span>
+          </label>
+
+          <label className="admin-field">
             Kicker
             <input
               type="text"
@@ -151,7 +369,7 @@ export default function HomepageEditor({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`${publicUrl}/${introImage}`} alt="" style={{ width: '100%', maxWidth: 220, display: 'block' }} />
                 <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
-                  <button type="button" onClick={() => setPickerOpen(true)} className="admin-btn admin-btn-sm admin-btn-ghost">
+                  <button type="button" onClick={() => setPickerTarget('intro')} className="admin-btn admin-btn-sm admin-btn-ghost">
                     Change
                   </button>
                   <button type="button" onClick={() => setIntroImage(null)} className="admin-btn admin-btn-sm admin-btn-danger">
@@ -162,7 +380,7 @@ export default function HomepageEditor({
             ) : (
               <button
                 type="button"
-                onClick={() => setPickerOpen(true)}
+                onClick={() => setPickerTarget('intro')}
                 style={{
                   width: '100%',
                   maxWidth: 220,
@@ -368,6 +586,83 @@ export default function HomepageEditor({
           onEnabledChange={setShowContact}
           enabledName="show_contact_section"
         >
+          <div className="admin-field">
+            Photo
+            {contactImage ? (
+              <div style={{ marginTop: '0.4rem' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`${publicUrl}/${contactImage}`}
+                  alt=""
+                  style={{ width: '100%', maxWidth: 220, display: 'block' }}
+                />
+                <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPickerTarget('contact')}
+                    className="admin-btn admin-btn-sm admin-btn-ghost"
+                  >
+                    Change
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContactImage(null)}
+                    className="admin-btn admin-btn-sm admin-btn-danger"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPickerTarget('contact')}
+                style={{
+                  width: '100%',
+                  maxWidth: 220,
+                  marginTop: '0.4rem',
+                  border: '1px dashed var(--admin-line)',
+                  background: 'none',
+                  cursor: 'pointer',
+                  padding: '1.5rem 1rem',
+                  color: 'var(--admin-mute)',
+                  fontFamily: 'inherit',
+                  fontSize: '0.85rem',
+                }}
+              >
+                Choose a photo
+              </button>
+            )}
+            <input type="hidden" name="contact_image_path" value={contactImage ?? ''} />
+            <p className="admin-meta" style={{ margin: '0.4rem 0 0', lineHeight: 1.55 }}>
+              Shown in black and white beside the form.
+            </p>
+          </div>
+
+          <label className="admin-field">
+            Photo position
+            <select
+              name="contact_image_side"
+              value={contactSide}
+              onChange={(e) => setContactSide(e.target.value)}
+              className="admin-select"
+            >
+              <option value="left">Photo left, form right</option>
+              <option value="right">Photo right, form left</option>
+            </select>
+          </label>
+
+          <label className="admin-field">
+            Eyebrow
+            <input
+              type="text"
+              name="contact_eyebrow"
+              defaultValue={settings.contact_eyebrow ?? ''}
+              placeholder="Let's keep in touch"
+              className="admin-input"
+            />
+          </label>
+
           <label className="admin-field">
             Heading
             <input
@@ -375,7 +670,51 @@ export default function HomepageEditor({
               name="contact_heading"
               value={contactHeading}
               onChange={(e) => setContactHeading(e.target.value)}
-              placeholder="Get in touch"
+              placeholder="Let's connect"
+              className="admin-input"
+            />
+          </label>
+
+          <label className="admin-field">
+            Intro line
+            <input
+              type="text"
+              name="contact_intro"
+              defaultValue={settings.contact_intro ?? ''}
+              placeholder="For collaborations, licensing, prints and assignments."
+              className="admin-input"
+            />
+          </label>
+
+          <label className="admin-field">
+            Note beside the button
+            <input
+              type="text"
+              name="contact_note"
+              defaultValue={settings.contact_note ?? ''}
+              placeholder="Response within 48 hours."
+              className="admin-input"
+            />
+          </label>
+
+          <label className="admin-field">
+            Caption over the photo
+            <input
+              type="text"
+              name="contact_tagline"
+              defaultValue={settings.contact_tagline ?? ''}
+              placeholder="A wilder tomorrow is a brighter tomorrow."
+              className="admin-input"
+            />
+          </label>
+
+          <label className="admin-field">
+            Footer note
+            <input
+              type="text"
+              name="footer_note"
+              defaultValue={settings.footer_note ?? ''}
+              placeholder="People · Places · Wildlife"
               className="admin-input"
             />
           </label>
@@ -387,8 +726,8 @@ export default function HomepageEditor({
             />
           </div>
 
-          <p className="admin-meta" style={{ margin: 0 }}>
-            Intro copy and public email live on the contact page.
+          <p className="admin-meta" style={{ margin: 0, lineHeight: 1.6 }}>
+            Social links and the public email come from settings.
           </p>
         </Section>
 
@@ -455,19 +794,25 @@ export default function HomepageEditor({
         </div>
       </aside>
 
-      {pickerOpen && (
+      {pickerTarget && (
         <ImagePickerModal
           publicUrl={publicUrl}
-          onClose={() => setPickerOpen(false)}
+          onClose={() => setPickerTarget(null)}
           onSelect={(images: BlockImage[]) => {
-            if (images[0]?.path) setIntroImage(images[0].path)
-            setPickerOpen(false)
+            const path = images[0]?.path
+            if (path) {
+              if (pickerTarget === 'contact') setContactImage(path)
+              else if (pickerTarget === 'hero') setHeroImage(path)
+              else setIntroImage(path)
+            }
+            setPickerTarget(null)
           }}
         />
       )}
 
       <input type="hidden" name="type_styles" value={JSON.stringify(typeStyles)} />
     </div>
+    </>
   )
 }
 

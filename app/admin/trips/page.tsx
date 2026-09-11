@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import GalleryCard from '@/components/admin/GalleryCard'
+import GalleryGrid from '@/components/admin/GalleryGrid'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
-type SortKey = 'newest' | 'oldest' | 'title' | 'photos'
+type SortKey = 'manual' | 'newest' | 'oldest' | 'title' | 'photos'
 
 export default async function GalleriesPage({
   searchParams,
@@ -12,15 +12,14 @@ export default async function GalleriesPage({
   searchParams: Promise<{ sort?: string }>
 }) {
   const { sort } = await searchParams
-  const sortKey = (sort ?? 'newest') as SortKey
+  const sortKey = (sort ?? 'manual') as SortKey
 
   const supabase = await createClient()
 
-  // Disambiguated join — albums link to photos twice (album_id and cover_photo_id)
   const { data: albums, error } = await supabase
     .from('albums')
     .select('*, photos!photos_album_id_fkey(id, storage_path)')
-    .order('created_at', { ascending: false })
+    .order('sort_order', { ascending: true })
 
   const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
 
@@ -39,20 +38,23 @@ export default async function GalleriesPage({
       coverUrl: coverPath ? `${publicUrl}/${coverPath}` : null,
       createdAt: album.created_at as string,
       updatedAt: (album.updated_at as string) ?? (album.created_at as string),
+      sortOrder: (album.sort_order as number) ?? 0,
     }
   })
 
   const sorted = [...rows].sort((a, b) => {
     if (sortKey === 'oldest') return a.createdAt.localeCompare(b.createdAt)
+    if (sortKey === 'newest') return b.createdAt.localeCompare(a.createdAt)
     if (sortKey === 'title') return a.title.localeCompare(b.title)
     if (sortKey === 'photos') return b.photoCount - a.photoCount
-    return b.createdAt.localeCompare(a.createdAt)
+    return a.sortOrder - b.sortOrder
   })
 
   const totalPhotos = rows.reduce((sum, r) => sum + r.photoCount, 0)
   const publicCount = rows.filter((r) => r.privacy === 'public').length
 
   const sortOptions: { key: SortKey; label: string }[] = [
+    { key: 'manual', label: 'Custom order' },
     { key: 'newest', label: 'Newest' },
     { key: 'oldest', label: 'Oldest' },
     { key: 'title', label: 'A–Z' },
@@ -99,20 +101,7 @@ export default async function GalleriesPage({
       )}
 
       {sorted.length > 0 ? (
-        <div className="gallery-grid">
-          {sorted.map((row) => (
-            <GalleryCard
-              key={row.id}
-              id={row.id}
-              title={row.title}
-              slug={row.slug}
-              privacy={row.privacy}
-              photoCount={row.photoCount}
-              coverUrl={row.coverUrl}
-              updatedAt={row.updatedAt}
-            />
-          ))}
-        </div>
+        <GalleryGrid rows={sorted} manualOrder={sortKey === 'manual'} />
       ) : (
         !error && (
           <div className="admin-empty">

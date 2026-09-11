@@ -1,5 +1,6 @@
 import { getSiteSettings } from '@/lib/site'
 import { updateContactPage } from '@/app/actions/site'
+import SaveBar from '@/components/admin/SaveBar'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,8 @@ export default async function ContactPageEditor() {
       </div>
 
       <form action={updateContactPage} autoComplete="off">
+        <SaveBar label="Save contact page" title="Contact" />
+
         <div className="admin-panel">
           <label className="admin-field">
             Intro copy
@@ -56,11 +59,6 @@ export default async function ContactPageEditor() {
           </p>
         </div>
 
-        <div className="page-save-bar">
-          <button type="submit" className="admin-btn">
-            Save contact page
-          </button>
-        </div>
       </form>
     </div>
   )

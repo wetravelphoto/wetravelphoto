@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { sendMessage } from '@/app/actions/contact'
 
-export default function ContactForm({ variant = 'boxed' }: { variant?: 'boxed' | 'line' }) {
+export default function ContactForm({ note }: { note?: string | null }) {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [error, setError] = useState<string | null>(null)
 
@@ -24,10 +24,10 @@ export default function ContactForm({ variant = 'boxed' }: { variant?: 'boxed' |
   if (status === 'sent') {
     return (
       <div className="contact-sent">
-        <p className="display" style={{ fontSize: '1.3rem', margin: '0 0 0.5rem' }}>
+        <p className="display" style={{ fontSize: '1.2rem', margin: '0 0 0.4rem' }}>
           Message sent
         </p>
-        <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink-soft)' }}>
+        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--ink-soft)' }}>
           Thanks — I&apos;ll get back to you.
         </p>
       </div>
@@ -42,7 +42,7 @@ export default function ContactForm({ variant = 'boxed' }: { variant?: 'boxed' |
       </div>
 
       <input type="text" name="subject" placeholder="Subject" autoComplete="off" />
-      <textarea name="message" placeholder="Message" required rows={5} />
+      <textarea name="message" placeholder="Message" required rows={4} />
 
       {/* Hidden from people, tempting to bots */}
       <input
@@ -59,12 +59,12 @@ export default function ContactForm({ variant = 'boxed' }: { variant?: 'boxed' |
       <div className="contact-submit-row">
         <button type="submit" disabled={status === 'sending'}>
           <span>{status === 'sending' ? 'Sending' : 'Send inquiry'}</span>
-          <svg width="20" height="10" viewBox="0 0 20 10" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden="true">
+          <svg width="20" height="10" viewBox="0 0 20 10" fill="none" stroke="currentColor" strokeWidth="1">
             <path d="M0 5h18M14 1l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
 
-        <span className="contact-note">Response within 48 hours.</span>
+        {note && <span className="contact-note">{note}</span>}
       </div>
     </form>
   )

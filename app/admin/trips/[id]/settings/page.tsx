@@ -40,12 +40,9 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
 
   return (
     <div>
-      <p className="admin-crumb">
-        <Link href="/admin">Albums</Link> / <Link href={`/admin/trips/${id}`}>{album?.title}</Link> / Settings
+      <p className="admin-crumb" style={{ marginBottom: '1.25rem' }}>
+        <Link href="/admin/trips">Galleries</Link> / <Link href={`/admin/trips/${id}`}>{album?.title}</Link> / Settings
       </p>
-      <h1 className="admin-h1" style={{ marginBottom: '1.25rem' }}>
-        Album settings
-      </h1>
 
       <form action={updateAlbumSettings.bind(null, id)} autoComplete="off">
         <AlbumSettingsEditor

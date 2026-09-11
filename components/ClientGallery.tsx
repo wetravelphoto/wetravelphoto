@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { toggleFavorite } from '@/app/actions/favorites'
+import PhotoLightbox from '@/components/PhotoLightbox'
+import Slideshow from '@/components/Slideshow'
+import GalleryToolbar from '@/components/GalleryToolbar'
 
 type Photo = {
   id: string
@@ -16,20 +19,29 @@ export default function ClientGallery({
   albumId,
   token,
   publicUrl,
+  galleryTitle,
+  siteTitle,
+  allowDownloads = true,
 }: {
   photos: Photo[]
   favoriteIds: string[]
   albumId: string
   token: string
   publicUrl: string
+  galleryTitle: string
+  siteTitle: string
+  allowDownloads?: boolean
 }) {
   const [favorites, setFavorites] = useState<Set<string>>(new Set(favoriteIds))
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const [slideshow, setSlideshow] = useState(false)
+  const [preparing, setPreparing] = useState(false)
+  const [onlyFavorites, setOnlyFavorites] = useState(false)
 
   async function handleFavorite(photoId: string) {
     const isFavorited = favorites.has(photoId)
 
-    // Update the UI immediately, then persist
+    // Update immediately; the server call follows
     setFavorites((prev) => {
       const next = new Set(prev)
       if (isFavorited) next.delete(photoId)
@@ -37,109 +49,134 @@ export default function ClientGallery({
       return next
     })
 
-    try {
-      await toggleFavorite(token, albumId, photoId, isFavorited)
-    } catch {
-      // Roll back if the save failed
-      setFavorites((prev) => {
-        const next = new Set(prev)
-        if (isFavorited) next.add(photoId)
-        else next.delete(photoId)
-        return next
-      })
-    }
+    await toggleFavorite(albumId, photoId, token, !isFavorited)
   }
 
-  const current = openIndex !== null ? photos[openIndex] : null
+  function downloadAll() {
+    setPreparing(true)
+    // The browser handles the transfer; the flag just gives feedback
+    window.location.href = `/api/download-all?album=${albumId}&token=${token}`
+    setTimeout(() => setPreparing(false), 4000)
+  }
+
+  function downloadOne(photoId: string) {
+    window.location.href = `/api/download?photo=${photoId}&token=${token}`
+  }
+
+  const shown = onlyFavorites ? photos.filter((p) => favorites.has(p.id)) : photos
+  const current = openIndex !== null ? shown[openIndex] : null
 
   return (
     <>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-          gap: '2px',
-          padding: '0 clamp(1.25rem, 4vw, 3rem) 4rem',
-        }}
-      >
-        {photos.map((photo, index) => {
-          const isFav = favorites.has(photo.id)
-          return (
-            <div key={photo.id} style={{ position: 'relative', background: 'var(--surface-alt)' }}>
+      <GalleryToolbar
+        galleryTitle={galleryTitle}
+        siteTitle={siteTitle}
+        actions={allowDownloads ? ['slideshow', 'download'] : ['slideshow']}
+        onSlideshow={() => setSlideshow(true)}
+        onDownloadAll={downloadAll}
+        downloading={preparing}
+      />
+
+      <div className="client-subbar">
+        <button
+          type="button"
+          onClick={() => setOnlyFavorites((v) => !v)}
+          className="toolbar-btn"
+          data-on={onlyFavorites}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill={onlyFavorites ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.3">
+            <path d="M12 20.2 4.6 12.9a4.6 4.6 0 0 1 6.5-6.5l.9.9.9-.9a4.6 4.6 0 1 1 6.5 6.5Z" strokeLinejoin="round" />
+          </svg>
+          {onlyFavorites ? 'Showing favourites' : `Favourites (${favorites.size})`}
+        </button>
+
+        <span className="client-count">
+          {shown.length} photograph{shown.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      <div className="album-grid-wrap">
+        <div className="client-grid">
+          {shown.map((photo, i) => (
+            <figure key={photo.id} className="client-tile">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`${publicUrl}/${photo.storage_path}`}
                 alt={photo.alt_text ?? photo.caption ?? ''}
                 loading="lazy"
-                onClick={() => setOpenIndex(index)}
-                style={{
-                  width: '100%',
-                  aspectRatio: '1',
-                  objectFit: 'cover',
-                  display: 'block',
-                  cursor: 'zoom-in',
-                }}
+                onClick={() => setOpenIndex(i)}
               />
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  display: 'flex',
-                  gap: '0.5rem',
-                  padding: '0.5rem',
-                  background: 'linear-gradient(to top, rgba(20,16,14,0.7), transparent)',
-                }}
-              >
+
+              <div className="client-tile-actions">
                 <button
+                  type="button"
                   onClick={() => handleFavorite(photo.id)}
-                  aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: isFav ? '#e8b48c' : '#faf9f6',
-                    cursor: 'pointer',
-                    fontSize: '1.05rem',
-                    lineHeight: 1,
-                    padding: 0,
-                  }}
+                  aria-label={favorites.has(photo.id) ? 'Remove from favourites' : 'Add to favourites'}
+                  data-on={favorites.has(photo.id)}
                 >
-                  {isFav ? '★' : '☆'}
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill={favorites.has(photo.id) ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                  >
+                    <path d="M12 20.2 4.6 12.9a4.6 4.6 0 0 1 6.5-6.5l.9.9.9-.9a4.6 4.6 0 1 1 6.5 6.5Z" strokeLinejoin="round" />
+                  </svg>
                 </button>
-                <a
-                  href={`/api/download?token=${token}&photo=${photo.id}`}
-                  style={{ color: '#faf9f6', fontSize: '0.7rem', letterSpacing: '0.05em', opacity: 0.9 }}
-                >
-                  Download
-                </a>
+
+                {allowDownloads && (
+                  <button type="button" onClick={() => downloadOne(photo.id)} aria-label="Download">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                      <path d="M12 3.5v12M7.5 11l4.5 4.5 4.5-4.5M4.5 19.5h15" />
+                    </svg>
+                  </button>
+                )}
               </div>
-            </div>
-          )
-        })}
+            </figure>
+          ))}
+        </div>
+
+        {shown.length === 0 && (
+          <p className="client-empty">No favourites picked yet.</p>
+        )}
       </div>
 
-      {current && openIndex !== null && (
-        <div
-          onClick={() => setOpenIndex(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100,
-            background: 'rgba(12,10,9,0.96)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '2rem',
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`${publicUrl}/${current.storage_path}`}
-            alt=""
-            style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain' }}
-          />
-        </div>
+      {openIndex !== null && current && (
+        <PhotoLightbox
+          photos={shown}
+          publicUrl={publicUrl}
+          index={openIndex}
+          onIndexChange={setOpenIndex}
+          onClose={() => setOpenIndex(null)}
+          actions={
+            <>
+              <button
+                type="button"
+                className="lightbox-action"
+                data-on={favorites.has(current.id)}
+                onClick={() => handleFavorite(current.id)}
+              >
+                {favorites.has(current.id) ? 'Favourited' : 'Favourite'}
+              </button>
+
+              {allowDownloads && (
+                <button type="button" className="lightbox-action" onClick={() => downloadOne(current.id)}>
+                  Download
+                </button>
+              )}
+            </>
+          }
+        />
+      )}
+
+      {slideshow && (
+        <Slideshow
+          photos={shown.map((p) => ({ id: p.id, storage_path: p.storage_path, caption: p.caption }))}
+          publicUrl={publicUrl}
+          onClose={() => setSlideshow(false)}
+        />
       )}
     </>
   )

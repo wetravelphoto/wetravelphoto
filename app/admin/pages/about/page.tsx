@@ -1,5 +1,6 @@
 import { getSiteSettings } from '@/lib/site'
 import { updateAboutPage } from '@/app/actions/site'
+import SaveBar from '@/components/admin/SaveBar'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,8 @@ export default async function AboutPageEditor() {
       </div>
 
       <form action={updateAboutPage} autoComplete="off">
+        <SaveBar label="Save about page" title="About" />
+
         <div className="admin-panel">
           <label className="admin-field">
             Heading
@@ -54,11 +57,6 @@ export default async function AboutPageEditor() {
           </p>
         </div>
 
-        <div className="page-save-bar">
-          <button type="submit" className="admin-btn">
-            Save about page
-          </button>
-        </div>
       </form>
     </div>
   )

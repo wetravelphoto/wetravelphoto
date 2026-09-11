@@ -1,0 +1,11 @@
+
+/* Draggable gallery cards */
+
+.gallery-drag { min-width: 0; }
+.gallery-drag[draggable='true'] { cursor: grab; }
+.gallery-drag[data-dragging='true'] { opacity: 0.4; }
+
+.gallery-drag[data-over='true'] {
+  outline: 2px solid var(--admin-accent);
+  outline-offset: 2px;
+}

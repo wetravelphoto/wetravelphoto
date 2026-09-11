@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { photoUrl, focalPosition } from '@/lib/images'
 import ClientGallery from '@/components/ClientGallery'
+import { getSiteSettings } from '@/lib/site'
 import { notFound } from 'next/navigation'
+import '@/app/gallery.css'
+import '@/app/lightbox.css'
 
 export default async function ClientGalleryPage({
   params,
@@ -10,6 +13,7 @@ export default async function ClientGalleryPage({
 }) {
   const { token } = await params
   const supabase = await createClient()
+  const settings = await getSiteSettings()
 
   const { data: client } = await supabase
     .from('clients')
@@ -32,7 +36,7 @@ export default async function ClientGalleryPage({
     return (
       <main style={{ padding: '6rem 2rem', textAlign: 'center' }}>
         <p className="eyebrow" style={{ margin: '0 0 0.75rem' }}>
-          WeTravelPhoto
+          {settings.site_title}
         </p>
         <h1 className="display" style={{ fontSize: '1.5rem' }}>
           Nothing shared with you yet
@@ -69,7 +73,7 @@ export default async function ClientGalleryPage({
         }}
       >
         <p className="eyebrow" style={{ margin: '0 0 0.6rem' }}>
-          WeTravelPhoto — private gallery
+          {settings.site_title} — private gallery
         </p>
         <h1 className="display" style={{ fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', margin: 0, lineHeight: 1 }}>
           Hello, {client.name}
@@ -125,16 +129,15 @@ export default async function ClientGalleryPage({
               </div>
             )}
 
-            <p className="meta" style={{ padding: '1rem clamp(1.25rem, 4vw, 3rem)' }}>
-              {photos.length} photographs
-            </p>
-
             <ClientGallery
               photos={photos}
               favoriteIds={favoriteIds}
               albumId={album.id as string}
               token={token}
               publicUrl={publicUrl}
+              galleryTitle={(album.cover_title_text as string) || (album.title as string)}
+              siteTitle={settings.site_title}
+              allowDownloads={album.allow_downloads !== false}
             />
           </section>
         )

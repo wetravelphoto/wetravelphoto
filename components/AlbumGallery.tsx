@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState } from 'react'
+import PhotoLightbox from '@/components/PhotoLightbox'
 
 type Photo = {
   id: string
@@ -49,35 +50,7 @@ export default function AlbumGallery({
   heroFirst?: boolean
 }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
-  const touchStartX = useRef<number | null>(null)
 
-  const close = useCallback(() => setOpenIndex(null), [])
-  const next = useCallback(() => setOpenIndex((i) => (i === null ? null : (i + 1) % photos.length)), [photos.length])
-  const prev = useCallback(
-    () => setOpenIndex((i) => (i === null ? null : (i - 1 + photos.length) % photos.length)),
-    [photos.length]
-  )
-
-  useEffect(() => {
-    if (openIndex === null) return
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') close()
-      if (e.key === 'ArrowRight') next()
-      if (e.key === 'ArrowLeft') prev()
-    }
-
-    document.addEventListener('keydown', onKey)
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = previousOverflow
-    }
-  }, [openIndex, close, next, prev])
-
-  const current = openIndex !== null ? photos[openIndex] : null
   const pad = 'clamp(1.25rem, 4vw, 3rem)'
 
   // With a hero enabled the first photo runs full width on its own
@@ -90,7 +63,7 @@ export default function AlbumGallery({
 
     if (layoutStyle === 'single_column') {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 1000, margin: '0 auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--grid-gap)', maxWidth: 1000, margin: '0 auto' }}>
           {rest.map((photo, i) => (
             <Figure key={photo.id} photo={photo} publicUrl={publicUrl} onOpen={() => setOpenIndex(i + offset)} />
           ))}
@@ -100,7 +73,7 @@ export default function AlbumGallery({
 
     if (layoutStyle === 'square') {
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 2 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--grid-gap)' }}>
           {rest.map((photo, i) => (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -117,11 +90,39 @@ export default function AlbumGallery({
     }
 
     if (layoutStyle === 'masonry') {
+      // Deal the photos into columns in turn, so every column is used even
+      // when there are only a few images.
+      const columnCount = Math.min(3, Math.max(1, rest.length))
+      const columns: { photo: Photo; index: number }[][] = Array.from(
+        { length: columnCount },
+        () => []
+      )
+
+      rest.forEach((photo, i) => {
+        columns[i % columnCount].push({ photo, index: i + offset })
+      })
+
       return (
-        <div style={{ columns: 'auto 3', columnGap: '2px' }}>
-          {rest.map((photo, i) => (
-            <div key={photo.id} style={{ breakInside: 'avoid', marginBottom: 2 }}>
-              <Figure photo={photo} publicUrl={publicUrl} onOpen={() => setOpenIndex(i + offset)} />
+        <div style={{ display: 'flex', gap: 'var(--grid-gap)', alignItems: 'flex-start' }}>
+          {columns.map((column, c) => (
+            <div
+              key={c}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--grid-gap)',
+              }}
+            >
+              {column.map(({ photo, index }) => (
+                <Figure
+                  key={photo.id}
+                  photo={photo}
+                  publicUrl={publicUrl}
+                  onOpen={() => setOpenIndex(index)}
+                />
+              ))}
             </div>
           ))}
         </div>
@@ -133,9 +134,9 @@ export default function AlbumGallery({
     let cursor = offset
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--grid-gap)' }}>
         {rows.map((row, rowIndex) => (
-          <div key={rowIndex} style={{ display: 'flex', gap: 2 }}>
+          <div key={rowIndex} style={{ display: 'flex', gap: 'var(--grid-gap)' }}>
             {row.map((photo) => {
               const index = cursor++
               const ratio = (photo.width ?? 3) / (photo.height ?? 2)
@@ -154,7 +155,8 @@ export default function AlbumGallery({
   return (
     <>
       {hero && (
-        <div style={{ marginBottom: 2 }}>
+        // Sits inside the same margins as the grid below it
+        <div style={{ padding: `0 ${pad}`, marginBottom: 'var(--grid-gap)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${publicUrl}/${hero.storage_path}`}
@@ -163,7 +165,7 @@ export default function AlbumGallery({
             style={{ width: '100%', height: 'auto', display: 'block', cursor: 'zoom-in' }}
           />
           {hero.caption && (
-            <p className="meta" style={{ padding: `0.6rem ${pad} 0`, margin: 0 }}>
+            <p className="meta" style={{ paddingTop: '0.6rem', margin: 0 }}>
               {hero.caption}
             </p>
           )}
@@ -172,91 +174,14 @@ export default function AlbumGallery({
 
       <div style={{ padding: `0 ${pad} 4rem` }}>{renderBody()}</div>
 
-      {current && openIndex !== null && (
-        <div
-          onClick={close}
-          onTouchStart={(e) => {
-            touchStartX.current = e.touches[0].clientX
-          }}
-          onTouchEnd={(e) => {
-            if (touchStartX.current === null) return
-            const delta = e.changedTouches[0].clientX - touchStartX.current
-            if (delta > 60) prev()
-            if (delta < -60) next()
-            touchStartX.current = null
-          }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100,
-            background: 'rgba(12, 10, 9, 0.96)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 'clamp(1rem, 4vw, 3rem)',
-          }}
-        >
-          <button onClick={close} aria-label="Close" style={closeStyle}>
-            &times;
-          </button>
-
-          {photos.length > 1 && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  prev()
-                }}
-                aria-label="Previous photo"
-                style={navButtonStyle('left')}
-              >
-                &#8249;
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  next()
-                }}
-                aria-label="Next photo"
-                style={navButtonStyle('right')}
-              >
-                &#8250;
-              </button>
-            </>
-          )}
-
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`${publicUrl}/${current.storage_path}`}
-            alt={current.alt_text ?? current.caption ?? ''}
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block' }}
-          />
-
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              marginTop: '1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1.25rem',
-              color: '#faf9f6',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-            }}
-          >
-            <span style={{ fontSize: '0.78rem', opacity: 0.6 }}>
-              {String(openIndex + 1).padStart(2, '0')} / {String(photos.length).padStart(2, '0')}
-            </span>
-            {current.caption && <span style={{ fontSize: '0.82rem', opacity: 0.85 }}>{current.caption}</span>}
-            {current.is_for_sale && (
-              <span className="underline-link" style={{ fontSize: '0.78rem', letterSpacing: '0.06em', cursor: 'pointer' }}>
-                Buy print
-              </span>
-            )}
-          </div>
-        </div>
+      {openIndex !== null && (
+        <PhotoLightbox
+          photos={photos}
+          publicUrl={publicUrl}
+          index={openIndex}
+          onIndexChange={setOpenIndex}
+          onClose={() => setOpenIndex(null)}
+        />
       )}
     </>
   )
@@ -280,34 +205,4 @@ function Figure({ photo, publicUrl, onOpen }: { photo: Photo; publicUrl: string;
       )}
     </figure>
   )
-}
-
-const closeStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '1.25rem',
-  right: '1.25rem',
-  background: 'none',
-  border: 'none',
-  color: '#faf9f6',
-  fontSize: '1.6rem',
-  lineHeight: 1,
-  cursor: 'pointer',
-  opacity: 0.7,
-}
-
-function navButtonStyle(side: 'left' | 'right'): React.CSSProperties {
-  return {
-    position: 'absolute',
-    [side]: 'clamp(0.5rem, 2vw, 1.5rem)',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    background: 'none',
-    border: 'none',
-    color: '#faf9f6',
-    fontSize: '2.2rem',
-    lineHeight: 1,
-    cursor: 'pointer',
-    opacity: 0.55,
-    padding: '0.5rem',
-  }
 }

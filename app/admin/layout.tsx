@@ -8,6 +8,9 @@ import './home-editor.css'
 import './home-preview.css'
 import './hero-title.css'
 import './home-preview-ig.css'
+import './save-bar.css'
+import '../hero.css'
+import './branding.css'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()

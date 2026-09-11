@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { subscribe } from '@/app/actions/newsletter'
 
-export default function NewsletterForm() {
+export default function NewsletterForm({ variant = 'default' }: { variant?: 'default' | 'footer' }) {
   const [status, setStatus] = useState<'idle' | 'sending' | 'done'>('idle')
   const [message, setMessage] = useState<string | null>(null)
 
@@ -14,9 +14,11 @@ export default function NewsletterForm() {
     setStatus(result.ok ? 'done' : 'idle')
   }
 
+  const className = variant === 'footer' ? 'footer-signup-form' : 'newsletter-form'
+
   if (status === 'done') {
     return (
-      <p style={{ fontSize: '0.92rem', opacity: 0.85, margin: 0 }}>
+      <p style={{ fontSize: '0.85rem', opacity: 0.8, margin: 0 }}>
         {message ?? 'Thanks — you’re on the list.'}
       </p>
     )
@@ -24,13 +26,13 @@ export default function NewsletterForm() {
 
   return (
     <form action={handle}>
-      <div className="newsletter-form">
+      <div className={className}>
         <input type="email" name="email" placeholder="you@example.com" required aria-label="Email address" />
         <button type="submit" disabled={status === 'sending'}>
-          {status === 'sending' ? 'Joining…' : 'Join'}
+          {status === 'sending' ? '…' : 'Join'}
         </button>
       </div>
-      {message && <p style={{ fontSize: '0.78rem', marginTop: '0.6rem', opacity: 0.8 }}>{message}</p>}
+      {message && <p style={{ fontSize: '0.75rem', marginTop: '0.5rem', opacity: 0.75 }}>{message}</p>}
     </form>
   )
 }

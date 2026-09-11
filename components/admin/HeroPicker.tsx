@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef } from 'react'
+import FocalPicker, { type FocalPoint } from '@/components/admin/FocalPicker'
 
 export type PostOption = {
   id: string
@@ -18,6 +19,7 @@ export default function HeroPicker({
   initialIds,
   initialTitles,
   initialSubtitles,
+  initialFocal,
   publicUrl,
   onChange,
   onTitlesChange,
@@ -27,6 +29,7 @@ export default function HeroPicker({
   initialIds: string[]
   initialTitles: Record<string, string>
   initialSubtitles: Record<string, string>
+  initialFocal: Record<string, { x: number; y: number; mx: number; my: number }>
   publicUrl: string
   onChange?: (ids: string[]) => void
   onTitlesChange?: (titles: Record<string, string>) => void
@@ -35,6 +38,10 @@ export default function HeroPicker({
   const [selected, setSelected] = useState<string[]>(initialIds.filter((id) => posts.some((p) => p.id === id)))
   const [titles, setTitles] = useState<Record<string, string>>(initialTitles ?? {})
   const [subtitles, setSubtitles] = useState<Record<string, string>>(initialSubtitles ?? {})
+  const [focal, setFocal] = useState<Record<string, { x: number; y: number; mx: number; my: number }>>(
+    initialFocal ?? {}
+  )
+  const [focalOpen, setFocalOpen] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -60,6 +67,17 @@ export default function HeroPicker({
     else delete next[id]
     setSubtitles(next)
     onSubtitlesChange?.(next)
+  }
+
+  function focalFor(id: string) {
+    return focal[id] ?? { x: 0.5, y: 0.5, mx: 0.5, my: 0.5 }
+  }
+
+  function setFocalFor(id: string, next: { desktop: FocalPoint; mobile: FocalPoint }) {
+    setFocal((prev) => ({
+      ...prev,
+      [id]: { x: next.desktop.x, y: next.desktop.y, mx: next.mobile.x, my: next.mobile.y },
+    }))
   }
 
   const byId = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts])
@@ -191,6 +209,29 @@ export default function HeroPicker({
                 className="admin-input hero-slot-rename"
                 autoComplete="off"
               />
+
+              {post.imagePath && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setFocalOpen(focalOpen === post.id ? null : post.id)}
+                    className="admin-btn admin-btn-sm admin-btn-ghost hero-slot-focal-toggle"
+                  >
+                    {focalOpen === post.id ? 'Hide framing' : 'Framing'}
+                  </button>
+
+                  {focalOpen === post.id && (
+                    <div className="hero-slot-focal">
+                      <FocalPicker
+                        imageUrl={`${publicUrl}/${post.imagePath}`}
+                        desktop={{ x: focalFor(post.id).x, y: focalFor(post.id).y }}
+                        mobile={{ x: focalFor(post.id).mx, y: focalFor(post.id).my }}
+                        onChange={(next) => setFocalFor(post.id, next)}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )
         })}
@@ -263,6 +304,7 @@ export default function HeroPicker({
       <input type="hidden" name="featured_post_ids" value={selected.join(',')} />
       <input type="hidden" name="hero_titles" value={JSON.stringify(titles)} />
       <input type="hidden" name="hero_subtitles" value={JSON.stringify(subtitles)} />
+      <input type="hidden" name="hero_focal" value={JSON.stringify(focal)} />
     </div>
   )
 }

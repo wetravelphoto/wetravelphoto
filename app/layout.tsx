@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
 import { Oswald, Karla } from 'next/font/google'
 import './globals.css'
+import './home.css'
+import './contact-footer.css'
+import './lightbox.css'
 
 const display = Oswald({
   subsets: ['latin'],

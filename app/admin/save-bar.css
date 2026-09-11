@@ -1,0 +1,79 @@
+/* Sticky save bar, shared by every admin editor */
+
+.save-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--admin-bg);
+  /* Pull out to the edges of the admin padding so the bar spans full width */
+  margin: calc(clamp(1.5rem, 3vw, 2.5rem) * -1);
+  margin-bottom: 1.25rem;
+  padding: 0.8rem clamp(1.5rem, 3vw, 2.5rem);
+  border-bottom: 0.5px solid var(--admin-line);
+  box-shadow: 0 1px 8px rgba(26, 23, 21, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.save-bar-title {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.85rem;
+  color: var(--admin-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+}
+
+.save-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.save-toast { font-size: 0.78rem; color: #2f6b45; }
+.save-toast[data-tone='working'] { color: var(--admin-accent); }
+
+/* Heading / body tabs inside the typography block */
+.type-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.85rem;
+}
+
+.type-tabs button {
+  flex: 1;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.66rem;
+  padding: 0.4rem 0.5rem;
+  background: transparent;
+  border: 0.5px solid var(--admin-line);
+  color: var(--admin-mute);
+  cursor: pointer;
+}
+
+.type-tabs button[data-active='true'] {
+  background: var(--admin-ink);
+  border-color: var(--admin-ink);
+  color: #f7f6f3;
+}
+
+
+/* Inside a panel (settings has several forms) the bar sits inline */
+.admin-panel .save-bar {
+  position: static;
+  margin: 1rem 0 0;
+  padding: 0.85rem 0 0;
+  border-bottom: none;
+  border-top: 0.5px solid var(--admin-line);
+  box-shadow: none;
+}

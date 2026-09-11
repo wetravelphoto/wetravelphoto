@@ -3,13 +3,13 @@ import { photoUrl } from '@/lib/images'
 import { formatTripDate } from '@/lib/dates'
 import SiteHeader from '@/components/SiteHeader'
 import AlbumPasswordGate from '@/components/AlbumPasswordGate'
-import AlbumGallery from '@/components/AlbumGallery'
 import TripCover from '@/components/TripCover'
 import ViewTracker from '@/components/ViewTracker'
-import ShareButtons from '@/components/ShareButtons'
+import GalleryView from '@/components/GalleryView'
+import { getSiteSettings } from '@/lib/site'
 import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import '../../gallery.css'
 
 export default async function TripPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -28,6 +28,8 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
 
   const orderColumn = album.sort_order === 'manual' ? 'sort_order' : 'taken_at'
   const ascending = album.sort_order !== 'date_desc'
+
+  const settings = await getSiteSettings()
 
   const { data: photos } = await supabase
     .from('photos')
@@ -55,7 +57,7 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
   return (
     <main>
       <ViewTracker albumId={album.id} />
-      <SiteHeader overHero={!!imageUrl} />
+      <SiteHeader />
 
       {imageUrl && (
         <TripCover
@@ -82,13 +84,7 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
         />
       )}
 
-      <div id="gallery" style={{ padding: 'clamp(1.5rem, 4vw, 2.5rem) clamp(1.25rem, 4vw, 3rem)' }}>
-        <p className="meta" style={{ margin: '0 0 0.35rem' }}>
-          <Link href="/" className="underline-link" style={{ borderBottom: 'none' }}>
-            &larr; All trips
-          </Link>
-        </p>
-
+      <div id="gallery" style={{ padding: '0 clamp(1.25rem, 4vw, 3rem)' }}>
         {album.description && (
           <p
             style={{
@@ -104,22 +100,6 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
             {album.description}
           </p>
         )}
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '1.5rem',
-            flexWrap: 'wrap',
-            marginTop: '1rem',
-          }}
-        >
-          <p className="meta" style={{ margin: 0 }}>
-            {photos?.length ?? 0} photographs — click any image to enlarge
-          </p>
-          <ShareButtons title={album.title} />
-        </div>
 
         {tags.length > 0 && (
           <div
@@ -144,11 +124,14 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
         )}
       </div>
 
-      <AlbumGallery
+      <GalleryView
         photos={photos ?? []}
         layoutStyle={album.layout_style ?? 'masonry'}
         publicUrl={process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''}
         heroFirst={album.gallery_hero ?? false}
+        galleryTitle={album.title}
+        siteTitle={settings.site_title}
+        canDownload={false}
       />
     </main>
   )

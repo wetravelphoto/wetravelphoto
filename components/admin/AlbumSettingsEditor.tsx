@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import SaveBar from '@/components/admin/SaveBar'
 import { useRouter } from 'next/navigation'
 import { uploadCustomCover, clearCustomCover, uploadCoverVideo, clearCoverVideo } from '@/app/actions/albums'
 import { COVER_LAYOUTS } from '@/lib/cover-layouts'
@@ -170,6 +171,9 @@ export default function AlbumSettingsEditor(props: {
   const previewPhotos = sortedPhotos.slice(0, 6)
 
   return (
+    <>
+    <SaveBar label="Save settings" title={props.albumTitle || 'Gallery settings'} />
+
     <div className="settings-layout">
       <link rel="stylesheet" href={fontHref(font)} />
 
@@ -887,6 +891,7 @@ export default function AlbumSettingsEditor(props: {
         </div>
       )}
     </div>
+    </>
   )
 }
 

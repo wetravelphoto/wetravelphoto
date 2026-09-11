@@ -1,0 +1,246 @@
+/* ---------- Gallery index (public) ---------- */
+
+.gallery-index-head {
+  max-width: 1400px;
+  margin: 0 auto clamp(1.75rem, 4vw, 3rem);
+}
+
+.gallery-index-eyebrow {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.26em;
+  font-size: 0.68rem;
+  color: var(--ember);
+  margin: 0 0 0.85rem;
+}
+
+.gallery-index-heading {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-weight: 400;
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  line-height: 1;
+  margin: 0;
+  color: var(--ink);
+}
+
+/* An even grid — every gallery the same size, which reads cleaner than a
+   ragged masonry when covers use different layouts. */
+.gallery-grid-public {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.75rem, 1.8vw, 1.5rem);
+}
+
+@media (max-width: 1000px) { .gallery-grid-public { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .gallery-grid-public { grid-template-columns: 1fr; } }
+
+.gallery-tile {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 0.5px solid var(--line);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.gallery-tile:hover {
+  border-color: rgba(20, 16, 14, 0.28);
+  box-shadow: 0 10px 28px rgba(20, 16, 14, 0.08);
+}
+
+.gallery-tile img {
+  width: 100%;
+  height: auto;
+  display: block;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gallery-tile:hover img { transform: scale(1.03); }
+
+.gallery-tile-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(14, 11, 10, 0.62) 0%, rgba(14, 11, 10, 0) 55%);
+}
+
+.gallery-tile-copy {
+  position: absolute;
+  left: clamp(0.9rem, 1.8vw, 1.5rem);
+  right: clamp(0.9rem, 1.8vw, 1.5rem);
+  bottom: clamp(0.9rem, 1.8vw, 1.5rem);
+  color: #faf9f6;
+}
+
+.gallery-tile-loc {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.62rem;
+  color: #e8b48c;
+  margin: 0 0 0.3rem;
+}
+
+.gallery-tile-name {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: clamp(1rem, 2vw, 1.45rem);
+  line-height: 1.15;
+  margin: 0;
+}
+
+/* ---------- Toolbar between cover and grid ---------- */
+
+.gallery-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: clamp(1rem, 1.6vw, 1.4rem) clamp(1.25rem, 4vw, 3rem);
+  border-bottom: 0.5px solid var(--line);
+}
+
+.gallery-toolbar-title { min-width: 0; }
+
+.gallery-toolbar-name {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: clamp(1.6rem, 3.4vw, 2.6rem);
+  line-height: 1.1;
+  margin: 0;
+  color: var(--ink);
+}
+
+.gallery-toolbar-site {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.86rem;
+  color: var(--ink-mute);
+  margin: 0.2rem 0 0;
+}
+
+.gallery-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  padding: 0.55rem 0.7rem;
+  transition: color 0.2s ease;
+}
+
+.toolbar-btn:hover { color: var(--ink); }
+.toolbar-btn:disabled { opacity: 0.5; cursor: wait; }
+
+.toolbar-divider { width: 0.5px; height: 1.7rem; background: var(--line); margin: 0 0.35rem; }
+
+.toolbar-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-mute);
+  padding: 0.55rem;
+  line-height: 0;
+  transition: color 0.2s ease;
+}
+
+.toolbar-icon:hover { color: var(--ink); }
+
+/* ---------- Slideshow ---------- */
+
+.slideshow {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #0b0a09;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slideshow-image {
+  max-width: 100%;
+  max-height: 100vh;
+  object-fit: contain;
+  display: block;
+}
+
+.slideshow-close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  background: none;
+  border: none;
+  color: rgba(250, 249, 246, 0.8);
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.slideshow-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
+  background: linear-gradient(to top, rgba(11, 10, 9, 0.85), rgba(11, 10, 9, 0));
+  color: rgba(250, 249, 246, 0.85);
+}
+
+.slideshow-bar button {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  line-height: 1;
+}
+
+.slideshow-count {
+  font-family: var(--font-display), sans-serif;
+  letter-spacing: 0.1em;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.slideshow-caption { font-size: 0.8rem; opacity: 0.75; margin-left: auto; }
+
+/* Grid spacing, shared by every album layout */
+.album-grid-wrap { --grid-gap: clamp(0.6rem, 1.4vw, 1.15rem); }
+
+
+/* Covers rendered inside index tiles */
+.gallery-tile-cover {
+  width: 100%;
+  overflow: hidden;
+  background: #14100e;
+}
+
+.gallery-tile-cover { aspect-ratio: 4 / 3; }

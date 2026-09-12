@@ -10,6 +10,7 @@ export default function PostMetaFields({
   excerpt,
   category,
   categories,
+  byline,
   albumId,
   albums,
   featuredPath,
@@ -22,6 +23,7 @@ export default function PostMetaFields({
   excerpt: string
   category: string
   categories: string[]
+  byline: string
   albumId: string
   albums: { id: string; title: string }[]
   featuredPath: string | null
@@ -64,6 +66,20 @@ export default function PostMetaFields({
             <option key={c} value={c} />
           ))}
         </datalist>
+      </label>
+
+      <label className="admin-field">
+        Author or collaborator
+        <input
+          type="text"
+          name="byline"
+          defaultValue={byline}
+          placeholder="Words and photographs by…"
+          className="admin-input"
+        />
+        <span className="admin-meta" style={{ display: 'block', marginTop: '0.3rem' }}>
+          Shown on the story, and on the index if that&apos;s switched on.
+        </span>
       </label>
 
       <label className="admin-field">

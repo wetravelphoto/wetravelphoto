@@ -22,6 +22,7 @@ export type CoverSettings = {
   overlayType: string | null
   overlayOpacity: number
   imageUrl: string | null
+  imageSrcSet?: string
   videoUrl?: string | null
   showButton?: boolean
   buttonText?: string | null
@@ -199,6 +200,8 @@ export default function CoverRenderer({
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={settings.imageUrl}
+      srcSet={settings.imageSrcSet}
+      sizes="100vw"
       alt=""
       draggable={false}
       style={{

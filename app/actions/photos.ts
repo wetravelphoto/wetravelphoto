@@ -1,20 +1,31 @@
 'use server'
 
 import { r2Client } from '@/lib/r2'
-import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createClient } from '@/lib/supabase/server'
-import sharp from 'sharp'
+import { processExistingOriginal } from '@/lib/derivatives'
 import exifr from 'exifr'
-import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 
-export async function uploadPhoto(albumId: string, formData: FormData) {
-  const file = formData.get('file') as File
-  if (!file) throw new Error('No file provided')
+/**
+ * Called once the browser has uploaded the original straight to R2. Reads it
+ * back, pulls its metadata, builds the display sizes and records the photo.
+ */
+export async function registerPhoto(
+  albumId: string,
+  key: string,
+  base: string,
+  originalBytes: number
+) {
+  const object = await r2Client.send(
+    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key })
+  )
 
-  const buffer = Buffer.from(await file.arrayBuffer())
+  if (!object.Body) throw new Error('Uploaded file could not be read back')
 
-  // Pull Lightroom keywords, capture date and GPS out of the file's metadata
+  const buffer = Buffer.from(await object.Body.transformToByteArray())
+
+  // Lightroom keywords, capture date and GPS, straight from the file
   let tags: string[] = []
   let takenAt: string | null = null
   let latitude: number | null = null
@@ -47,24 +58,7 @@ export async function uploadPhoto(albumId: string, formData: FormData) {
     // Metadata is a bonus — a file without it still uploads fine
   }
 
-  const image = sharp(buffer).rotate()
-  const metadata = await image.metadata()
-
-  const optimized = await image
-    .resize(2400, 2400, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 85 })
-    .toBuffer()
-
-  const key = `photos/${albumId}/${randomUUID()}.jpg`
-
-  await r2Client.send(
-    new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME!,
-      Key: key,
-      Body: optimized,
-      ContentType: 'image/jpeg',
-    })
-  )
+  const processed = await processExistingOriginal(buffer, base, key)
 
   const supabase = await createClient()
 
@@ -79,9 +73,12 @@ export async function uploadPhoto(albumId: string, formData: FormData) {
 
   const { error } = await supabase.from('photos').insert({
     album_id: albumId,
-    storage_path: key,
-    width: metadata.width,
-    height: metadata.height,
+    storage_path: processed.displayPath,
+    original_path: processed.originalPath,
+    original_bytes: originalBytes || processed.originalBytes,
+    derivatives: processed.derivatives,
+    width: processed.width,
+    height: processed.height,
     sort_order: nextSortOrder,
     tags,
     taken_at: takenAt,
@@ -97,8 +94,27 @@ export async function uploadPhoto(albumId: string, formData: FormData) {
 export async function deletePhoto(albumId: string, photoId: string, storagePath: string) {
   const supabase = await createClient()
 
-  await r2Client.send(
-    new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: storagePath })
+  // A photo is now several files — the original plus each display size
+  const { data: photo } = await supabase
+    .from('photos')
+    .select('original_path, derivatives')
+    .eq('id', photoId)
+    .maybeSingle()
+
+  const keys = new Set<string>([storagePath])
+  if (photo?.original_path) keys.add(photo.original_path)
+
+  for (const value of Object.values((photo?.derivatives ?? {}) as Record<string, string>)) {
+    if (value) keys.add(value)
+  }
+
+  await Promise.all(
+    [...keys].map((Key) =>
+      r2Client
+        .send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key }))
+        // One missing object shouldn't block removing the record
+        .catch(() => null)
+    )
   )
 
   const { error } = await supabase.from('photos').delete().eq('id', photoId)

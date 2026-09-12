@@ -11,6 +11,8 @@ import './home-preview-ig.css'
 import './save-bar.css'
 import '../hero.css'
 import './branding.css'
+import './uploader.css'
+import '../journal/block-editor-fix.css'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()

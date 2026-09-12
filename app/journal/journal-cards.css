@@ -1,0 +1,78 @@
+/* Journal index cards */
+
+.journal-card-media-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+
+.journal-card-media {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-alt);
+  aspect-ratio: 4 / 3;
+  margin-bottom: 0;
+}
+
+.journal-card[data-feature='true'] .journal-card-media { aspect-ratio: 16 / 9; }
+
+.journal-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.journal-card:hover .journal-card-media img { transform: scale(1.025); }
+
+/* Reads downward and finishes flush with the bottom of the photograph */
+.journal-card-cat {
+  writing-mode: vertical-rl;
+  display: block;
+  flex: 0 0 auto;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.26em;
+  font-size: 0.62rem;
+  color: var(--ember);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  max-height: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.journal-card-title {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-weight: 400;
+  /* Matches the old feature card, scaled by the journal page setting */
+  font-size: calc(clamp(1.3rem, 2.4vw, 1.85rem) * var(--journal-title-scale, 1));
+  line-height: 1.15;
+  margin: 0 0 0.4rem;
+  color: var(--ink);
+}
+
+/* The feature card is wider, but its title matches the rest */
+
+.journal-card-meta {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.62rem;
+  color: var(--ink-mute);
+  margin: 0 0 0.4rem;
+}
+
+.journal-card-excerpt {
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  margin: 0;
+}

@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
 
 export type LightboxPhoto = {
   id: string
   storage_path: string
+  derivatives?: Record<string, string> | null
   caption: string | null
   alt_text: string | null
   is_for_sale?: boolean
@@ -213,7 +215,9 @@ export default function PhotoLightbox({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={`${publicUrl}/${current.storage_path}`}
+          src={displayUrl(current)}
+          srcSet={srcSetFor(current)}
+          sizes={SIZES_ATTR.fullWidth}
           alt={current.alt_text ?? current.caption ?? ''}
           draggable={false}
           style={{

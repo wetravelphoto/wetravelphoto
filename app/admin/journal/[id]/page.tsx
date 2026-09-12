@@ -35,7 +35,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
         <PostActions status={post?.status ?? 'draft'} title={post?.title} slug={post?.slug} />
 
         <p className="admin-crumb">
-          <Link href="/admin/journal">← All stories</Link>
+          <Link href="/admin/blog">← All stories</Link>
         </p>
 
         <PostMetaFields
@@ -43,6 +43,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
           slug={post?.slug ?? ''}
           excerpt={post?.excerpt ?? ''}
           category={post?.category ?? ''}
+          byline={post?.byline ?? ''}
           categories={categories}
           albumId={post?.album_id ?? ''}
           albums={albums ?? []}

@@ -5,10 +5,12 @@ import { toggleFavorite } from '@/app/actions/favorites'
 import PhotoLightbox from '@/components/PhotoLightbox'
 import Slideshow from '@/components/Slideshow'
 import GalleryToolbar from '@/components/GalleryToolbar'
+import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
 
 type Photo = {
   id: string
   storage_path: string
+  derivatives?: Record<string, string> | null
   caption: string | null
   alt_text: string | null
 }
@@ -101,7 +103,9 @@ export default function ClientGallery({
             <figure key={photo.id} className="client-tile">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`${publicUrl}/${photo.storage_path}`}
+                src={displayUrl(photo)}
+                srcSet={srcSetFor(photo)}
+                sizes={SIZES_ATTR.grid}
                 alt={photo.alt_text ?? photo.caption ?? ''}
                 loading="lazy"
                 onClick={() => setOpenIndex(i)}

@@ -23,6 +23,10 @@ export type SiteSettings = {
   galleries_heading: string | null
   journal_page_eyebrow: string | null
   journal_page_heading: string | null
+  journal_show_excerpt: boolean
+  journal_show_date: boolean
+  journal_show_byline: boolean
+  journal_title_scale: number
   tagline: string | null
   about_heading: string | null
   about_body: string | null
@@ -105,6 +109,10 @@ const FALLBACK: SiteSettings = {
   galleries_heading: null,
   journal_page_eyebrow: null,
   journal_page_heading: null,
+  journal_show_excerpt: true,
+  journal_show_date: false,
+  journal_show_byline: false,
+  journal_title_scale: 1,
   tagline: 'Travel photography and field notes',
   about_heading: 'About',
   about_body: null,

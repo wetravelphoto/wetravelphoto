@@ -1,0 +1,87 @@
+/* Direct-to-storage uploader */
+
+.uploader {
+  border: 1px dashed var(--admin-line);
+  padding: clamp(1.5rem, 4vw, 2.5rem) 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--admin-bg);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.uploader:hover,
+.uploader[data-dragging='true'] {
+  border-color: var(--admin-accent);
+  background: var(--admin-panel);
+}
+
+.uploader-title {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.92rem;
+  color: var(--admin-ink);
+  margin: 0 0 0.4rem;
+}
+
+.upload-list {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.upload-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px 90px;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .upload-list li { grid-template-columns: minmax(0, 1fr) 80px; }
+  .upload-list .upload-track { display: none; }
+}
+
+.upload-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--admin-ink);
+}
+
+.upload-track {
+  height: 3px;
+  background: var(--admin-line);
+  overflow: hidden;
+}
+
+.upload-fill {
+  display: block;
+  height: 100%;
+  background: var(--admin-accent);
+  transition: width 0.2s ease;
+}
+
+.upload-status {
+  text-align: right;
+  color: var(--admin-mute);
+  font-size: 0.74rem;
+}
+
+.upload-list li[data-status='done'] .upload-fill { background: #2f6b45; }
+.upload-list li[data-status='done'] .upload-status { color: #2f6b45; }
+
+/* Processing has no measurable progress, so the bar pulses instead */
+.upload-list li[data-status='processing'] .upload-fill { animation: upload-pulse 1.2s ease-in-out infinite; }
+
+.upload-list li[data-status='failed'] .upload-fill { background: var(--admin-danger); }
+.upload-list li[data-status='failed'] .upload-status { color: var(--admin-danger); }
+
+@keyframes upload-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}

@@ -21,6 +21,18 @@ const pages = [
     description: 'Intro copy and the public email shown above the form.',
     live: '/contact',
   },
+  {
+    href: '/admin/pages/journal',
+    title: 'Journal',
+    description: 'The heading above your stories, and what each card shows.',
+    live: '/journal',
+  },
+  {
+    href: '/admin/pages/galleries',
+    title: 'Galleries',
+    description: 'The heading above your gallery index.',
+    live: '/trips',
+  },
 ]
 
 export default function PagesIndex() {
@@ -59,8 +71,7 @@ export default function PagesIndex() {
       <div className="admin-panel" style={{ marginTop: '1.25rem' }}>
         <h2 className="admin-h2">Not editable yet</h2>
         <p className="admin-meta" style={{ margin: 0, lineHeight: 1.6 }}>
-          The trips index, journal index and 404 page are laid out in code. If you want copy control over
-          any of them, that&apos;s a small addition.
+          The 404 page is still laid out in code.
         </p>
       </div>
     </div>

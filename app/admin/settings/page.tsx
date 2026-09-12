@@ -7,6 +7,8 @@ import { saveInstagramToken } from '@/app/actions/instagram'
 import InstagramPanel from '@/components/admin/InstagramPanel'
 import ChromeEditor from '@/components/admin/ChromeEditor'
 import SaveBar from '@/components/admin/SaveBar'
+import BackfillPanel from '@/components/admin/BackfillPanel'
+import { countUnprocessed } from '@/app/actions/backfill'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +25,8 @@ export default async function SettingsPage() {
     .select('id', { count: 'exact', head: true })
 
   const { data: team } = await supabase.from('profiles').select('id, email, display_name, role')
+
+  const unprocessed = await countUnprocessed()
 
   // A real cover makes the header preview honest about legibility
   const { data: samples } = await supabase
@@ -212,6 +216,11 @@ export default async function SettingsPage() {
           <SaveBar label="Save newsletter" />
         </div>
       </form>
+
+      <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+        <h2 className="admin-h2">Photograph sizes</h2>
+        <BackfillPanel initialRemaining={unprocessed} />
+      </div>
 
       <div className="admin-panel">
         <h2 className="admin-h2">Team</h2>

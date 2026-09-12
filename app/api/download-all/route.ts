@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
   const { data: photos } = await supabase
     .from('photos')
-    .select('storage_path, caption')
+    .select('storage_path, original_path, caption')
     .eq('album_id', albumId)
     .order('sort_order')
 
@@ -73,16 +73,19 @@ export async function GET(request: NextRequest) {
       void (async () => {
         for (const [index, photo] of photos.entries()) {
           try {
+            // Originals where we have them, display copies otherwise
+            const key = photo.original_path ?? photo.storage_path
+
             const object = await r2Client.send(
               new GetObjectCommand({
                 Bucket: process.env.R2_BUCKET_NAME!,
-                Key: photo.storage_path,
+                Key: key,
               })
             )
 
             if (!object.Body) continue
 
-            const name = photo.storage_path.split('/').pop() ?? `photo-${index + 1}.jpg`
+            const name = key.split('/').pop() ?? `photo-${index + 1}.jpg`
             archive.append(object.Body as Readable, { name: `${album.slug}/${name}` })
           } catch {
             // A missing object shouldn't sink the whole archive

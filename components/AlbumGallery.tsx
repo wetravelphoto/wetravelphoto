@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import PhotoLightbox from '@/components/PhotoLightbox'
+import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
 
 type Photo = {
   id: string
   storage_path: string
+  derivatives?: Record<string, string> | null
   caption: string | null
   alt_text: string | null
   is_for_sale: boolean
@@ -78,7 +80,9 @@ export default function AlbumGallery({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               key={photo.id}
-              src={`${publicUrl}/${photo.storage_path}`}
+              src={displayUrl(photo)}
+              srcSet={srcSetFor(photo)}
+              sizes={SIZES_ATTR.grid}
               alt={photo.alt_text ?? photo.caption ?? ''}
               loading="lazy"
               onClick={() => setOpenIndex(i + offset)}
@@ -159,7 +163,9 @@ export default function AlbumGallery({
         <div style={{ padding: `0 ${pad}`, marginBottom: 'var(--grid-gap)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`${publicUrl}/${hero.storage_path}`}
+            src={displayUrl(hero)}
+            srcSet={srcSetFor(hero)}
+            sizes={SIZES_ATTR.fullWidth}
             alt={hero.alt_text ?? hero.caption ?? ''}
             onClick={() => setOpenIndex(0)}
             style={{ width: '100%', height: 'auto', display: 'block', cursor: 'zoom-in' }}
@@ -192,7 +198,9 @@ function Figure({ photo, publicUrl, onOpen }: { photo: Photo; publicUrl: string;
     <figure style={{ margin: 0, background: 'var(--surface-alt)' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`${publicUrl}/${photo.storage_path}`}
+        src={displayUrl(photo)}
+        srcSet={srcSetFor(photo)}
+        sizes={SIZES_ATTR.grid}
         alt={photo.alt_text ?? photo.caption ?? ''}
         loading="lazy"
         onClick={onOpen}

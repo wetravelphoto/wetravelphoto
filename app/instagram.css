@@ -52,10 +52,43 @@
   gap: clamp(0.45rem, 1.05vw, 1rem);
 }
 
-/* Three columns below the breakpoint: nine singles tile exactly as 3x3 */
+/* Tablets keep three columns, with the large tiles flattened so nine
+   photographs tile exactly as 3x3 */
 @media (max-width: 900px) {
   .ig-grid { grid-template-columns: repeat(3, 1fr); }
   .ig-item[data-feature='true'] { grid-column: span 1; grid-row: span 1; }
+}
+
+/* Phones: a tight, edge-to-edge 3x3 — the shape the images were made for,
+   and far more legible than five narrow columns */
+@media (max-width: 620px) {
+  .ig-section {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: clamp(2.25rem, 8vw, 3rem);
+    padding-bottom: clamp(2.25rem, 8vw, 3rem);
+  }
+
+  .ig-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    max-width: none;
+  }
+
+  .ig-head {
+    max-width: none;
+    padding: 0 1.25rem;
+    margin-bottom: 1.25rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .ig-heading { font-size: 0.82rem; letter-spacing: 0.2em; }
+  .ig-handle { font-size: 0.8rem; }
+
+  /* A badge over a small tile just obscures the photograph */
+  .ig-badge { display: none; }
 }
 
 .ig-item {

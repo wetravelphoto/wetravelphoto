@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import type { BlockImage } from '@/lib/blocks'
-import { fetchAlbumPhotos, uploadPostImage } from '@/app/actions/blog'
+import { fetchAlbumPhotos, registerJournalImage } from '@/app/actions/blog'
 
 type AlbumOption = { id: string; title: string }
 type PhotoOption = { id: string; storage_path: string; caption: string | null }
@@ -24,6 +24,7 @@ export default function ImagePickerModal({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -56,20 +57,45 @@ export default function ImagePickerModal({
     })
   }
 
+  /** Files go straight to storage, so large photographs aren't capped by the
+   *  request size limit the way a server upload would be. */
   async function handleUpload(files: FileList | null) {
     if (!files?.length) return
+
     setUploading(true)
+    setError(null)
 
     const results: BlockImage[] = []
-    for (const file of Array.from(files)) {
-      const fd = new FormData()
-      fd.append('file', file)
-      const path = await uploadPostImage(fd)
-      if (path) results.push({ path })
-    }
 
-    setUploading(false)
-    if (results.length) onSelect(multiple ? results : [results[0]])
+    try {
+      for (const file of Array.from(files)) {
+        const signedResponse = await fetch('/api/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder: 'journal', contentType: file.type }),
+        })
+
+        const signed = await signedResponse.json()
+        if (!signedResponse.ok) throw new Error(signed.error ?? 'Could not start the upload')
+
+        const put = await fetch(signed.url, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        })
+
+        if (!put.ok) throw new Error(`Storage rejected the file (${put.status})`)
+
+        const path = await registerJournalImage(signed.key, signed.base)
+        if (path) results.push({ path })
+      }
+
+      if (results.length) onSelect(multiple ? results : [results[0]])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
@@ -110,6 +136,12 @@ export default function ImagePickerModal({
           <p className="admin-meta" style={{ margin: '0 0 0.5rem' }}>
             {uploading ? 'Uploading…' : 'Upload a new image just for this post'}
           </p>
+
+          {error && (
+            <p className="admin-meta" style={{ margin: '0 0 0.5rem', color: 'var(--admin-danger)' }}>
+              {error}
+            </p>
+          )}
           <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="admin-btn admin-btn-sm">
             Choose file{multiple ? 's' : ''}
           </button>

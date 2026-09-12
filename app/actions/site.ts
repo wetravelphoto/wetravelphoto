@@ -17,6 +17,11 @@ async function patch(values: Record<string, unknown>, paths: string[]) {
 }
 
 const text = (formData: FormData, key: string) => (formData.get(key) as string)?.trim() || null
+
+const decimalFrom = (formData: FormData, key: string, fallback: number) => {
+  const value = parseFloat((formData.get(key) as string) ?? '')
+  return Number.isNaN(value) ? fallback : value
+}
 const on = (formData: FormData, key: string) => formData.get(key) === 'on'
 
 export async function updateIdentity(formData: FormData) {
@@ -133,5 +138,30 @@ export async function updateNewsletter(formData: FormData) {
       footer_note: text(formData, 'footer_note'),
     },
     ['/']
+  )
+}
+
+
+export async function updateJournalPage(formData: FormData) {
+  await patch(
+    {
+      journal_page_eyebrow: text(formData, 'journal_page_eyebrow'),
+      journal_page_heading: text(formData, 'journal_page_heading'),
+      journal_show_excerpt: on(formData, 'journal_show_excerpt'),
+      journal_show_date: on(formData, 'journal_show_date'),
+      journal_show_byline: on(formData, 'journal_show_byline'),
+      journal_title_scale: decimalFrom(formData, 'journal_title_scale', 1),
+    },
+    ['/journal', '/admin/pages/journal']
+  )
+}
+
+export async function updateGalleriesPage(formData: FormData) {
+  await patch(
+    {
+      galleries_eyebrow: text(formData, 'galleries_eyebrow'),
+      galleries_heading: text(formData, 'galleries_heading'),
+    },
+    ['/trips', '/admin/pages/galleries']
   )
 }

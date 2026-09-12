@@ -29,7 +29,6 @@
 /* The lead story spans two columns on wide screens */
 .journal-card[data-feature='true'] { grid-column: span 2; }
 .journal-card[data-feature='true'] .journal-card-media { aspect-ratio: 16 / 9; }
-.journal-card[data-feature='true'] .journal-card-title { font-size: clamp(1.3rem, 2.4vw, 1.85rem); }
 
 @media (max-width: 620px) {
   .journal-card[data-feature='true'] { grid-column: span 1; }
@@ -74,11 +73,9 @@
 
 .post-shell > * { grid-column: 2; }
 
-/* Wide but not edge to edge — breathing room on both sides */
 .post-figure-full {
   grid-column: 1 / -1;
-  width: min(var(--wide), calc(100% - clamp(1rem, 6vw, 7rem)));
-  margin: clamp(2rem, 4vw, 3.25rem) auto;
+  margin: clamp(2rem, 4vw, 3.25rem) 0;
 }
 
 .post-figure-wide {
@@ -255,14 +252,13 @@
 
 /* ---------- Larger imagery, masonry sets, lightbox ---------- */
 
-.post-shell { --wide: 1240px; --gap: clamp(0.4rem, 1vw, 0.75rem); }
+.post-shell { --wide: 1180px; --gap: clamp(0.4rem, 1vw, 0.75rem); }
 
 .post-figure-wide { width: min(var(--wide), 100%); }
 
-/* No padding here — the parent already sets the width, so the lead image
-   and the columns below it line up exactly. */
 .post-masonry {
   column-gap: var(--gap);
+  padding: 0 clamp(0.5rem, 2vw, 2rem);
 }
 
 @media (max-width: 700px) {
@@ -328,86 +324,28 @@
 
 .editor-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+  grid-template-columns: minmax(0, 1fr) 210px;
   gap: 1.25rem;
-  /* No align-items:start — the rail must stretch for sticky to work */
+  align-items: start;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 900px) {
   .editor-layout { grid-template-columns: 1fr; }
-  .editor-rail-inner { position: static; max-height: none; }
+  .editor-palette { position: static !important; }
 }
 
-.editor-rail { min-width: 0; }
-
-.editor-rail-inner {
+.editor-palette {
   position: sticky;
-  top: 4.5rem;
+  top: 5.5rem;
   background: var(--admin-panel);
   border: 0.5px solid var(--admin-line);
-  max-height: calc(100vh - 6rem);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.editor-rail-tabs {
-  display: flex;
-  border-bottom: 0.5px solid var(--admin-line);
-  flex-shrink: 0;
-}
-
-.editor-rail-tabs button {
-  flex: 1;
-  font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.7rem;
-  padding: 0.55rem 0.5rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--admin-mute);
-  cursor: pointer;
-  margin-bottom: -1px;
-}
-
-.editor-rail-tabs button[data-active='true'] {
-  color: var(--admin-ink);
-  border-bottom-color: var(--admin-accent);
-}
-
-.editor-rail-body {
-  overflow-y: auto;
   padding: 0.85rem;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
   scrollbar-width: thin;
-  flex: 1;
 }
 
-.editor-preview {
-  background: var(--surface, #faf9f6);
-  font-family: var(--font-body), sans-serif;
-}
-
-/* Scale the post typography down inside the narrow preview column */
-.editor-preview .post-title { font-size: 1.15rem; margin-bottom: 0.6rem; }
-.editor-preview .post-lead { font-size: 0.82rem; margin-bottom: 0.8rem; }
-.editor-preview .post-body { font-size: 0.75rem; line-height: 1.7; margin-bottom: 0.7rem; }
-.editor-preview .post-heading { font-size: 0.85rem; margin: 1.1rem 0 0.5rem; }
-.editor-preview .post-quote { font-size: 0.85rem; margin: 1rem 0; padding-left: 0.7rem; }
-.editor-preview .post-quote-cite { font-size: 0.62rem; }
-.editor-preview .post-credit { font-size: 0.66rem; }
-.editor-preview .post-caption { font-size: 0.62rem; margin-top: 0.35rem; }
-.editor-preview .post-figure-full,
-.editor-preview .post-figure-wide,
-.editor-preview .post-figure { margin: 0.9rem 0; width: 100%; }
-.editor-preview .post-masonry { padding: 0; }
-.editor-preview .post-divider { margin: 1rem 0; }
-.editor-preview img { cursor: default !important; }
-.editor-preview .post-breadcrumb { font-size: 0.6rem; margin-bottom: 0.7rem; }
-.editor-preview .post-meta { font-size: 0.6rem; margin-bottom: 1rem; }
-
-.editor-rail-body .palette-btn {
+.editor-palette button {
   display: block;
   width: 100%;
   text-align: left;
@@ -417,21 +355,16 @@
 .editor-actions {
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: 5;
   background: var(--admin-bg);
-  padding: 0.85rem clamp(1.5rem, 3vw, 2.5rem);
-  /* Pull out to the edges of the admin padding so the bar spans full width */
-  margin: calc(clamp(1.5rem, 3vw, 2.5rem) * -1);
-  margin-bottom: 1.25rem;
+  padding: 0.75rem 0;
   border-bottom: 0.5px solid var(--admin-line);
+  margin-bottom: 1.25rem;
   display: flex;
   gap: 0.6rem;
   align-items: center;
   flex-wrap: wrap;
-  box-shadow: 0 1px 8px rgba(26, 23, 21, 0.05);
 }
-
-.post-masonry-lead img { width: 100%; height: auto; display: block; }
 
 .save-toast {
   font-size: 0.78rem;
@@ -439,78 +372,3 @@
 }
 
 .save-toast[data-tone='working'] { color: var(--admin-accent); }
-
-
-/* ---------- Drag-and-drop block insertion ---------- */
-
-.block-dropzone {
-  height: 10px;
-  margin: -4px 0;
-  border-radius: 2px;
-  transition: height 0.15s ease, background 0.15s ease;
-  position: relative;
-}
-
-.block-dropzone[data-active='true'] {
-  height: 34px;
-  background: rgba(181, 96, 44, 0.12);
-  border: 1px dashed var(--admin-accent);
-  margin: 0.25rem 0;
-}
-
-.block-dropzone[data-active='true']::after {
-  content: 'Drop here';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--admin-accent);
-}
-
-.palette-btn { cursor: grab; }
-.palette-btn:active { cursor: grabbing; }
-
-.block-card { position: relative; }
-.block-card[data-dragging='true'] { opacity: 0.4; }
-
-.thumb-strip { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-
-.thumb-strip-item {
-  position: relative;
-  cursor: grab;
-  line-height: 0;
-}
-
-.thumb-strip-item[data-dragging='true'] { opacity: 0.4; }
-.thumb-strip-item[data-over='true'] { outline: 2px solid var(--admin-accent); outline-offset: 1px; }
-
-/* Wide preview overlay */
-.preview-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  background: rgba(20, 16, 14, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-}
-
-.preview-overlay-inner {
-  background: var(--surface, #faf9f6);
-  width: min(1100px, 100%);
-  max-height: 88vh;
-  overflow-y: auto;
-  position: relative;
-}
-
-.preview-overlay-close {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  z-index: 2;
-}

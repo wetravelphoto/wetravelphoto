@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
   const { data: photo } = await supabase
     .from('photos')
-    .select('id, album_id, storage_path')
+    .select('id, album_id, storage_path, original_path')
     .eq('id', photoId)
     .maybeSingle()
 
@@ -45,10 +45,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not authorized for this album' }, { status: 403 })
   }
 
+  // Clients get the full-resolution original when one exists; photos
+  // uploaded before originals were kept fall back to the display copy.
+  const key = photo.original_path ?? photo.storage_path
+
   const object = await r2Client.send(
     new GetObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
-      Key: photo.storage_path,
+      Key: key,
     })
   )
 
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
     client_id: client.id,
   })
 
-  const filename = photo.storage_path.split('/').pop() ?? 'photo.jpg'
+  const filename = key.split('/').pop() ?? 'photo.jpg'
 
   return new NextResponse(Buffer.from(bytes), {
     headers: {

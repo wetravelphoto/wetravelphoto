@@ -127,9 +127,11 @@ export default function BlockEditor({
   const leadBlock = blocks.find((b) => b.type === 'lead') as { type: 'lead'; text: string } | undefined
   const bodyBlocks = blocks.filter((b) => b.type !== 'lead')
 
-  const DropZone = ({ index }: { index: number }) => (
+  const DropZone = ({ index, first = false }: { index: number; first?: boolean }) => (
     <div
       className="block-dropzone"
+      data-first={first}
+      data-armed={dragging !== null}
       data-active={dragging !== null && dropIndex === index}
       onDragOver={(e) => {
         e.preventDefault()
@@ -177,7 +179,18 @@ export default function BlockEditor({
           </div>
         )}
 
-        <DropZone index={0} />
+        {blocks.length > 0 && (
+          <button
+            type="button"
+            className="insert-top"
+            onClick={() => insertAt(0, newBlock('paragraph'))}
+            title="Add a paragraph above everything"
+          >
+            + Add at the top
+          </button>
+        )}
+
+        <DropZone index={0} first />
 
         {blocks.map((block, index) => (
           <div key={block.id}>

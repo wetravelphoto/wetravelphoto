@@ -1,0 +1,55 @@
+/* Drop zones need a usable target, especially the one above the first block */
+
+.block-dropzone {
+  height: 10px;
+  margin: -2px 0;
+  border-radius: 2px;
+  transition: height 0.15s ease, background 0.15s ease;
+  position: relative;
+}
+
+/* While something is being dragged, every zone grows so it can be hit */
+.block-dropzone[data-armed='true'] {
+  height: 26px;
+  margin: 0.2rem 0;
+  border: 1px dashed rgba(26, 23, 21, 0.18);
+}
+
+.block-dropzone[data-active='true'] {
+  height: 38px;
+  background: rgba(181, 96, 44, 0.12);
+  border: 1px dashed var(--admin-accent);
+  margin: 0.3rem 0;
+}
+
+.block-dropzone[data-active='true']::after {
+  content: 'Drop here';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--admin-accent);
+}
+
+/* Direct way to add above everything, without needing to hit a thin target */
+.insert-top {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.4rem;
+  padding: 0.5rem;
+  background: none;
+  border: 1px dashed var(--admin-line);
+  color: var(--admin-mute);
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.insert-top:hover { border-color: var(--admin-accent); color: var(--admin-accent); }

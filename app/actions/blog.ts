@@ -2,9 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { r2Client } from '@/lib/r2'
-import { PutObjectCommand } from '@aws-sdk/client-s3'
-import sharp from 'sharp'
-import { randomUUID } from 'crypto'
+import { GetObjectCommand } from '@aws-sdk/client-s3'
+import { processExistingOriginal } from '@/lib/derivatives'
 import { estimateReadMinutes, type Block } from '@/lib/blocks'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -42,8 +41,8 @@ export async function createPost(formData: FormData) {
 
   if (error) throw new Error(error.message)
 
-  revalidatePath('/admin/journal')
-  redirect(`/admin/journal/${data.id}`)
+  revalidatePath('/admin/blog')
+  redirect(`/admin/blog/${data.id}`)
 }
 
 export async function updatePost(postId: string, formData: FormData) {
@@ -65,6 +64,7 @@ export async function updatePost(postId: string, formData: FormData) {
     title,
     slug,
     excerpt: get('excerpt') || null,
+    byline: get('byline') || null,
     category: get('category') || null,
     album_id: get('album_id') || null,
     // Featured image is stored as a storage path so it can come from any
@@ -97,8 +97,8 @@ export async function updatePost(postId: string, formData: FormData) {
   const { error } = await supabase.from('blog_posts').update(updates).eq('id', postId)
   if (error) throw new Error(error.message)
 
-  revalidatePath('/admin/journal')
-  revalidatePath(`/admin/journal/${postId}`)
+  revalidatePath('/admin/blog')
+  revalidatePath(`/admin/blog/${postId}`)
   revalidatePath('/journal')
   revalidatePath(`/journal/${slug}`)
   revalidatePath('/')
@@ -109,9 +109,9 @@ export async function deletePost(postId: string) {
   const { error } = await supabase.from('blog_posts').delete().eq('id', postId)
   if (error) throw new Error(error.message)
 
-  revalidatePath('/admin/journal')
+  revalidatePath('/admin/blog')
   revalidatePath('/journal')
-  redirect('/admin/journal')
+  redirect('/admin/blog')
 }
 
 /** Feeds the image picker — albums list, or one album's photos. */
@@ -133,34 +133,23 @@ export async function fetchAlbumPhotos(albumId: string | null) {
   return { albums: albums ?? [], photos: photos ?? [] }
 }
 
-/** Uploads an image that belongs to a post rather than an album. */
-export async function uploadPostImage(formData: FormData): Promise<string | null> {
-  const file = formData.get('file') as File
-  if (!file || file.size === 0) return null
-
-  const buffer = Buffer.from(await file.arrayBuffer())
-
-  const optimized = await sharp(buffer)
-    .rotate()
-    .resize(2400, 2400, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 85 })
-    .toBuffer()
-
-  const key = `journal/${randomUUID()}.jpg`
-
-  await r2Client.send(
-    new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME!,
-      Key: key,
-      Body: optimized,
-      ContentType: 'image/jpeg',
-    })
+/**
+ * Called once the browser has uploaded a journal image straight to storage.
+ * Builds the display sizes and hands back the path blocks should reference.
+ */
+export async function registerJournalImage(key: string, base: string): Promise<string | null> {
+  const object = await r2Client.send(
+    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key })
   )
 
-  return key
+  if (!object.Body) return null
+
+  const buffer = Buffer.from(await object.Body.transformToByteArray())
+  const processed = await processExistingOriginal(buffer, base, key)
+
+  return processed.displayPath
 }
 
-/** Bulk actions from the journal list — status changes, copies, deletes. */
 export async function bulkUpdateStatus(ids: string[], status: 'draft' | 'published') {
   if (ids.length === 0) return
 
@@ -170,7 +159,7 @@ export async function bulkUpdateStatus(ids: string[], status: 'draft' | 'publish
 
   await supabase.from('blog_posts').update(updates).in('id', ids)
 
-  revalidatePath('/admin/journal')
+  revalidatePath('/admin/blog')
   revalidatePath('/journal')
 }
 
@@ -180,7 +169,7 @@ export async function bulkDelete(ids: string[]) {
   const supabase = await createClient()
   await supabase.from('blog_posts').delete().in('id', ids)
 
-  revalidatePath('/admin/journal')
+  revalidatePath('/admin/blog')
   revalidatePath('/journal')
 }
 
@@ -211,5 +200,5 @@ export async function duplicatePosts(ids: string[]) {
     await supabase.from('blog_posts').insert(copy)
   }
 
-  revalidatePath('/admin/journal')
+  revalidatePath('/admin/blog')
 }

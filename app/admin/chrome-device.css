@@ -1,0 +1,29 @@
+/* Device switch inside the header and footer editor */
+
+.chrome-device-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+/* Narrow the preview so phone sizing is judged at roughly phone width */
+.chrome-preview[data-device='mobile'] { max-width: 300px; }
+
+.chrome-preview[data-device='mobile'] .chrome-header {
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.chrome-preview[data-device='mobile'] .chrome-nav {
+  font-size: 0.62rem;
+  gap: 0.7rem;
+}
+
+.chrome-preview[data-device='mobile'] .chrome-footer {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+  gap: 0.9rem;
+}

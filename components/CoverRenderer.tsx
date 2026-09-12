@@ -203,6 +203,8 @@ export default function CoverRenderer({
       srcSet={settings.imageSrcSet}
       sizes="100vw"
       alt=""
+      fetchPriority="high"
+      decoding="async"
       draggable={false}
       style={{
         width: '100%',

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import FocalPicker, { type FocalPoint } from '@/components/admin/FocalPicker'
 
 export type PostOption = {
@@ -10,9 +10,13 @@ export type PostOption = {
   imagePath: string | null
 }
 
+type Focal = { x: number; y: number; mx: number; my: number }
+
+const EMPTY_FOCAL: Focal = { x: 0.5, y: 0.5, mx: 0.5, my: 0.5 }
+
 /**
- * Search-and-select for the hero stories, with thumbnails, drag-to-reorder,
- * and a per-slot title override that only affects the hero.
+ * Three slots, each its own dropdown with a search field at the top. Clearer
+ * than one shared search bar, since it's obvious which slot you're filling.
  */
 export default function HeroPicker({
   posts,
@@ -29,28 +33,35 @@ export default function HeroPicker({
   initialIds: string[]
   initialTitles: Record<string, string>
   initialSubtitles: Record<string, string>
-  initialFocal: Record<string, { x: number; y: number; mx: number; my: number }>
+  initialFocal: Record<string, Focal>
   publicUrl: string
   onChange?: (ids: string[]) => void
   onTitlesChange?: (titles: Record<string, string>) => void
   onSubtitlesChange?: (subtitles: Record<string, string>) => void
 }) {
-  const [selected, setSelected] = useState<string[]>(initialIds.filter((id) => posts.some((p) => p.id === id)))
+  const [selected, setSelected] = useState<(string | null)[]>(() => {
+    const filled = initialIds.filter((id) => posts.some((p) => p.id === id))
+    return [filled[0] ?? null, filled[1] ?? null, filled[2] ?? null]
+  })
+
   const [titles, setTitles] = useState<Record<string, string>>(initialTitles ?? {})
   const [subtitles, setSubtitles] = useState<Record<string, string>>(initialSubtitles ?? {})
-  const [focal, setFocal] = useState<Record<string, { x: number; y: number; mx: number; my: number }>>(
-    initialFocal ?? {}
-  )
-  const [focalOpen, setFocalOpen] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
-  const [open, setOpen] = useState(false)
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [overIndex, setOverIndex] = useState<number | null>(null)
-  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [focal, setFocal] = useState<Record<string, Focal>>(initialFocal ?? {})
+  const [openSlot, setOpenSlot] = useState<number | null>(null)
+  const [framingSlot, setFramingSlot] = useState<number | null>(null)
 
-  function update(ids: string[]) {
-    setSelected(ids)
-    onChange?.(ids)
+  const byId = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts])
+
+  function commit(next: (string | null)[]) {
+    setSelected(next)
+    onChange?.(next.filter(Boolean) as string[])
+  }
+
+  function choose(slot: number, id: string | null) {
+    const next = [...selected]
+    next[slot] = id
+    commit(next)
+    setOpenSlot(null)
   }
 
   function setTitle(id: string, value: string) {
@@ -69,52 +80,11 @@ export default function HeroPicker({
     onSubtitlesChange?.(next)
   }
 
-  function focalFor(id: string) {
-    return focal[id] ?? { x: 0.5, y: 0.5, mx: 0.5, my: 0.5 }
-  }
-
   function setFocalFor(id: string, next: { desktop: FocalPoint; mobile: FocalPoint }) {
     setFocal((prev) => ({
       ...prev,
       [id]: { x: next.desktop.x, y: next.desktop.y, mx: next.mobile.x, my: next.mobile.y },
     }))
-  }
-
-  const byId = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts])
-
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return posts
-      .filter((p) => !selected.includes(p.id))
-      .filter((p) => !q || p.title.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q))
-      .slice(0, 8)
-  }, [posts, query, selected])
-
-  function add(id: string) {
-    if (selected.length >= 3 || selected.includes(id)) return
-    update([...selected, id])
-    setQuery('')
-    setOpen(false)
-  }
-
-  function remove(id: string) {
-    update(selected.filter((s) => s !== id))
-    setTitle(id, '')
-    setSubtitle(id, '')
-  }
-
-  function drop(target: number) {
-    if (dragIndex === null || dragIndex === target) {
-      setDragIndex(null)
-      setOverIndex(null)
-      return
-    }
-    const next = [...selected]
-    const [moved] = next.splice(dragIndex, 1)
-    next.splice(target, 0, moved)
-    update(next)
-    setDragIndex(null)
-    setOverIndex(null)
   }
 
   return (
@@ -123,188 +93,219 @@ export default function HeroPicker({
         {[0, 1, 2].map((slot) => {
           const id = selected[slot]
           const post = id ? byId.get(id) : undefined
-
-          if (!post) {
-            return (
-              <div key={slot} className="hero-slot" data-empty="true">
-                <span className="hero-slot-index">{String(slot + 1).padStart(2, '0')}</span>
-                <span className="admin-meta">Empty</span>
-              </div>
-            )
-          }
+          const point = id ? (focal[id] ?? EMPTY_FOCAL) : EMPTY_FOCAL
 
           return (
-            <div
-              key={post.id}
-              className="hero-slot-wrap"
-              data-dragging={dragIndex === slot}
-              data-over={overIndex === slot && dragIndex !== slot}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setOverIndex(slot)
-              }}
-              onDrop={(e) => {
-                e.preventDefault()
-                drop(slot)
-              }}
-            >
-              <div
-                className="hero-slot"
-                draggable
-                onDragStart={() => setDragIndex(slot)}
-                onDragEnd={() => {
-                  setDragIndex(null)
-                  setOverIndex(null)
-                }}
-                title="Drag to reorder"
-              >
+            <div key={slot} className="hero-slot-card">
+              <div className="hero-slot-head">
                 <span className="hero-slot-index">{String(slot + 1).padStart(2, '0')}</span>
 
-                <div className="hero-slot-thumb">
-                  {post.imagePath ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={`${publicUrl}/${post.imagePath}`} alt="" draggable={false} />
-                  ) : (
-                    <span className="admin-meta" style={{ fontSize: '0.6rem' }}>
-                      No image
-                    </span>
-                  )}
-                </div>
+                <SlotDropdown
+                  posts={posts}
+                  selectedId={id}
+                  takenIds={selected.filter((s, i) => s && i !== slot) as string[]}
+                  open={openSlot === slot}
+                  onOpen={() => setOpenSlot(openSlot === slot ? null : slot)}
+                  onClose={() => setOpenSlot(null)}
+                  onChoose={(chosen) => choose(slot, chosen)}
+                  publicUrl={publicUrl}
+                />
+              </div>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p className="hero-slot-title">{post.title}</p>
-                  {post.category && <p className="admin-meta">{post.category}</p>}
-                  {!post.imagePath && (
-                    <p className="admin-meta" style={{ color: 'var(--admin-danger)' }}>
-                      Needs a featured image
+              {post && (
+                <div className="hero-slot-fields">
+                  <input
+                    type="text"
+                    value={titles[post.id] ?? ''}
+                    onChange={(e) => setTitle(post.id, e.target.value)}
+                    placeholder={`Show as: ${post.title}`}
+                    className="admin-input"
+                    autoComplete="off"
+                  />
+
+                  <input
+                    type="text"
+                    value={subtitles[post.id] ?? ''}
+                    onChange={(e) => setSubtitle(post.id, e.target.value)}
+                    placeholder="Subtitle (optional)"
+                    className="admin-input"
+                    autoComplete="off"
+                  />
+
+                  {post.imagePath ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setFramingSlot(framingSlot === slot ? null : slot)}
+                        className="admin-btn admin-btn-sm admin-btn-ghost"
+                        style={{ width: '100%' }}
+                      >
+                        {framingSlot === slot ? 'Hide framing' : 'Framing'}
+                      </button>
+
+                      {framingSlot === slot && (
+                        <div className="hero-slot-focal">
+                          <FocalPicker
+                            imageUrl={`${publicUrl}/${post.imagePath}`}
+                            desktop={{ x: point.x, y: point.y }}
+                            mobile={{ x: point.mx, y: point.my }}
+                            onChange={(next) => setFocalFor(post.id, next)}
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="admin-meta" style={{ margin: 0, color: 'var(--admin-danger)' }}>
+                      This story has no featured image, so the hero would be blank.
                     </p>
                   )}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => remove(post.id)}
-                  className="admin-btn admin-btn-sm admin-btn-ghost"
-                  aria-label={`Remove ${post.title}`}
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* Display name for the hero only — the story keeps its own title */}
-              <input
-                type="text"
-                value={titles[post.id] ?? ''}
-                onChange={(e) => setTitle(post.id, e.target.value)}
-                placeholder={`Show as: ${post.title}`}
-                className="admin-input hero-slot-rename"
-                autoComplete="off"
-              />
-
-              <input
-                type="text"
-                value={subtitles[post.id] ?? ''}
-                onChange={(e) => setSubtitle(post.id, e.target.value)}
-                placeholder="Subtitle (optional)"
-                className="admin-input hero-slot-rename"
-                autoComplete="off"
-              />
-
-              {post.imagePath && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setFocalOpen(focalOpen === post.id ? null : post.id)}
-                    className="admin-btn admin-btn-sm admin-btn-ghost hero-slot-focal-toggle"
-                  >
-                    {focalOpen === post.id ? 'Hide framing' : 'Framing'}
-                  </button>
-
-                  {focalOpen === post.id && (
-                    <div className="hero-slot-focal">
-                      <FocalPicker
-                        imageUrl={`${publicUrl}/${post.imagePath}`}
-                        desktop={{ x: focalFor(post.id).x, y: focalFor(post.id).y }}
-                        mobile={{ x: focalFor(post.id).mx, y: focalFor(post.id).my }}
-                        onChange={(next) => setFocalFor(post.id, next)}
-                      />
-                    </div>
-                  )}
-                </>
               )}
             </div>
           )
         })}
       </div>
 
-      {selected.length < 3 && (
-        <div className="hero-search">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setOpen(true)
-            }}
-            onFocus={() => setOpen(true)}
-            onBlur={() => {
-              blurTimer.current = setTimeout(() => setOpen(false), 150)
-            }}
-            placeholder="Search stories by title or category…"
-            className="admin-input"
-            style={{ marginTop: 0 }}
-            autoComplete="off"
-          />
-
-          {open && matches.length > 0 && (
-            <ul className="hero-results">
-              {matches.map((post) => (
-                <li key={post.id}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      if (blurTimer.current) clearTimeout(blurTimer.current)
-                      add(post.id)
-                    }}
-                  >
-                    <span className="hero-result-thumb">
-                      {post.imagePath && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`${publicUrl}/${post.imagePath}`} alt="" />
-                      )}
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span className="hero-result-title">{post.title}</span>
-                      {post.category && <span className="admin-meta"> · {post.category}</span>}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {open && query && matches.length === 0 && (
-            <ul className="hero-results">
-              <li>
-                <span style={{ padding: '0.6rem 0.7rem', display: 'block' }} className="admin-meta">
-                  No published stories match that.
-                </span>
-              </li>
-            </ul>
-          )}
-        </div>
-      )}
-
       <p className="admin-meta" style={{ margin: '0.6rem 0 0', lineHeight: 1.55 }}>
-        Leave all three empty to fall back to your three most recent stories. A display name changes the hero
-        only — the story keeps its real title everywhere else.
+        Leave all three empty to use your three most recent stories.
       </p>
 
-      <input type="hidden" name="featured_post_ids" value={selected.join(',')} />
+      <input
+        type="hidden"
+        name="featured_post_ids"
+        value={(selected.filter(Boolean) as string[]).join(',')}
+      />
       <input type="hidden" name="hero_titles" value={JSON.stringify(titles)} />
       <input type="hidden" name="hero_subtitles" value={JSON.stringify(subtitles)} />
       <input type="hidden" name="hero_focal" value={JSON.stringify(focal)} />
+    </div>
+  )
+}
+
+/** A dropdown whose first field is a search box. */
+function SlotDropdown({
+  posts,
+  selectedId,
+  takenIds,
+  open,
+  onOpen,
+  onClose,
+  onChoose,
+  publicUrl,
+}: {
+  posts: PostOption[]
+  selectedId: string | null | undefined
+  takenIds: string[]
+  open: boolean
+  onOpen: () => void
+  onClose: () => void
+  onChoose: (id: string | null) => void
+  publicUrl: string
+}) {
+  const [query, setQuery] = useState('')
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const selected = posts.find((p) => p.id === selectedId)
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus()
+    else setQuery('')
+  }, [open])
+
+  // Clicking anywhere else closes it
+  useEffect(() => {
+    if (!open) return
+
+    function onDocClick(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) onClose()
+    }
+
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open, onClose])
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return posts
+      .filter((p) => !takenIds.includes(p.id))
+      .filter((p) => !q || p.title.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q))
+  }, [posts, query, takenIds])
+
+  return (
+    <div className="slot-dropdown" ref={wrapRef}>
+      <button type="button" className="slot-trigger" onClick={onOpen} data-empty={!selected}>
+        {selected ? (
+          <>
+            <span className="slot-thumb">
+              {selected.imagePath && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={`${publicUrl}/${selected.imagePath}`} alt="" />
+              )}
+            </span>
+            <span className="slot-trigger-text">
+              <span className="slot-trigger-title">{selected.title}</span>
+              {selected.category && <span className="admin-meta">{selected.category}</span>}
+            </span>
+          </>
+        ) : (
+          <span className="slot-trigger-text">
+            <span className="slot-trigger-title">Empty</span>
+            <span className="admin-meta">Choose a story</span>
+          </span>
+        )}
+
+        <span className="slot-caret">{open ? '▴' : '▾'}</span>
+      </button>
+
+      {open && (
+        <div className="slot-menu">
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search stories…"
+            className="admin-input slot-search"
+            autoComplete="off"
+          />
+
+          <ul>
+            {selected && (
+              <li>
+                <button type="button" onClick={() => onChoose(null)} className="slot-clear">
+                  Clear this slot
+                </button>
+              </li>
+            )}
+
+            {matches.map((post) => (
+              <li key={post.id}>
+                <button type="button" onClick={() => onChoose(post.id)} data-active={post.id === selectedId}>
+                  <span className="slot-thumb">
+                    {post.imagePath && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`${publicUrl}/${post.imagePath}`} alt="" />
+                    )}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="slot-trigger-title">{post.title}</span>
+                    {post.category && <span className="admin-meta"> · {post.category}</span>}
+                  </span>
+                </button>
+              </li>
+            ))}
+
+            {matches.length === 0 && (
+              <li>
+                <span className="admin-meta" style={{ display: 'block', padding: '0.7rem' }}>
+                  {posts.length === 0 ? 'No published stories yet.' : 'Nothing matches that.'}
+                </span>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

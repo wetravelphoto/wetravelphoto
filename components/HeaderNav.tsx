@@ -5,12 +5,6 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Logo from '@/components/Logo'
 
-const links = [
-  { href: '/trips', label: 'Galleries' },
-  { href: '/journal', label: 'Journal' },
-  { href: '/contact', label: 'Contact' },
-]
-
 export default function HeaderNav({
   overHero = false,
   siteTitle,
@@ -18,6 +12,8 @@ export default function HeaderNav({
   logoHeight,
   align = 'split',
   navStyle,
+  labels,
+  showAbout = true,
 }: {
   overHero?: boolean
   siteTitle: string
@@ -25,6 +21,8 @@ export default function HeaderNav({
   logoHeight: number
   align?: string
   navStyle?: React.CSSProperties
+  labels: { galleries: string; journal: string; about: string; contact: string }
+  showAbout?: boolean
 }) {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -47,6 +45,13 @@ export default function HeaderNav({
     }
   }, [menuOpen])
 
+  const links = [
+    { href: '/trips', label: labels.galleries },
+    { href: '/journal', label: labels.journal },
+    ...(showAbout ? [{ href: '/about', label: labels.about }] : []),
+    { href: '/contact', label: labels.contact },
+  ]
+
   const mode = overHero && !scrolled ? 'over' : 'solid'
 
   return (
@@ -58,7 +63,8 @@ export default function HeaderNav({
             src={logoUrl}
             alt={siteTitle}
             tone={mode === 'over' ? 'light' : 'dark'}
-            height={logoHeight}
+            height={0}
+            className="site-logo"
           />
         </Link>
 

@@ -84,7 +84,10 @@ export default function AlbumGallery({
               srcSet={srcSetFor(photo)}
               sizes={SIZES_ATTR.grid}
               alt={photo.alt_text ?? photo.caption ?? ''}
+              width={photo.width ?? undefined}
+              height={photo.height ?? undefined}
               loading="lazy"
+              decoding="async"
               onClick={() => setOpenIndex(i + offset)}
               style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }}
             />
@@ -167,6 +170,10 @@ export default function AlbumGallery({
             srcSet={srcSetFor(hero)}
             sizes={SIZES_ATTR.fullWidth}
             alt={hero.alt_text ?? hero.caption ?? ''}
+            width={hero.width ?? undefined}
+            height={hero.height ?? undefined}
+            fetchPriority="high"
+            decoding="async"
             onClick={() => setOpenIndex(0)}
             style={{ width: '100%', height: 'auto', display: 'block', cursor: 'zoom-in' }}
           />
@@ -202,7 +209,12 @@ function Figure({ photo, publicUrl, onOpen }: { photo: Photo; publicUrl: string;
         srcSet={srcSetFor(photo)}
         sizes={SIZES_ATTR.grid}
         alt={photo.alt_text ?? photo.caption ?? ''}
+        /* Declaring the shape reserves the space, so the page doesn't jump
+           around as photographs arrive */
+        width={photo.width ?? undefined}
+        height={photo.height ?? undefined}
         loading="lazy"
+        decoding="async"
         onClick={onOpen}
         style={{ width: '100%', height: 'auto', display: 'block', cursor: 'zoom-in' }}
       />

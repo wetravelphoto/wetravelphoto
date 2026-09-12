@@ -68,7 +68,10 @@ export async function updateHomepage(formData: FormData) {
       hero_subtitles: heroSubtitles,
       hero_focal: heroFocal,
       hero_title_position: text(formData, 'hero_title_position') ?? 'center',
+      hero_story_align: text(formData, 'hero_story_align') ?? 'left',
       hero_show_mark: on(formData, 'hero_show_mark'),
+      show_bird: on(formData, 'show_bird'),
+      logo_bird_size: Math.round(decimalFrom(formData, 'logo_bird_size', 64)),
 
       hero_mode: text(formData, 'hero_mode') ?? 'stories',
       hero_image_path: text(formData, 'hero_image_path'),
@@ -94,13 +97,6 @@ export async function updateHomepage(formData: FormData) {
       journal_heading: text(formData, 'journal_heading'),
       journal_count: isNaN(count) ? 3 : count,
 
-      show_contact_section: on(formData, 'show_contact_section'),
-      contact_heading: text(formData, 'contact_heading'),
-      contact_eyebrow: text(formData, 'contact_eyebrow'),
-      contact_note: text(formData, 'contact_note'),
-      contact_tagline: text(formData, 'contact_tagline'),
-      contact_image_path: text(formData, 'contact_image_path'),
-      contact_image_side: text(formData, 'contact_image_side') ?? 'left',
 
       show_instagram: on(formData, 'show_instagram'),
       instagram_heading: text(formData, 'instagram_heading'),
@@ -112,18 +108,33 @@ export async function updateHomepage(formData: FormData) {
 export async function updateAboutPage(formData: FormData) {
   await patch(
     {
+      show_about: on(formData, 'show_about'),
+      about_eyebrow: text(formData, 'about_eyebrow'),
       about_heading: text(formData, 'about_heading'),
       about_body: text(formData, 'about_body'),
+      about_image_path: text(formData, 'about_image_path'),
+      about_image_side: text(formData, 'about_image_side') ?? 'left',
+      about_cta_label: text(formData, 'about_cta_label'),
+      about_cta_href: text(formData, 'about_cta_href'),
+      nav_about_label: text(formData, 'nav_about_label'),
     },
-    ['/about', '/admin/pages/about']
+    ['/about', '/admin/pages/about', '/']
   )
 }
 
 export async function updateContactPage(formData: FormData) {
   await patch(
     {
+      show_contact_section: on(formData, 'show_contact_section'),
+      contact_eyebrow: text(formData, 'contact_eyebrow'),
+      contact_heading: text(formData, 'contact_heading'),
       contact_intro: text(formData, 'contact_intro'),
+      contact_note: text(formData, 'contact_note'),
+      contact_tagline: text(formData, 'contact_tagline'),
+      contact_image_path: text(formData, 'contact_image_path'),
+      contact_image_side: text(formData, 'contact_image_side') ?? 'left',
       email_public: text(formData, 'email_public'),
+      nav_contact_label: text(formData, 'nav_contact_label'),
     },
     ['/contact', '/', '/admin/pages/contact']
   )
@@ -151,6 +162,7 @@ export async function updateJournalPage(formData: FormData) {
       journal_show_date: on(formData, 'journal_show_date'),
       journal_show_byline: on(formData, 'journal_show_byline'),
       journal_title_scale: decimalFrom(formData, 'journal_title_scale', 1),
+      nav_journal_label: text(formData, 'nav_journal_label'),
     },
     ['/journal', '/admin/pages/journal']
   )
@@ -161,6 +173,7 @@ export async function updateGalleriesPage(formData: FormData) {
     {
       galleries_eyebrow: text(formData, 'galleries_eyebrow'),
       galleries_heading: text(formData, 'galleries_heading'),
+      nav_galleries_label: text(formData, 'nav_galleries_label'),
     },
     ['/trips', '/admin/pages/galleries']
   )

@@ -1,0 +1,100 @@
+/* About page */
+
+.about {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  background: var(--surface);
+}
+
+.about[data-side='right'] .about-media { order: 2; }
+
+@media (max-width: 900px) {
+  .about { grid-template-columns: 1fr; }
+  .about[data-side='right'] .about-media { order: 0; }
+}
+
+.about-media {
+  position: relative;
+  min-height: clamp(320px, 55vw, 760px);
+  overflow: hidden;
+  background: #14100e;
+}
+
+.about-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.about-panel {
+  display: flex;
+  align-items: center;
+  padding: clamp(6rem, 10vw, 8rem) clamp(1.5rem, 5vw, 5rem) clamp(3rem, 6vw, 5rem);
+}
+
+.about-inner { width: 100%; max-width: 560px; }
+
+.about-eyebrow {
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-size: 0.68rem;
+  color: var(--ember);
+  margin: 0 0 1.1rem;
+}
+
+.about-heading {
+  font-family: var(--sec-font, var(--font-display));
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.01em);
+  color: var(--sec-color, #14100e);
+  font-size: calc(clamp(2rem, 5vw, 3.4rem) * var(--sec-scale, 1));
+  line-height: 1.02;
+  margin: 0 0 1.5rem;
+}
+
+.about-body p {
+  font-family: var(--sec-body-font, var(--font-body));
+  font-weight: var(--sec-body-weight, 400);
+  color: var(--sec-body-color, var(--ink-soft));
+  font-size: calc(1.02rem * var(--sec-body-scale, 1));
+  line-height: 1.9;
+  margin: 0 0 1.2rem;
+  max-width: 46ch;
+}
+
+.about-cta {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.74rem;
+  padding: 0.85em 2.1em;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.about-cta:hover { background: var(--ink); color: var(--surface); }
+
+.about-contact {
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 0.5px solid var(--line);
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.about-contact a {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  border-bottom: 0.5px solid transparent;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.about-contact a:hover { color: var(--ink); border-bottom-color: var(--ink); }

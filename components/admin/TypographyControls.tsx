@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { COVER_FONTS, TITLE_COLORS, fontHref } from '@/lib/fonts'
+import { TITLE_COLORS } from '@/lib/fonts'
+import FontSelect from '@/components/admin/FontSelect'
 import type { SectionStyle } from '@/lib/type-styles'
 
 type Full = Required<SectionStyle>
@@ -39,10 +40,6 @@ export default function TypographyControls({
 
   return (
     <div className="type-controls">
-      {/* Load both faces so either tab previews correctly */}
-      <link rel="stylesheet" href={fontHref(value.font)} />
-      <link rel="stylesheet" href={fontHref(value.bodyFont)} />
-
       <div className="type-tabs">
         <button type="button" onClick={() => setTab('heading')} data-active={isHeading}>
           Headings
@@ -52,16 +49,11 @@ export default function TypographyControls({
         </button>
       </div>
 
-      <label className="admin-field">
-        Font
-        <select value={font} onChange={(e) => setFont(e.target.value)} className="admin-select">
-          {COVER_FONTS.map((f) => (
-            <option key={f.name} value={f.name}>
-              {f.name} — {f.category}
-            </option>
-          ))}
-        </select>
-      </label>
+      <FontSelect
+        name={isHeading ? 'heading_font_display' : 'body_font_display'}
+        value={font}
+        onChange={setFont}
+      />
 
       <label className="admin-field">
         Size — {Math.round(scale * 100)}%

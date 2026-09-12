@@ -98,15 +98,17 @@ export async function updateBranding(formData: FormData) {
       footer_copy: text('footer_copy'),
       logo_header_height: number('logo_header_height', 34),
       logo_footer_height: number('logo_footer_height', 130),
-      logo_bird_size: number('logo_bird_size', 64),
-      show_bird: formData.get('show_bird') === 'on',
 
       header_align: text('header_align') ?? 'split',
       header_nav_font: text('header_nav_font') ?? 'Oswald',
       header_nav_scale: decimal('header_nav_scale', 1),
+      header_nav_scale_mobile: decimal('header_nav_scale_mobile', 1),
+      logo_header_height_mobile: number('logo_header_height_mobile', 26),
       footer_align: text('footer_align') ?? 'left',
       footer_font: text('footer_font') ?? 'Karla',
       footer_scale: decimal('footer_scale', 1),
+      footer_scale_mobile: decimal('footer_scale_mobile', 1),
+      logo_footer_height_mobile: number('logo_footer_height_mobile', 90),
     })
     .eq('id', 1)
 

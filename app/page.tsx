@@ -182,6 +182,11 @@ export default async function HomePage() {
           items={heroItems}
           titlePosition={settings.hero_title_position ?? 'center'}
           showMark={settings.hero_show_mark !== false}
+          storyAlign={settings.hero_story_align ?? 'left'}
+          overlayTitle={settings.hero_fixed_title}
+          overlaySubtitle={settings.hero_fixed_subtitle}
+          ctaLabel={settings.hero_fixed_cta_label}
+          ctaHref={settings.hero_fixed_cta_href}
           styleVars={styleVars(styles, 'hero')}
         />
       )}

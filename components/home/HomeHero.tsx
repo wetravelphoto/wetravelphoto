@@ -22,11 +22,21 @@ export default function HomeHero({
   items,
   titlePosition = 'center',
   showMark = true,
+  storyAlign = 'left',
+  overlayTitle,
+  overlaySubtitle,
+  ctaLabel,
+  ctaHref,
   styleVars,
 }: {
   items: HeroItem[]
   titlePosition?: string
   showMark?: boolean
+  storyAlign?: string
+  overlayTitle?: string | null
+  overlaySubtitle?: string | null
+  ctaLabel?: string | null
+  ctaHref?: string | null
   styleVars?: React.CSSProperties
 }) {
   const [active, setActive] = useState(0)
@@ -48,7 +58,7 @@ export default function HomeHero({
   }
 
   return (
-    <section className="hero" data-title-pos={titlePosition} style={styleVars}>
+    <section className="hero" data-title-pos={titlePosition} data-story-align={storyAlign} style={styleVars}>
       {items.map((item, i) => {
         // Fall back to centre if no focal point has been set for this story
         const point = (isMobile ? item.focalMobile : item.focal) ?? { x: 0.5, y: 0.5 }
@@ -60,6 +70,9 @@ export default function HomeHero({
                 src={item.imageUrl}
                 alt=""
                 loading={i === 0 ? 'eager' : 'lazy'}
+                /* The first hero is the largest thing a visitor waits for */
+                fetchPriority={i === 0 ? 'high' : 'auto'}
+                decoding="async"
                 style={{ objectPosition: `${point.x * 100}% ${point.y * 100}%` }}
               />
             )}
@@ -73,6 +86,19 @@ export default function HomeHero({
       {showMark && (
         <div className="hero-mark">
           <Logo variant="word" tone="light" height={0} className="hero-wordmark" />
+        </div>
+      )}
+
+      {/* Copy that belongs to the site rather than to any one story */}
+      {(overlayTitle || overlaySubtitle || (ctaLabel && ctaHref)) && (
+        <div className="hero-overlay-copy">
+          {overlayTitle && <p className="hero-fixed-title">{overlayTitle}</p>}
+          {overlaySubtitle && <p className="hero-fixed-sub">{overlaySubtitle}</p>}
+          {ctaLabel && ctaHref && (
+            <Link href={ctaHref} className="hero-fixed-cta">
+              {ctaLabel}
+            </Link>
+          )}
         </div>
       )}
 

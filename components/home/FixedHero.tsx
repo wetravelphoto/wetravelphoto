@@ -57,6 +57,8 @@ export default function FixedHero({
           <img
             src={imageUrl}
             alt=""
+            fetchPriority="high"
+            decoding="async"
             style={{ objectPosition: `${point.x * 100}% ${point.y * 100}%` }}
           />
         )}

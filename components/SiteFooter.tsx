@@ -19,6 +19,9 @@ export default async function SiteFooter() {
     ['--footer-font' as string]: footerFont.stack,
     ['--footer-weight' as string]: footerFont.weight,
     ['--footer-scale' as string]: String(settings.footer_scale ?? 1),
+    ['--footer-scale-mobile' as string]: String(settings.footer_scale_mobile ?? 1),
+    ['--footer-logo-h' as string]: `${settings.logo_footer_height ?? 130}px`,
+    ['--footer-logo-h-mobile' as string]: `${settings.logo_footer_height_mobile ?? 90}px`,
   }
 
   return (
@@ -30,7 +33,8 @@ export default async function SiteFooter() {
             src={settings.logo_footer_path ? photoUrl(settings.logo_footer_path) : null}
             alt={settings.site_title}
             tone="light"
-            height={settings.logo_footer_height ?? 130}
+            height={0}
+            className="footer-logo"
           />
           {settings.tagline && <p className="footer-tagline">{settings.tagline}</p>}
 
@@ -61,10 +65,12 @@ export default async function SiteFooter() {
         <nav className="footer-links">
           <p className="footer-col-head">Explore</p>
           <Link href="/">Home</Link>
-          <Link href="/trips">Galleries</Link>
-          <Link href="/journal">Journal</Link>
-          {settings.show_about !== false && <Link href="/about">About</Link>}
-          <Link href="/contact">Contact</Link>
+          <Link href="/trips">{settings.nav_galleries_label || 'Galleries'}</Link>
+          <Link href="/journal">{settings.nav_journal_label || 'Journal'}</Link>
+          {settings.show_about !== false && (
+            <Link href="/about">{settings.nav_about_label || 'About'}</Link>
+          )}
+          <Link href="/contact">{settings.nav_contact_label || 'Contact'}</Link>
         </nav>
 
         {settings.show_newsletter !== false && (

@@ -108,6 +108,7 @@ export default function ClientGallery({
                 sizes={SIZES_ATTR.grid}
                 alt={photo.alt_text ?? photo.caption ?? ''}
                 loading="lazy"
+                decoding="async"
                 onClick={() => setOpenIndex(i)}
               />
 

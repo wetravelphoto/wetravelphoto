@@ -19,12 +19,22 @@ export default async function SiteHeader({ overHero = false }: { overHero?: bool
       logoUrl={settings.logo_header_path ? photoUrl(settings.logo_header_path) : null}
       logoHeight={settings.logo_header_height ?? 34}
       align={settings.header_align || 'split'}
+      showAbout={settings.show_about !== false}
+      labels={{
+        galleries: settings.nav_galleries_label || 'Galleries',
+        journal: settings.nav_journal_label || 'Journal',
+        about: settings.nav_about_label || 'About',
+        contact: settings.nav_contact_label || 'Contact',
+      }}
       navStyle={{
         ['--nav-font' as string]: nav.stack,
         ['--nav-weight' as string]: nav.weight,
         ['--nav-case' as string]: nav.uppercase ? 'uppercase' : 'none',
         ['--nav-track' as string]: nav.tracking,
         ['--nav-scale' as string]: String(settings.header_nav_scale ?? 1),
+        ['--nav-scale-mobile' as string]: String(settings.header_nav_scale_mobile ?? 1),
+        ['--logo-h' as string]: `${settings.logo_header_height ?? 34}px`,
+        ['--logo-h-mobile' as string]: `${settings.logo_header_height_mobile ?? 26}px`,
       }}
     />
   )

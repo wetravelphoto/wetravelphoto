@@ -21,6 +21,17 @@ export default async function GalleriesPageEditor() {
           <h2 className="admin-h2">Heading</h2>
 
           <label className="admin-field">
+            Menu label
+            <input
+              type="text"
+              name="nav_galleries_label"
+              defaultValue={settings.nav_galleries_label ?? ''}
+              placeholder="Galleries"
+              className="admin-input"
+            />
+          </label>
+
+          <label className="admin-field">
             Eyebrow
             <input
               type="text"

@@ -38,7 +38,8 @@ export default function Logo({
       alt={alt}
       className={className}
       style={{
-        height,
+        // A height of 0 hands sizing to CSS, so it can differ per device
+        height: height === 0 ? undefined : height,
         width: 'auto',
         display: 'block',
         filter: invert ? 'brightness(0) invert(1)' : undefined,

@@ -30,6 +30,20 @@ export const COVER_FONTS: CoverFont[] = [
   { name: 'JetBrains Mono', stack: "'JetBrains Mono', monospace", weight: '500', uppercase: true, tracking: '0.08em', category: 'mono' },
 ]
 
+/**
+ * Families published at a single weight. Google's css2 endpoint returns a 400
+ * if you ask for a weight axis these don't have, so the stylesheet never
+ * loads and the browser quietly falls back to a default face.
+ */
+const SINGLE_WEIGHT = new Set([
+  'Bebas Neue',
+  'Anton',
+  'Archivo Black',
+  'Fjalla One',
+  'Italiana',
+  'Marcellus',
+])
+
 export function getFont(name: string | null): CoverFont {
   return COVER_FONTS.find((f) => f.name === name) ?? COVER_FONTS[0]
 }
@@ -37,7 +51,11 @@ export function getFont(name: string | null): CoverFont {
 export function fontHref(name: string): string {
   const font = getFont(name)
   const family = font.name.replace(/ /g, '+')
-  return `https://fonts.googleapis.com/css2?family=${family}:wght@${font.weight}&display=swap`
+
+  // Ask for the weight only where the family actually offers a choice
+  const axis = SINGLE_WEIGHT.has(font.name) ? '' : `:wght@${font.weight}`
+
+  return `https://fonts.googleapis.com/css2?family=${family}${axis}&display=swap`
 }
 
 export const TITLE_COLORS = [

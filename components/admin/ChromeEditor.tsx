@@ -1,15 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { COVER_FONTS, fontHref, getFont } from '@/lib/fonts'
+import { fontHref, getFont } from '@/lib/fonts'
 import LogoUploader from '@/components/admin/LogoUploader'
+import FontSelect from '@/components/admin/FontSelect'
+import DeviceSwitch from '@/components/admin/DeviceSwitch'
 import SaveBar from '@/components/admin/SaveBar'
 
 type Props = {
   siteTitle: string
   headerLogoUrl: string | null
   footerLogoUrl: string | null
-  birdLogoUrl: string | null
   sampleImageUrl: string | null
   initial: {
     headerHeight: number
@@ -20,8 +21,10 @@ type Props = {
     footerAlign: string
     footerFont: string
     footerScale: number
-    birdSize: number
-    showBird: boolean
+    headerHeightMobile: number
+    navScaleMobile: number
+    footerHeightMobile: number
+    footerScaleMobile: number
     tagline: string | null
   }
 }
@@ -32,7 +35,6 @@ export default function ChromeEditor({
   siteTitle,
   headerLogoUrl,
   footerLogoUrl,
-  birdLogoUrl,
   sampleImageUrl,
   initial,
 }: Props) {
@@ -46,25 +48,36 @@ export default function ChromeEditor({
   const [footerFont, setFooterFont] = useState(initial.footerFont)
   const [footerScale, setFooterScale] = useState(initial.footerScale)
 
-  const [birdSize, setBirdSize] = useState(initial.birdSize)
-  const [showBird, setShowBird] = useState(initial.showBird)
+  const [headerHeightMobile, setHeaderHeightMobile] = useState(initial.headerHeightMobile)
+  const [navScaleMobile, setNavScaleMobile] = useState(initial.navScaleMobile)
+  const [footerHeightMobile, setFooterHeightMobile] = useState(initial.footerHeightMobile)
+  const [footerScaleMobile, setFooterScaleMobile] = useState(initial.footerScaleMobile)
+
+  // Which device the sliders and previews are showing
+  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const onMobile = device === 'mobile'
+
 
   // Previews are drawn at 60% so a full-width header fits the panel
   const SCALE = 0.6
+
+  const shownHeaderHeight = onMobile ? headerHeightMobile : headerHeight
+  const shownNavScale = onMobile ? navScaleMobile : navScale
+  const shownFooterHeight = onMobile ? footerHeightMobile : footerHeight
+  const shownFooterScale = onMobile ? footerScaleMobile : footerScale
 
   const nav = getFont(navFont)
   const footer = getFont(footerFont)
 
   const headerLogo = headerLogoUrl || '/logos/we-travel-photo-word.svg'
   const footerLogo = footerLogoUrl || '/logos/we-travel-photo-full.svg'
-  const birdLogo = birdLogoUrl || '/logos/we-travel-photo-bird.svg'
 
   const navStyle: React.CSSProperties = {
     fontFamily: nav.stack,
     fontWeight: nav.weight,
     textTransform: nav.uppercase ? 'uppercase' : 'none',
     letterSpacing: nav.tracking,
-    fontSize: `${0.78 * navScale}rem`,
+    fontSize: `${0.78 * shownNavScale}rem`,
   }
 
   return (
@@ -75,8 +88,15 @@ export default function ChromeEditor({
       {/* ---------------- HEADER ---------------- */}
       <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
         <h2 className="admin-h2">Header</h2>
+        <div className="chrome-device-row">
+          <DeviceSwitch device={device} onDevice={setDevice} />
+          <span className="admin-meta">
+            {onMobile ? 'Editing phone sizes' : 'Editing desktop sizes'}
+          </span>
+        </div>
 
-        <div className="chrome-preview" data-tone="photo">
+
+        <div className="chrome-preview" data-tone="photo" data-device={device}>
           {sampleImageUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={sampleImageUrl} alt="" className="chrome-preview-bg" />
@@ -90,7 +110,7 @@ export default function ChromeEditor({
               alt=""
               className="chrome-logo"
               style={{
-                height: headerHeight * SCALE,
+                height: shownHeaderHeight * SCALE,
                 filter: headerLogoUrl ? undefined : 'brightness(0) invert(1)',
               }}
             />
@@ -107,7 +127,7 @@ export default function ChromeEditor({
         <div className="chrome-preview" data-tone="solid" style={{ marginTop: '0.6rem' }}>
           <div className="chrome-header" data-align={headerAlign} data-solid="true">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={headerLogo} alt="" className="chrome-logo" style={{ height: headerHeight * SCALE }} />
+            <img src={headerLogo} alt="" className="chrome-logo" style={{ height: shownHeaderHeight * SCALE }} />
             <nav className="chrome-nav" style={navStyle}>
               {NAV.map((item) => (
                 <span key={item}>{item}</span>
@@ -133,15 +153,18 @@ export default function ChromeEditor({
 
           <div>
             <label className="admin-field">
-              Logo height — {headerHeight}px
+              Logo height — {shownHeaderHeight}px
               <input
                 type="range"
-                name="logo_header_height"
                 min="16"
                 max="110"
                 step="1"
-                value={headerHeight}
-                onChange={(e) => setHeaderHeight(parseInt(e.target.value, 10))}
+                value={shownHeaderHeight}
+                onChange={(e) => {
+                  const next = parseInt(e.target.value, 10)
+                  if (onMobile) setHeaderHeightMobile(next)
+                  else setHeaderHeight(next)
+                }}
                 style={{ width: '100%', marginTop: '0.35rem', accentColor: 'var(--admin-accent)' }}
               />
             </label>
@@ -160,32 +183,21 @@ export default function ChromeEditor({
               </select>
             </label>
 
-            <label className="admin-field">
-              Menu font
-              <select
-                name="header_nav_font"
-                value={navFont}
-                onChange={(e) => setNavFont(e.target.value)}
-                className="admin-select"
-              >
-                {COVER_FONTS.map((f) => (
-                  <option key={f.name} value={f.name}>
-                    {f.name} — {f.category}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <FontSelect name="header_nav_font" label="Menu font" value={navFont} onChange={setNavFont} />
 
             <label className="admin-field">
-              Menu size — {Math.round(navScale * 100)}%
+              Menu size — {Math.round(shownNavScale * 100)}%
               <input
                 type="range"
-                name="header_nav_scale"
                 min="0.7"
                 max="1.8"
                 step="0.05"
-                value={navScale}
-                onChange={(e) => setNavScale(parseFloat(e.target.value))}
+                value={shownNavScale}
+                onChange={(e) => {
+                  const next = parseFloat(e.target.value)
+                  if (onMobile) setNavScaleMobile(next)
+                  else setNavScale(next)
+                }}
                 style={{ width: '100%', marginTop: '0.35rem', accentColor: 'var(--admin-accent)' }}
               />
             </label>
@@ -196,8 +208,15 @@ export default function ChromeEditor({
       {/* ---------------- FOOTER ---------------- */}
       <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
         <h2 className="admin-h2">Footer</h2>
+        <div className="chrome-device-row">
+          <DeviceSwitch device={device} onDevice={setDevice} />
+          <span className="admin-meta">
+            {onMobile ? 'Editing phone sizes' : 'Editing desktop sizes'}
+          </span>
+        </div>
 
-        <div className="chrome-preview" data-tone="footer">
+
+        <div className="chrome-preview" data-tone="footer" data-device={device}>
           <div className="chrome-footer" data-align={footerAlign}>
             <div className="chrome-footer-brand">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -205,7 +224,7 @@ export default function ChromeEditor({
                 src={footerLogo}
                 alt=""
                 style={{
-                  height: footerHeight * SCALE,
+                  height: shownFooterHeight * SCALE,
                   filter: footerLogoUrl ? undefined : 'brightness(0) invert(1)',
                 }}
               />
@@ -213,7 +232,7 @@ export default function ChromeEditor({
                 <p
                   style={{
                     fontFamily: footer.stack,
-                    fontSize: `${0.98 * footerScale * SCALE}rem`,
+                    fontSize: `${0.98 * shownFooterScale * SCALE}rem`,
                     margin: '0.6rem 0 0',
                     opacity: 0.75,
                   }}
@@ -225,7 +244,7 @@ export default function ChromeEditor({
 
             <div
               className="chrome-footer-links"
-              style={{ fontFamily: footer.stack, fontSize: `${1 * footerScale * SCALE}rem` }}
+              style={{ fontFamily: footer.stack, fontSize: `${1 * shownFooterScale * SCALE}rem` }}
             >
               <span className="chrome-footer-head">Explore</span>
               <span>Home</span>
@@ -236,7 +255,7 @@ export default function ChromeEditor({
 
             <div
               className="chrome-footer-signup"
-              style={{ fontFamily: footer.stack, fontSize: `${0.92 * footerScale * SCALE}rem` }}
+              style={{ fontFamily: footer.stack, fontSize: `${0.92 * shownFooterScale * SCALE}rem` }}
             >
               <span className="chrome-footer-head">Newsletter</span>
               <span className="chrome-footer-input" />
@@ -257,15 +276,18 @@ export default function ChromeEditor({
 
           <div>
             <label className="admin-field">
-              Logo height — {footerHeight}px
+              Logo height — {shownFooterHeight}px
               <input
                 type="range"
-                name="logo_footer_height"
                 min="40"
                 max="280"
                 step="2"
-                value={footerHeight}
-                onChange={(e) => setFooterHeight(parseInt(e.target.value, 10))}
+                value={shownFooterHeight}
+                onChange={(e) => {
+                  const next = parseInt(e.target.value, 10)
+                  if (onMobile) setFooterHeightMobile(next)
+                  else setFooterHeight(next)
+                }}
                 style={{ width: '100%', marginTop: '0.35rem', accentColor: 'var(--admin-accent)' }}
               />
             </label>
@@ -283,32 +305,21 @@ export default function ChromeEditor({
               </select>
             </label>
 
-            <label className="admin-field">
-              Text font
-              <select
-                name="footer_font"
-                value={footerFont}
-                onChange={(e) => setFooterFont(e.target.value)}
-                className="admin-select"
-              >
-                {COVER_FONTS.map((f) => (
-                  <option key={f.name} value={f.name}>
-                    {f.name} — {f.category}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <FontSelect name="footer_font" label="Text font" value={footerFont} onChange={setFooterFont} />
 
             <label className="admin-field">
-              Text size — {Math.round(footerScale * 100)}%
+              Text size — {Math.round(shownFooterScale * 100)}%
               <input
                 type="range"
-                name="footer_scale"
                 min="0.7"
                 max="1.6"
                 step="0.05"
-                value={footerScale}
-                onChange={(e) => setFooterScale(parseFloat(e.target.value))}
+                value={shownFooterScale}
+                onChange={(e) => {
+                  const next = parseFloat(e.target.value)
+                  if (onMobile) setFooterScaleMobile(next)
+                  else setFooterScale(next)
+                }}
                 style={{ width: '100%', marginTop: '0.35rem', accentColor: 'var(--admin-accent)' }}
               />
             </label>
@@ -316,57 +327,14 @@ export default function ChromeEditor({
         </div>
       </div>
 
-      {/* ---------------- ACCENT MARK ---------------- */}
-      <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-        <h2 className="admin-h2">Accent mark</h2>
-
-        <div className="chrome-preview" data-tone="solid" style={{ padding: '1.25rem' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={birdLogo}
-            alt=""
-            style={{ width: birdSize * SCALE, height: 'auto', margin: '0 auto', display: 'block', opacity: showBird ? 0.85 : 0.2 }}
-          />
-        </div>
-
-        <div className="size-row" style={{ marginTop: '1rem' }}>
-          <div className="logo-grid" style={{ gridTemplateColumns: '1fr', margin: 0 }}>
-            <LogoUploader
-              slot="bird"
-              label="Accent logo"
-              currentUrl={birdLogoUrl}
-              builtInUrl="/logos/we-travel-photo-bird.svg"
-              previewTone="light"
-            />
-          </div>
-
-          <div>
-            <label className="admin-field">
-              Size — {birdSize}px
-              <input
-                type="range"
-                name="logo_bird_size"
-                min="24"
-                max="180"
-                step="2"
-                value={birdSize}
-                onChange={(e) => setBirdSize(parseInt(e.target.value, 10))}
-                style={{ width: '100%', marginTop: '0.35rem', accentColor: 'var(--admin-accent)' }}
-              />
-            </label>
-
-            <label className="admin-field" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input
-                type="checkbox"
-                name="show_bird"
-                checked={showBird}
-                onChange={(e) => setShowBird(e.target.checked)}
-              />
-              Show it below the hero
-            </label>
-          </div>
-        </div>
-      </div>
+      <input type="hidden" name="logo_header_height" value={headerHeight} />
+      <input type="hidden" name="logo_header_height_mobile" value={headerHeightMobile} />
+      <input type="hidden" name="header_nav_scale" value={navScale} />
+      <input type="hidden" name="header_nav_scale_mobile" value={navScaleMobile} />
+      <input type="hidden" name="logo_footer_height" value={footerHeight} />
+      <input type="hidden" name="logo_footer_height_mobile" value={footerHeightMobile} />
+      <input type="hidden" name="footer_scale" value={footerScale} />
+      <input type="hidden" name="footer_scale_mobile" value={footerScaleMobile} />
 
       <SaveBar label="Save header & footer" title={siteTitle} />
     </>

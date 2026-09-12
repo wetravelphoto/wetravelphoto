@@ -338,10 +338,10 @@
   max-width: 40vw;
 }
 
-/* Header wordmark */
-.site-logo {
-  height: clamp(26px, 3.4vw, 34px) !important;
-}
+/* Header wordmark — height comes from settings, per device */
+.site-logo { height: var(--logo-h, 34px); width: auto; }
+
+.footer-logo { height: var(--footer-logo-h, 130px); width: auto; }
 
 
 /* Stacked and centred variant */
@@ -376,4 +376,30 @@
   text-transform: var(--nav-case, uppercase);
   letter-spacing: var(--nav-track, 0.08em);
   font-size: calc(0.78rem * var(--nav-scale, 1));
+}
+
+
+/* ---------- Phones ---------- */
+
+@media (max-width: 760px) {
+  /* Re-pointing the variables lets every rule above use the mobile value
+     without being rewritten */
+  .site-header { --nav-scale: var(--nav-scale-mobile, 1); }
+  .site-logo { height: var(--logo-h-mobile, 26px); }
+
+  .site-footer { --footer-scale: var(--footer-scale-mobile, 1); }
+  .footer-logo { height: var(--footer-logo-h-mobile, 90px); }
+
+  /* One column, centred — three columns is unreadable on a phone */
+  .footer-grid {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    gap: 2.25rem;
+  }
+
+  .footer-links,
+  .footer-signup { align-items: center; }
+
+  .footer-base { justify-content: center; text-align: center; gap: 0.5rem; }
 }

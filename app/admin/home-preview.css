@@ -248,3 +248,57 @@
   overflow-y: auto;
   scrollbar-width: thin;
 }
+
+
+/* ---------------------------------------------------------------
+   Typography from the section settings.
+   Appended last and scoped through .hp so these win over the base
+   rules above, which declare their own font-family and size.
+   --------------------------------------------------------------- */
+
+.hp .hp-hero-title {
+  font-family: var(--sec-font, var(--font-display)), sans-serif;
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.02em);
+  color: var(--sec-color, #faf9f6);
+  font-size: calc(1rem * var(--sec-scale, 1));
+}
+
+.hp .hp-kicker {
+  font-family: var(--sec-body-font, var(--font-body)), sans-serif;
+  color: var(--sec-color, inherit);
+}
+
+.hp .hp-hero-picker span {
+  font-family: var(--sec-font, var(--font-display)), sans-serif;
+  letter-spacing: var(--sec-track, 0.08em);
+}
+
+.hp .hp-heading {
+  font-family: var(--sec-font, var(--font-display)), sans-serif;
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.02em);
+  color: var(--sec-color, inherit);
+  font-size: calc(0.72rem * var(--sec-scale, 1));
+}
+
+.hp .hp-body {
+  font-family: var(--sec-body-font, var(--font-body)), sans-serif;
+  font-weight: var(--sec-body-weight, 400);
+  color: var(--sec-body-color, inherit);
+  font-size: calc(0.52rem * var(--sec-body-scale, 1));
+}
+
+.hp .hp-trio-title {
+  font-family: var(--sec-font, var(--font-display)), sans-serif;
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.02em);
+  color: var(--sec-color, inherit);
+  font-size: calc(0.5rem * var(--sec-scale, 1));
+}
+
+/* A focused preview shows one section, so it shouldn't be letterboxed */
+.hp[data-focus='true'] { min-height: 0; }
+.hp[data-focus='true'] .hp-hero { aspect-ratio: 16 / 9; }

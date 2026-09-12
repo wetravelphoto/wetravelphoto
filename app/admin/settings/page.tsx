@@ -48,19 +48,20 @@ export default async function SettingsPage() {
           siteTitle={settings.site_title}
           headerLogoUrl={url(settings.logo_header_path)}
           footerLogoUrl={url(settings.logo_footer_path)}
-          birdLogoUrl={url(settings.logo_bird_path)}
           sampleImageUrl={samples?.[0] ? photoUrl(samples[0].storage_path) : null}
           initial={{
             headerHeight: settings.logo_header_height ?? 34,
             headerAlign: settings.header_align || 'split',
             navFont: settings.header_nav_font || 'Oswald',
             navScale: settings.header_nav_scale ?? 1,
+            headerHeightMobile: settings.logo_header_height_mobile ?? 26,
+            navScaleMobile: settings.header_nav_scale_mobile ?? 1,
             footerHeight: settings.logo_footer_height ?? 130,
             footerAlign: settings.footer_align || 'left',
             footerFont: settings.footer_font || 'Karla',
             footerScale: settings.footer_scale ?? 1,
-            birdSize: settings.logo_bird_size ?? 64,
-            showBird: settings.show_bird !== false,
+            footerHeightMobile: settings.logo_footer_height_mobile ?? 90,
+            footerScaleMobile: settings.footer_scale_mobile ?? 1,
             tagline: settings.tagline,
           }}
         />

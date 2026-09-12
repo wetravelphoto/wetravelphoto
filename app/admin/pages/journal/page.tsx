@@ -1,6 +1,7 @@
 import { getSiteSettings } from '@/lib/site'
 import { updateJournalPage } from '@/app/actions/site'
 import SaveBar from '@/components/admin/SaveBar'
+import Toggle from '@/components/admin/Toggle'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,17 @@ export default async function JournalPageEditor() {
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
           <h2 className="admin-h2">Heading</h2>
+
+          <label className="admin-field">
+            Menu label
+            <input
+              type="text"
+              name="nav_journal_label"
+              defaultValue={settings.nav_journal_label ?? ''}
+              placeholder="Journal"
+              className="admin-input"
+            />
+          </label>
 
           <label className="admin-field">
             Eyebrow
@@ -66,36 +78,24 @@ export default async function JournalPageEditor() {
             write it.
           </p>
 
-          <label className="admin-field" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input
-              type="checkbox"
-              name="journal_show_excerpt"
-              defaultChecked={settings.journal_show_excerpt !== false}
-            />
-            Excerpt
-          </label>
+          <Toggle
+            name="journal_show_excerpt"
+            label="Excerpt"
+            defaultChecked={settings.journal_show_excerpt !== false}
+            note="The homepage always shows excerpts — this governs the journal index only."
+          />
 
-          <p className="admin-meta" style={{ margin: '-0.5rem 0 1rem', lineHeight: 1.55 }}>
-            The homepage always shows excerpts — this only governs the journal index.
-          </p>
+          <Toggle
+            name="journal_show_date"
+            label="Publication date"
+            defaultChecked={settings.journal_show_date === true}
+          />
 
-          <label className="admin-field" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input
-              type="checkbox"
-              name="journal_show_date"
-              defaultChecked={settings.journal_show_date === true}
-            />
-            Publication date
-          </label>
-
-          <label className="admin-field" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input
-              type="checkbox"
-              name="journal_show_byline"
-              defaultChecked={settings.journal_show_byline === true}
-            />
-            Author or collaborator
-          </label>
+          <Toggle
+            name="journal_show_byline"
+            label="Author or collaborator"
+            defaultChecked={settings.journal_show_byline === true}
+          />
         </div>
       </form>
     </div>

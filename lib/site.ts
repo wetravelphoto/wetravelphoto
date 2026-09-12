@@ -15,9 +15,13 @@ export type SiteSettings = {
   header_align: string
   header_nav_font: string
   header_nav_scale: number
+  header_nav_scale_mobile: number
+  logo_header_height_mobile: number
   footer_align: string
   footer_font: string
   footer_scale: number
+  footer_scale_mobile: number
+  logo_footer_height_mobile: number
   footer_copy: string | null
   galleries_eyebrow: string | null
   galleries_heading: string | null
@@ -30,6 +34,16 @@ export type SiteSettings = {
   tagline: string | null
   about_heading: string | null
   about_body: string | null
+  about_eyebrow: string | null
+  about_image_path: string | null
+  about_image_side: 'left' | 'right'
+  about_cta_label: string | null
+  about_cta_href: string | null
+
+  nav_galleries_label: string | null
+  nav_journal_label: string | null
+  nav_about_label: string | null
+  nav_contact_label: string | null
   contact_intro: string | null
   instagram_url: string | null
   facebook_url: string | null
@@ -41,6 +55,7 @@ export type SiteSettings = {
   hero_subtitles: Record<string, string>
   hero_focal: Record<string, { x: number; y: number; mx: number; my: number }>
   hero_title_position: string
+  hero_story_align: 'left' | 'center'
   hero_show_mark: boolean
   hero_mode: 'stories' | 'fixed'
   hero_image_path: string | null
@@ -101,9 +116,13 @@ const FALLBACK: SiteSettings = {
   header_align: 'split',
   header_nav_font: 'Oswald',
   header_nav_scale: 1,
+  header_nav_scale_mobile: 1,
+  logo_header_height_mobile: 26,
   footer_align: 'left',
   footer_font: 'Karla',
   footer_scale: 1,
+  footer_scale_mobile: 1,
+  logo_footer_height_mobile: 90,
   footer_copy: null,
   galleries_eyebrow: null,
   galleries_heading: null,
@@ -116,6 +135,15 @@ const FALLBACK: SiteSettings = {
   tagline: 'Travel photography and field notes',
   about_heading: 'About',
   about_body: null,
+  about_eyebrow: null,
+  about_image_path: null,
+  about_image_side: 'left',
+  about_cta_label: null,
+  about_cta_href: null,
+  nav_galleries_label: null,
+  nav_journal_label: null,
+  nav_about_label: null,
+  nav_contact_label: null,
   contact_intro: null,
   instagram_url: null,
   facebook_url: null,
@@ -126,6 +154,7 @@ const FALLBACK: SiteSettings = {
   hero_subtitles: {},
   hero_focal: {},
   hero_title_position: 'center',
+  hero_story_align: 'left',
   hero_show_mark: true,
   hero_mode: 'stories',
   hero_image_path: null,

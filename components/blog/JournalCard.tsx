@@ -42,6 +42,7 @@ export default function JournalCard({
               sizes="(max-width: 620px) 100vw, (max-width: 1000px) 50vw, 33vw"
               alt=""
               loading="lazy"
+              decoding="async"
             />
           )}
         </div>

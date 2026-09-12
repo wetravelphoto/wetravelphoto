@@ -84,8 +84,12 @@ export default async function HomePageEditor() {
             hero_subtitles: settings.hero_subtitles ?? {},
             hero_focal: settings.hero_focal ?? {},
             hero_title_position: settings.hero_title_position ?? 'center',
+            hero_story_align: settings.hero_story_align ?? 'left',
             hero_show_mark: settings.hero_show_mark !== false,
             hero_mode: settings.hero_mode ?? 'stories',
+            logo_bird_size: settings.logo_bird_size ?? 64,
+            show_bird: settings.show_bird !== false,
+            logo_bird_path: settings.logo_bird_path,
             hero_image_path: settings.hero_image_path,
             hero_fixed_title: settings.hero_fixed_title,
             hero_fixed_subtitle: settings.hero_fixed_subtitle,
@@ -109,13 +113,6 @@ export default async function HomePageEditor() {
             contact_heading: settings.contact_heading,
             show_instagram: settings.show_instagram,
             instagram_heading: settings.instagram_heading,
-            contact_eyebrow: settings.contact_eyebrow,
-            contact_intro: settings.contact_intro,
-            contact_note: settings.contact_note,
-            contact_tagline: settings.contact_tagline,
-            contact_image_path: settings.contact_image_path,
-            contact_image_side: settings.contact_image_side,
-            footer_note: settings.footer_note,
           }}
         />
 

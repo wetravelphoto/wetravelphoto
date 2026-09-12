@@ -277,12 +277,7 @@
   overflow: hidden;
   cursor: crosshair;
   background: #14100e;
-  touch-action: none;
-  user-select: none;
 }
-
-/* Clicks belong to the frame, not the picture inside it */
-.focal-frame img { pointer-events: none; }
 
 /* Mirrors the hero's shape on each device */
 .focal-frame[data-device='desktop'] { aspect-ratio: 16 / 9; }
@@ -429,3 +424,37 @@
   line-height: 1.5;
   color: var(--admin-mute);
 }
+
+
+/* Site copy layered over the rotating hero, above the story titles */
+.hero-overlay-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(7rem, 14vw, 11rem);
+  z-index: 3;
+  text-align: center;
+  padding: 0 clamp(1.5rem, 5vw, 4rem);
+  color: #faf9f6;
+}
+
+@media (max-width: 760px) {
+  .hero-overlay-copy { bottom: clamp(10rem, 30vw, 14rem); }
+}
+
+
+/* ---------- Story title alignment ---------- */
+
+.hero[data-story-align='center'] .hero-picker-item {
+  align-items: center;
+  text-align: center;
+}
+
+.hero[data-story-align='center'] .hero-picker-body { text-align: center; }
+
+.hero[data-story-align='left'] .hero-picker-item {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.hero[data-story-align='left'] .hero-picker-body { text-align: left; }

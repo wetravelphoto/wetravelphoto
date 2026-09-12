@@ -1,6 +1,7 @@
 'use client'
 
 import type { PostOption } from '@/components/admin/HeroPicker'
+import { styleVars, type TypeStyles } from '@/lib/type-styles'
 
 export type PreviewGallery = { id: string; title: string; location: string | null; coverPath: string | null }
 
@@ -30,6 +31,9 @@ export default function HomePreview({
   showInstagram,
   instagramHeading,
   instagramCount,
+  focus,
+  typeStyles,
+  siteTitle = 'WETRAVELPHOTO',
 }: {
   device: 'desktop' | 'mobile'
   publicUrl: string
@@ -52,14 +56,24 @@ export default function HomePreview({
   showInstagram?: boolean
   instagramHeading?: string
   instagramCount?: number
+  /** When set, only this section is drawn — keeps the preview on what you're editing. */
+  focus?: string | null
+  typeStyles?: TypeStyles | null
+  siteTitle?: string
 }) {
   const hero = heroPosts[0]
   const introParas = introBody.split('\n\n').filter(Boolean).slice(0, 2)
 
+  // No focus means the whole page; otherwise just the section being edited
+  const visible = (section: string) => !focus || focus === section
+
+  const styles = typeStyles ?? null
+
   return (
-    <div className="hp" data-device={device}>
+    <div className="hp" data-device={device} data-focus={!!focus}>
       {/* ---- HERO ---- */}
-      <div className="hp-hero">
+      {visible('hero') && (
+      <div className="hp-hero" style={styleVars(styles, 'hero')}>
         {hero?.imagePath ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={`${publicUrl}/${hero.imagePath}`} alt="" />
@@ -69,7 +83,7 @@ export default function HomePreview({
         <div className="hp-hero-scrim" />
 
         <div className="hp-header">
-          <span>WETRAVELPHOTO</span>
+          <span>{siteTitle}</span>
           <span className="hp-nav">Galleries · Journal · Contact</span>
         </div>
 
@@ -90,9 +104,11 @@ export default function HomePreview({
         </div>
       </div>
 
+      )}
+
       {/* ---- INTRO ---- */}
-      {showIntro && (introHeading || introParas.length > 0 || introImage) && (
-        <div className="hp-section hp-intro" data-side={introSide}>
+      {visible('intro') && showIntro && (introHeading || introParas.length > 0 || introImage) && (
+        <div className="hp-section hp-intro" style={styleVars(styles, 'intro')} data-side={introSide}>
           {introImage && (
             <div className="hp-intro-media">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -112,7 +128,7 @@ export default function HomePreview({
       )}
 
       {/* ---- GALLERIES ---- */}
-      {showGalleries && (
+      {visible('galleries') && showGalleries && (
         <div className="hp-carousel">
           <p className="hp-carousel-head">{galleryHeading || 'Recent trips'}</p>
           <div className="hp-carousel-track">
@@ -135,8 +151,8 @@ export default function HomePreview({
       )}
 
       {/* ---- JOURNAL ---- */}
-      {showJournal && (
-        <div className="hp-section">
+      {visible('journal') && showJournal && (
+        <div className="hp-section" style={styleVars(styles, 'journal')}>
           <p className="hp-heading" style={{ marginBottom: '0.5rem' }}>
             {journalHeading || 'From the journal'}
           </p>
@@ -164,7 +180,7 @@ export default function HomePreview({
       )}
 
       {/* ---- INSTAGRAM ---- */}
-      {showInstagram && (
+      {visible('instagram') && showInstagram && (
         <div className="hp-section">
           <p className="hp-heading" style={{ textAlign: 'center', letterSpacing: '0.2em', fontSize: '0.55rem' }}>
             {instagramHeading || 'Instagram'}
@@ -178,8 +194,8 @@ export default function HomePreview({
       )}
 
       {/* ---- CONTACT ---- */}
-      {showContact && (
-        <div className="hp-section hp-contact">
+      {visible('contact') && showContact && (
+        <div className="hp-section hp-contact" style={styleVars(styles, 'contact')}>
           <p className="hp-heading">{contactHeading || 'Get in touch'}</p>
           <div className="hp-form">
             <span />
@@ -191,7 +207,7 @@ export default function HomePreview({
 
       {/* ---- FOOTER ---- */}
       <div className="hp-footer">
-        <span>WETRAVELPHOTO</span>
+        <span>{siteTitle}</span>
         <span className="hp-nav">Galleries · Journal · About · Contact</span>
       </div>
     </div>

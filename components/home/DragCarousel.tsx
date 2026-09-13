@@ -40,12 +40,34 @@ export default function DragCarousel({ items }: { items: CarouselItem[] }) {
     const viewport = viewportRef.current
     if (!viewport) return
 
-    const update = () => setWidth(viewport.clientWidth)
+    const update = () => {
+      const next = viewport.clientWidth
+      // A zero reading means layout hasn't settled; keep the last good value
+      if (next > 0) setWidth(next)
+    }
+
     update()
 
     const observer = new ResizeObserver(update)
     observer.observe(viewport)
-    return () => observer.disconnect()
+
+    /**
+     * On a cold visit the first measurement can land before fonts and images
+     * have laid out, leaving the track at zero width and the carousel blank
+     * until a refresh. These catch the late settle.
+     */
+    const raf = requestAnimationFrame(update)
+    const timer = setTimeout(update, 300)
+    window.addEventListener('load', update)
+    window.addEventListener('resize', update)
+
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(raf)
+      clearTimeout(timer)
+      window.removeEventListener('load', update)
+      window.removeEventListener('resize', update)
+    }
   }, [])
 
   useEffect(() => {

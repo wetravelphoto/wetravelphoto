@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { processExistingOriginal } from '@/lib/derivatives'
 import { isQuad, DEFAULT_QUAD } from '@/lib/perspective'
+import { isPresetId } from '@/lib/preset-rooms'
 import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 
@@ -58,6 +59,9 @@ export async function uploadRoomScene(formData: FormData) {
  * ridiculous, and there's no visible error to lead anyone back here.
  */
 export async function saveRoomScene(id: string, formData: FormData) {
+  // The rooms that ship with the site belong to the code, not to this site
+  if (isPresetId(id)) return
+
   const raw = formData.get('corners') as string
 
   let corners: unknown = null
@@ -90,6 +94,8 @@ export async function saveRoomScene(id: string, formData: FormData) {
 }
 
 export async function deleteRoomScene(id: string) {
+  if (isPresetId(id)) return
+
   const supabase = await createClient()
   const { error } = await supabase.from('room_scenes').delete().eq('id', id)
 
@@ -107,5 +113,24 @@ export async function reorderRoomScenes(ids: string[]) {
     )
   )
 
+  revalidate()
+}
+
+/**
+ * Whether the three rooms that ship with the site are shown.
+ *
+ * Off is for a photographer who has their own rooms and wants only those —
+ * the built-in ones stay in the code either way, so it costs nothing to turn
+ * them back on.
+ */
+export async function setPresetRooms(show: boolean) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('site_settings')
+    .update({ shop_preset_rooms: show })
+    .eq('id', 1)
+
+  if (error && !/shop_preset_rooms/i.test(error.message)) throw new Error(error.message)
   revalidate()
 }

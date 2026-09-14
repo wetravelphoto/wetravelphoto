@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
 import { srcSetFromPath } from '@/lib/srcset'
 import { toQuad, type Quad } from '@/lib/perspective'
+import { PRESET_ROOMS } from '@/lib/preset-rooms'
 
 /**
  * Room scenes: a photograph of a room and the four corners of the wall space
@@ -25,6 +26,8 @@ export type RoomSceneRecord = {
   hasFrame: boolean
   sortOrder: number
   isActive: boolean
+  /** Ships with the site rather than belonging to this one. Not editable. */
+  isPreset?: boolean
 }
 
 type Row = {
@@ -69,7 +72,10 @@ const COLS_LEGACY = 'id, name, image_path, width, height, corners, sort_order, i
 
 const isMissingColumn = (message: string | undefined) => !!message && /has_frame/i.test(message)
 
-export async function getRoomScenes(includeInactive = false): Promise<RoomSceneRecord[]> {
+export async function getRoomScenes(
+  includeInactive = false,
+  includePresets = true
+): Promise<RoomSceneRecord[]> {
   const supabase = await createClient()
 
   const run = (select: string) => {
@@ -91,13 +97,19 @@ export async function getRoomScenes(includeInactive = false): Promise<RoomSceneR
   // either way the product page still has its plain framed view to fall back on
   if (error) {
     console.error('[scenes] getRoomScenes failed:', error.message)
-    return []
+    return includePresets ? [...PRESET_ROOMS] : []
   }
 
-  return ((data ?? []) as Row[]).map(shape)
+  const own = ((data ?? []) as Row[]).map(shape)
+
+  // The built-in rooms come first, then anything the site added of its own.
+  return includePresets ? [...PRESET_ROOMS, ...own] : own
 }
 
 export async function getRoomScene(id: string): Promise<RoomSceneRecord | null> {
+  const preset = PRESET_ROOMS.find((room) => room.id === id)
+  if (preset) return preset
+
   const supabase = await createClient()
 
   const run = (select: string) =>

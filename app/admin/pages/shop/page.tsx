@@ -20,8 +20,14 @@ export default async function ShopPageEditor() {
           <Link href="/admin/pages">← Pages</Link>
         </p>
 
+        <p className="admin-meta admin-lede">
+          Every panel below says which page it changes and whereabouts on it. Open{' '}
+          <Link href="/shop" target="_blank">the shop</Link> in another tab and keep it beside
+          this one — it&rsquo;s the quickest way to see what each field moves.
+        </p>
+
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">Visibility</h2>
+          <h2 className="admin-h2">The shop <span className="admin-where">on or off</span></h2>
 
           <Toggle
             name="show_shop"
@@ -55,7 +61,7 @@ export default async function ShopPageEditor() {
         </div>
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">Heading</h2>
+          <h2 className="admin-h2">Shop page <span className="admin-where">the three lines at the top</span></h2>
 
           <label className="admin-field">
             Menu label
@@ -124,7 +130,7 @@ export default async function ShopPageEditor() {
         {/* ---------- THE WALL ---------- */}
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">The wall</h2>
+          <h2 className="admin-h2">Shop page <span className="admin-where">how the prints are hung</span></h2>
           <p className="admin-meta" style={{ margin: '0 0 1rem', lineHeight: 1.6 }}>
             Prints hang in even columns. Horizontals and squares share a bottom line; verticals
             sit centred on that line, so they rise higher and hang a little lower. Every frame on
@@ -189,7 +195,7 @@ export default async function ShopPageEditor() {
         {/* ---------- CAPTIONS ---------- */}
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">Under each print</h2>
+          <h2 className="admin-h2">Shop page <span className="admin-where">the caption under each print</span></h2>
           <p className="admin-meta" style={{ margin: '0 0 1rem', lineHeight: 1.6 }}>
             The title always shows. Everything else you switch on or off, and whatever is left
             runs on one quiet line beneath it.
@@ -220,7 +226,7 @@ export default async function ShopPageEditor() {
         {/* ---------- PRODUCT PAGE ---------- */}
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">The product page</h2>
+          <h2 className="admin-h2">Product page <span className="admin-where">the top of the page</span></h2>
           <p className="admin-meta" style={{ margin: '0 0 1rem', lineHeight: 1.6 }}>
             Each print gets its own page: the piece on a wall, in every room you&rsquo;ve added
             under <Link href="/admin/shop/scenes">Rooms</Link>, with the buying column beside it.
@@ -248,7 +254,7 @@ export default async function ShopPageEditor() {
         {/* ---------- REASSURANCE ---------- */}
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">Three things worth saying</h2>
+          <h2 className="admin-h2">Product page <span className="admin-where">the row under the buy button</span></h2>
           <p className="admin-meta" style={{ margin: '0 0 1rem', lineHeight: 1.6 }}>
             The row under the buy button — paper, shipping, however you print. Leave a title
             blank and that one is left out; leave all three blank and the row goes away.
@@ -318,7 +324,7 @@ export default async function ShopPageEditor() {
         {/* ---------- RELATED ---------- */}
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">More prints, at the foot of a product page</h2>
+          <h2 className="admin-h2">Product page <span className="admin-where">more prints, at the foot</span></h2>
 
           <label className="admin-field">
             Line above the heading
@@ -346,7 +352,7 @@ export default async function ShopPageEditor() {
         {/* ---------- CLOSING QUOTE ---------- */}
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">Closing line</h2>
+          <h2 className="admin-h2">Both pages <span className="admin-where">the band across the bottom</span></h2>
           <p className="admin-meta" style={{ margin: '0 0 1rem', lineHeight: 1.6 }}>
             A quote across the foot of the shop. Leave blank and the band isn&rsquo;t drawn.
           </p>
@@ -400,7 +406,7 @@ export default async function ShopPageEditor() {
         </div>
 
         <div className="admin-panel">
-          <h2 className="admin-h2">Orders</h2>
+          <h2 className="admin-h2">Orders <span className="admin-where">shipping and checkout</span></h2>
 
           <label className="admin-field">
             Flat shipping — US dollars

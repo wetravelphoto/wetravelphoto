@@ -139,6 +139,8 @@ export type SiteSettings = {
   shop_related_heading: string | null
   shop_footer_left: string | null
   shop_footer_right: string | null
+  /** Show the three rooms that ship with the site alongside any of your own. */
+  shop_preset_rooms: boolean
 }
 
 const FALLBACK: SiteSettings = {
@@ -266,6 +268,7 @@ const FALLBACK: SiteSettings = {
   shop_related_heading: null,
   shop_footer_left: null,
   shop_footer_right: null,
+  shop_preset_rooms: true,
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {

@@ -49,7 +49,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const [categories, related, scenes] = await Promise.all([
     getShopCategories(),
     getRelated(entry, 4),
-    getRoomScenes(),
+    getRoomScenes(false, settings.shop_preset_rooms !== false),
   ])
 
   const title = displayTitle(entry, entry.photo)

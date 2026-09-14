@@ -210,12 +210,22 @@
   overflow: hidden;
 }
 
+/* A room photograph keeps its own proportions and is letterboxed, never
+   stretched — its corners are percentages of the picture, and squashing it
+   would slide the wall out from under the frame. */
 .views-stage > .scene,
-.views-stage > .views-plain,
-.views-thumb > .scene,
-.views-thumb > .views-plain {
+.views-thumb > .scene {
   width: 100%;
   height: auto;
+  flex: none;
+}
+
+/* The bare wall fills the box; the frame is sized to fit inside it, which is
+   what stops a tall print being cropped top and bottom. */
+.views-stage > .views-plain,
+.views-thumb > .views-plain {
+  width: 100%;
+  height: 100%;
   flex: none;
 }
 
@@ -225,16 +235,15 @@
   background-image: var(--wall-texture, none);
   background-repeat: repeat;
   background-size: 620px auto;
-  /* A percentage so the wall around the print scales with the stage, and the
-     same rule serves the thumbnails. */
-  padding: 9%;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
+/* --solo is worked out per print: the widest the frame can be and still fit
+   the box whichever way it's shaped. See ProductViews. */
 .views-plain .framed-solo {
-  width: 100%;
+  width: var(--solo, 84%);
 }
 
 .views-stage .scene,
@@ -247,11 +256,13 @@
   transform: scale(1.012);
 }
 
+/* Always quarters, however many views there are — with two views, auto-fit
+   made each one half the stage, which is not a thumbnail. */
 .views-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: clamp(0.5rem, 1.2vw, 0.9rem);
-  margin-top: clamp(0.5rem, 1.2vw, 0.9rem);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(0.4rem, 1vw, 0.75rem);
+  margin-top: clamp(0.4rem, 1vw, 0.75rem);
 }
 
 .views-thumb {
@@ -277,9 +288,7 @@
   opacity: 1;
 }
 
-.views-thumb .views-plain {
-  padding: 8%;
-}
+
 
 .framed-hint {
   position: absolute;

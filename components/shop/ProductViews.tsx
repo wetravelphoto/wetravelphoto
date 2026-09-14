@@ -74,6 +74,19 @@ export default function ProductViews({
   const views = [null, ...scenes]
   const current = views[Math.min(active, views.length - 1)]
 
+  // How wide the frame may be drawn on the bare wall, as a percentage of the
+  // box. Whichever way the piece is more extreme decides: a panorama runs out
+  // of width, a tall print runs out of height. Worked out here rather than in
+  // CSS because it needs the frame's own proportions, and getting it wrong is
+  // what crops a portrait top and bottom.
+  //
+  // On a bare wall the frame fills its container's width (see FramedArt's fill
+  // mode), so its height is width x heightFactor/widthFactor — which is why
+  // the widthFactor belongs in here. Leaving it out is what cropped a tall
+  // print top and bottom.
+  const m = frameMetrics(width, height)
+  const solo = `${Math.min(88, (69 * m.widthFactor) / m.heightFactor).toFixed(2)}%`
+
   return (
     <div className="views">
       <button
@@ -91,7 +104,7 @@ export default function ProductViews({
           />
         ) : (
           <div className="views-plain">
-            <div className="framed-solo">
+            <div className="framed-solo" style={{ '--solo': solo } as React.CSSProperties}>
               <FramedArt {...art} sizes="(max-width: 900px) 84vw, 520px" eager fill />
             </div>
           </div>
@@ -121,7 +134,10 @@ export default function ProductViews({
                 <RoomScene scene={view} {...art} sizes="180px" />
               ) : (
                 <div className="views-plain">
-                  <div className="framed-solo">
+                  <div
+                    className="framed-solo"
+                    style={{ '--solo': solo } as React.CSSProperties}
+                  >
                     <FramedArt {...art} sizes="180px" fill />
                   </div>
                 </div>

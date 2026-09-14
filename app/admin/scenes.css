@@ -132,3 +132,75 @@
   background: rgba(163, 48, 42, 0.07);
   opacity: 1;
 }
+
+/* ---------- The rooms that come with the site ---------- */
+
+.scene-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.scene-preset {
+  margin: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+}
+
+.scene-preset[data-off='true'] {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.scene-preset img {
+  display: block;
+  width: 100%;
+}
+
+.scene-preset figcaption {
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute, #77706a);
+}
+
+.scene-btn-quiet {
+  background: transparent;
+  color: #23201d;
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.scene-btn-quiet:hover {
+  background: rgba(0, 0, 0, 0.04);
+  opacity: 1;
+}
+
+.scene-actions .admin-meta {
+  align-self: center;
+}
+
+@media (max-width: 700px) {
+  .scene-preset-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A panel heading that names where its fields appear on the site */
+.admin-where {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink-mute, #8a837c);
+}
+
+.admin-lede {
+  line-height: 1.7;
+  margin: 0 0 1.5rem;
+  padding: 0.9rem 1.1rem;
+  background: rgba(0, 0, 0, 0.03);
+  border-left: 2px solid rgba(0, 0, 0, 0.18);
+}

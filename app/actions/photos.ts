@@ -4,6 +4,7 @@ import { r2Client } from '@/lib/r2'
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createClient } from '@/lib/supabase/server'
 import { processExistingOriginal } from '@/lib/derivatives'
+import { syncProductsForPhoto } from '@/lib/products'
 import exifr from 'exifr'
 import { revalidatePath } from 'next/cache'
 
@@ -153,7 +154,14 @@ export async function toggleForSale(albumId: string, photoId: string, currentVal
 
   if (error) throw new Error(error.message)
 
+  // The flag alone doesn't make a photo buyable — it needs the product rows
+  // that carry the sizes and prices.
+  await syncProductsForPhoto(photoId)
+
   revalidatePath(`/admin/trips/${albumId}`)
+  revalidatePath('/admin/shop')
+  revalidatePath('/shop')
+  revalidatePath(`/shop/${photoId}`)
 }
 
 export async function reorderPhotos(albumId: string, orderedIds: string[]) {

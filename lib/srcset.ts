@@ -31,6 +31,37 @@ export function displayUrl(photo: Sizeable): string {
 }
 
 /**
+ * Builds a srcset from a stored path alone, for images that have no
+ * `derivatives` record of their own — hero stories, journal covers, the intro
+ * and contact images. They're written by the same pipeline, which keeps only
+ * the largest path, so without this they load at full resolution everywhere.
+ *
+ * Safe because the ladder only ever skips sizes *larger* than the source (see
+ * lib/derivatives.ts). If a path ends in 2400.webp then 1600, 800 and 400 all
+ * exist. Every size at or below the stored one is real; nothing above it is
+ * ever referenced.
+ *
+ * Returns undefined for anything that isn't a ladder path, so legacy uploads
+ * and original.jpg fall through to the bare src untouched.
+ */
+export function srcSetFromPath(url: string | null | undefined): string | undefined {
+  if (!url) return undefined
+
+  const match = url.match(/^(.*)\/(400|800|1600|2400)\.webp(\?.*)?$/)
+  if (!match) return undefined
+
+  const base = match[1]
+  const cap = Number(match[2])
+
+  const entries = SIZES.filter((size) => size <= cap).map(
+    (size) => `${base}/${size}.webp ${size}w`
+  )
+
+  // A single candidate tells the browser nothing it didn't already know
+  return entries.length > 1 ? entries.join(', ') : undefined
+}
+
+/**
  * Tells the browser how wide the image will actually be drawn, so it can pick
  * the right file before layout. Without this it assumes full viewport width
  * and over-fetches.

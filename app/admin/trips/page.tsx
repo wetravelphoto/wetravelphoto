@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { attachCovers, photoCounts } from '@/lib/album-covers'
 import GalleryGrid from '@/components/admin/GalleryGrid'
 import Link from 'next/link'
 
@@ -16,33 +17,38 @@ export default async function GalleriesPage({
 
   const supabase = await createClient()
 
-  const { data: albums, error } = await supabase
+  // Covers and counts come from bounded queries. Embedding every photo row of
+  // every gallery here is what made this page fail with "bad gateway".
+  const { data: albumData, error } = await supabase
     .from('albums')
-    .select('*, photos!photos_album_id_fkey(id, storage_path)')
+    .select('*')
     // display_order is the gallery's position. albums.sort_order is text and
     // means the photo sort mode inside the album — don't order by it here.
     .order('display_order', { ascending: true })
 
-  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+  const base = (albumData ?? []) as {
+    id: string
+    cover_photo_id: string | null
+    cover_custom_path: string | null
+    [key: string]: unknown
+  }[]
 
-  const rows = (albums ?? []).map((album) => {
-    const photos = (album.photos ?? []) as { id: string; storage_path: string }[]
-    const coverPath = album.cover_custom_path
-      ? album.cover_custom_path
-      : (photos.find((p) => p.id === album.cover_photo_id) ?? photos[0])?.storage_path
+  const [albums, counts] = await Promise.all([
+    attachCovers(base),
+    photoCounts(base.map((a) => a.id)),
+  ])
 
-    return {
-      id: album.id as string,
-      title: album.title as string,
-      slug: (album.slug as string) ?? null,
-      privacy: (album.privacy_type as string) ?? 'public',
-      photoCount: photos.length,
-      coverUrl: coverPath ? `${publicUrl}/${coverPath}` : null,
-      createdAt: album.created_at as string,
-      updatedAt: (album.updated_at as string) ?? (album.created_at as string),
-      sortOrder: (album.display_order as number) ?? 0,
-    }
-  })
+  const rows = albums.map((album) => ({
+    id: album.id as string,
+    title: album.title as string,
+    slug: (album.slug as string) ?? null,
+    privacy: (album.privacy_type as string) ?? 'public',
+    photoCount: counts.get(album.id) ?? 0,
+    coverUrl: album.coverUrl,
+    createdAt: album.created_at as string,
+    updatedAt: (album.updated_at as string) ?? (album.created_at as string),
+    sortOrder: (album.display_order as number) ?? 0,
+  }))
 
   const sorted = [...rows].sort((a, b) => {
     if (sortKey === 'oldest') return a.createdAt.localeCompare(b.createdAt)

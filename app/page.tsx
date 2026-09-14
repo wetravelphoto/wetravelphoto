@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
+import { attachCovers } from '@/lib/album-covers'
+import { srcSetFromPath, SIZES_ATTR } from '@/lib/srcset'
 import { formatTripDate } from '@/lib/dates'
 import { getSiteSettings } from '@/lib/site'
 import { getInstagramFeed } from '@/lib/instagram'
@@ -55,7 +57,7 @@ type AlbumRow = {
   cover_show_location: boolean | null
   cover_show_date: boolean | null
   cover_date_format: string | null
-  photos: { id: string; storage_path: string }[]
+  // Covers are resolved separately by attachCovers — see lib/album-covers.ts
 }
 
 export default async function HomePage() {
@@ -93,6 +95,10 @@ export default async function HomePage() {
       title: heroTitles[post.id] || post.title,
       subtitle: heroSubtitles[post.id] || null,
       imageUrl: post.featured_custom_path ? photoUrl(post.featured_custom_path) : null,
+      // Without this the hero blocks first paint on a 2400px file
+      imageSrcSet: post.featured_custom_path
+        ? srcSetFromPath(photoUrl(post.featured_custom_path))
+        : undefined,
       focal: { x: point.x, y: point.y },
       focalMobile: { x: point.mx, y: point.my },
     }
@@ -100,20 +106,16 @@ export default async function HomePage() {
 
   const latestPosts = posts.slice(0, settings.journal_count ?? 3)
 
+  // No photo embed here. Fetching every photo of every gallery to pick one
+  // cover each is what made this page time out and 502.
   const { data: albumData, error: albumError } = await supabase
     .from('albums')
-    .select('*, photos!photos_album_id_fkey(id, storage_path)')
+    .select('*')
     .eq('privacy_type', 'public')
-    .order('created_at', { ascending: false })
+    // Same order as /trips and the admin grid — set by dragging in /admin/trips
+    .order('display_order', { ascending: true })
 
-  const albums = (albumData ?? []) as unknown as AlbumRow[]
-
-  function albumCover(album: AlbumRow): string | null {
-    if (album.cover_custom_path) return photoUrl(album.cover_custom_path)
-    const list = album.photos ?? []
-    const cover = list.find((p) => p.id === album.cover_photo_id) ?? list[0]
-    return cover ? photoUrl(cover.storage_path) : null
-  }
+  const albums = await attachCovers((albumData ?? []) as unknown as AlbumRow[])
 
   // Each card shows the gallery's own composed cover, not just its first photo
   const carouselItems: CarouselItem[] = albums.map((album) => {
@@ -140,7 +142,10 @@ export default async function HomePage() {
         focalY: album.cover_focal_y ?? 0.5,
         overlayType: album.cover_overlay_type,
         overlayOpacity: album.cover_overlay_opacity ?? 0.35,
-        imageUrl: albumCover(album),
+        imageUrl: album.coverUrl,
+        // Lets the browser pick a 400/800px file for a card instead of the
+        // 2400px one storage_path points at
+        imageSrcSet: album.coverSrcSet,
         videoUrl: album.cover_video_path ? photoUrl(album.cover_video_path) : null,
         showButton: false,
       },
@@ -200,7 +205,14 @@ export default async function HomePage() {
               {settings.intro_image_path && (
                 <div className="intro-media">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photoUrl(settings.intro_image_path)} alt="" loading="lazy" />
+                  <img
+                    src={photoUrl(settings.intro_image_path)}
+                    srcSet={srcSetFromPath(photoUrl(settings.intro_image_path))}
+                    sizes={SIZES_ATTR.halfWidth}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
               )}
 
@@ -257,7 +269,14 @@ export default async function HomePage() {
                     <div className="trio-image">
                       {post.featured_custom_path && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={photoUrl(post.featured_custom_path)} alt="" loading="lazy" />
+                        <img
+                          src={photoUrl(post.featured_custom_path)}
+                          srcSet={srcSetFromPath(photoUrl(post.featured_custom_path))}
+                          sizes={SIZES_ATTR.grid}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                        />
                       )}
                     </div>
                     {post.category && <span className="trio-label">{post.category}</span>}

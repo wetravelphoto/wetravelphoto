@@ -33,6 +33,12 @@ const pages = [
     description: 'The heading above your gallery index.',
     live: '/trips',
   },
+  {
+    href: '/admin/pages/shop',
+    title: 'Shop',
+    description: 'Publish the shop, choose what it sells, and set flat shipping.',
+    live: '/shop',
+  },
 ]
 
 export default function PagesIndex() {

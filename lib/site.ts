@@ -100,6 +100,16 @@ export type SiteSettings = {
   instagram_token: string | null
   instagram_token_expires: string | null
   instagram_synced_at: string | null
+
+  show_shop: boolean
+  shop_mode: 'curated' | 'all'
+  shop_eyebrow: string | null
+  shop_heading: string | null
+  shop_intro: string | null
+  nav_shop_label: string | null
+  shop_currency: string
+  shop_shipping_flat_cents: number
+  shop_order_note: string | null
 }
 
 const FALLBACK: SiteSettings = {
@@ -193,6 +203,15 @@ const FALLBACK: SiteSettings = {
   instagram_token: null,
   instagram_token_expires: null,
   instagram_synced_at: null,
+  show_shop: false,
+  shop_mode: 'curated',
+  shop_eyebrow: null,
+  shop_heading: null,
+  shop_intro: null,
+  nav_shop_label: null,
+  shop_currency: 'usd',
+  shop_shipping_flat_cents: 1200,
+  shop_order_note: null,
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {

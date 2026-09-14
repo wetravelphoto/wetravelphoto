@@ -1,0 +1,96 @@
+/* Shop admin — price list and category rows.
+   Appended as its own file so it can't be overridden by, or override,
+   declarations in the shared admin sheets. */
+
+.shop-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.shop-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 8.5rem 7.5rem auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--admin-line, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.012);
+}
+
+.shop-row-category {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+/* A size that isn't listed still shows, just visibly stood down */
+.shop-row[data-inactive='true'] {
+  opacity: 0.55;
+}
+
+.shop-row .admin-input,
+.shop-row .admin-select {
+  margin: 0;
+}
+
+.shop-price {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.shop-price > span {
+  color: var(--ink-mute, #77706a);
+  font-size: 0.85rem;
+}
+
+.shop-price .admin-input {
+  text-align: right;
+}
+
+.shop-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-mute, #77706a);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shop-check input {
+  accent-color: var(--admin-accent, #a4552f);
+  cursor: pointer;
+}
+
+.shop-check-danger input {
+  accent-color: var(--admin-danger, #a33224);
+}
+
+.shop-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.shop-add .admin-input,
+.shop-add .admin-select {
+  margin: 0;
+  width: auto;
+  min-width: 8rem;
+}
+
+@media (max-width: 720px) {
+  .shop-row,
+  .shop-row-category {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    row-gap: 0.5rem;
+  }
+
+  .shop-add .admin-input,
+  .shop-add .admin-select {
+    width: 100%;
+  }
+}

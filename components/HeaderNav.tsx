@@ -14,6 +14,7 @@ export default function HeaderNav({
   navStyle,
   labels,
   showAbout = true,
+  showShop = false,
 }: {
   overHero?: boolean
   siteTitle: string
@@ -21,8 +22,9 @@ export default function HeaderNav({
   logoHeight: number
   align?: string
   navStyle?: React.CSSProperties
-  labels: { galleries: string; journal: string; about: string; contact: string }
+  labels: { galleries: string; journal: string; about: string; contact: string; shop: string }
   showAbout?: boolean
+  showShop?: boolean
 }) {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -48,6 +50,7 @@ export default function HeaderNav({
   const links = [
     { href: '/trips', label: labels.galleries },
     { href: '/journal', label: labels.journal },
+    ...(showShop ? [{ href: '/shop', label: labels.shop }] : []),
     ...(showAbout ? [{ href: '/about', label: labels.about }] : []),
     { href: '/contact', label: labels.contact },
   ]

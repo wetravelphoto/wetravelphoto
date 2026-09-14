@@ -9,6 +9,7 @@ export type HeroItem = {
   title: string
   subtitle: string | null
   imageUrl: string | null
+  imageSrcSet?: string
   focal?: { x: number; y: number }
   focalMobile?: { x: number; y: number }
 }
@@ -68,6 +69,8 @@ export default function HomeHero({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={item.imageUrl}
+                srcSet={item.imageSrcSet}
+                sizes="100vw"
                 alt=""
                 loading={i === 0 ? 'eager' : 'lazy'}
                 /* The first hero is the largest thing a visitor waits for */

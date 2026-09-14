@@ -178,3 +178,25 @@ export async function updateGalleriesPage(formData: FormData) {
     ['/trips', '/admin/pages/galleries']
   )
 }
+
+export async function updateShopPage(formData: FormData) {
+  const shipping = parseFloat(
+    ((formData.get('shop_shipping_flat') as string) ?? '').replace(/[$,\s]/g, '')
+  )
+
+  await patch(
+    {
+      show_shop: on(formData, 'show_shop'),
+      shop_mode: text(formData, 'shop_mode') ?? 'curated',
+      shop_eyebrow: text(formData, 'shop_eyebrow'),
+      shop_heading: text(formData, 'shop_heading'),
+      shop_intro: text(formData, 'shop_intro'),
+      shop_order_note: text(formData, 'shop_order_note'),
+      nav_shop_label: text(formData, 'nav_shop_label'),
+      // Typed in dollars, stored in cents
+      shop_shipping_flat_cents:
+        Number.isFinite(shipping) && shipping >= 0 ? Math.round(shipping * 100) : 0,
+    },
+    ['/shop', '/', '/admin/pages/shop']
+  )
+}

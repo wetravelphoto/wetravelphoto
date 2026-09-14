@@ -20,11 +20,13 @@ export default async function SiteHeader({ overHero = false }: { overHero?: bool
       logoHeight={settings.logo_header_height ?? 34}
       align={settings.header_align || 'split'}
       showAbout={settings.show_about !== false}
+      showShop={settings.show_shop === true}
       labels={{
         galleries: settings.nav_galleries_label || 'Galleries',
         journal: settings.nav_journal_label || 'Journal',
         about: settings.nav_about_label || 'About',
         contact: settings.nav_contact_label || 'Contact',
+        shop: settings.nav_shop_label || 'Prints',
       }}
       navStyle={{
         ['--nav-font' as string]: nav.stack,

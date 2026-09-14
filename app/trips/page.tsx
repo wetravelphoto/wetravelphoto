@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
+import { attachCovers } from '@/lib/album-covers'
 import { formatTripDate } from '@/lib/dates'
 import CoverRenderer from '@/components/CoverRenderer'
 import { getSiteSettings } from '@/lib/site'
@@ -43,7 +44,7 @@ type AlbumRow = {
   cover_show_location: boolean | null
   cover_show_date: boolean | null
   cover_date_format: string | null
-  photos: { id: string; storage_path: string }[]
+  // Covers are resolved separately by attachCovers
 }
 
 
@@ -51,22 +52,17 @@ export default async function GalleriesPage() {
   const supabase = await createClient()
   const settings = await getSiteSettings()
 
+  // Covers are resolved by a second bounded query rather than embedding every
+  // photo of every gallery — see lib/album-covers.ts
   const { data } = await supabase
     .from('albums')
-    .select('*, photos!photos_album_id_fkey(id, storage_path)')
+    .select('*')
     .eq('privacy_type', 'public')
     // display_order is the gallery's position, set by dragging in the admin.
     // albums.sort_order is text and means the photo sort mode inside an album.
     .order('display_order', { ascending: true })
 
-  const albums = (data ?? []) as unknown as AlbumRow[]
-
-  function coverFor(album: AlbumRow): string | null {
-    if (album.cover_custom_path) return photoUrl(album.cover_custom_path)
-    const list = album.photos ?? []
-    const cover = list.find((p) => p.id === album.cover_photo_id) ?? list[0]
-    return cover ? photoUrl(cover.storage_path) : null
-  }
+  const albums = await attachCovers((data ?? []) as unknown as AlbumRow[])
 
   return (
     <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -113,7 +109,8 @@ export default async function GalleriesPage() {
                         focalY: album.cover_focal_y ?? 0.5,
                         overlayType: album.cover_overlay_type,
                         overlayOpacity: album.cover_overlay_opacity ?? 0.35,
-                        imageUrl: coverFor(album),
+                        imageUrl: album.coverUrl,
+                        imageSrcSet: album.coverSrcSet,
                         videoUrl: album.cover_video_path ? photoUrl(album.cover_video_path) : null,
                         showButton: false,
                       }}

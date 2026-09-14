@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
 import { getSiteSettings } from '@/lib/site'
+import { srcSetFromPath } from '@/lib/srcset'
 import { formatTripDate } from '@/lib/dates'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
@@ -87,6 +88,7 @@ export default async function JournalPage() {
                     post.published_at ? formatTripDate(post.published_at, 'full') : null
                   }
                   imageUrl={coverFor(post)}
+                  imageSrcSet={srcSetFromPath(coverFor(post))}
                   feature={i === 0}
                   showExcerpt={settings.journal_show_excerpt !== false}
                   showByline={settings.journal_show_byline === true}

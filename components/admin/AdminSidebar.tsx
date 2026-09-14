@@ -14,6 +14,10 @@ const groups: { label: string; links: { href: string; label: string; exact?: boo
     ],
   },
   {
+    label: 'Selling',
+    links: [{ href: '/admin/shop', label: 'Shop' }],
+  },
+  {
     label: 'People',
     links: [
       { href: '/admin/clients', label: 'Clients' },

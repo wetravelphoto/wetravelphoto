@@ -88,7 +88,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               {eyebrow && <p className="product-eyebrow">{eyebrow}</p>}
               <h1 className="product-title">{title}</h1>
 
-              {settings.shop_show_location && entry.location?.trim() && (
+              {settings.shop_show_location !== false && entry.location?.trim() && (
                 <p className="product-location">{entry.location.trim()}</p>
               )}
 
@@ -136,11 +136,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                     : null
 
                   const sub = [
-                    settings.shop_show_location ? item.location?.trim() : null,
-                    settings.shop_show_collection
+                    settings.shop_show_location !== false ? item.location?.trim() : null,
+                    settings.shop_show_collection !== false
                       ? categoryName.get(item.categoryIds[0] ?? '')
                       : null,
-                    settings.shop_show_price && from !== null
+                    settings.shop_show_price !== false && from !== null
                       ? formatMoney(from, settings.shop_currency)
                       : null,
                   ]

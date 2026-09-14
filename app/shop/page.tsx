@@ -1,6 +1,6 @@
 import { getSiteSettings } from '@/lib/site'
 import { getShopCategories, formatMoney } from '@/lib/shop'
-import { getPublishedCatalog, displayTitle } from '@/lib/catalog'
+import { getPublishedCatalogResult, displayTitle } from '@/lib/catalog'
 import { srcSetFor, displayUrl } from '@/lib/srcset'
 import { pieceStyle } from '@/lib/frame'
 import { wallStyle, googleFontHref } from '@/lib/wall'
@@ -39,7 +39,11 @@ export default async function ShopPage({
 
   // Only prints with a published catalogue entry — a photograph marked for
   // sale but never written up doesn't belong in front of a customer
-  const entries = await getPublishedCatalog(active?.id ?? null)
+  const { entries, failed } = await getPublishedCatalogResult(active?.id ?? null)
+
+  // A shop with nothing in it and a shop that couldn't be read look identical
+  // to a visitor, so they get different words.
+  const columns = Number(settings.shop_columns) || 4
 
   const categoryName = new Map(categories.map((c) => [c.id, c.name]))
   const fontHref = googleFontHref(settings.shop_title_font)
@@ -88,7 +92,7 @@ export default async function ShopPage({
           {entries.length > 0 ? (
             <div
               className="wall-grid"
-              style={{ '--cols-wide': String(settings.shop_columns) } as React.CSSProperties}
+              style={{ '--cols-wide': String(columns) } as React.CSSProperties}
             >
               {entries.map((entry, index) => {
                 const title = displayTitle(entry, entry.photo)
@@ -101,11 +105,11 @@ export default async function ShopPage({
                 // off in the shop settings, and an empty line simply isn't
                 // rendered rather than leaving a gap.
                 const sub = [
-                  settings.shop_show_location ? entry.location?.trim() : null,
-                  settings.shop_show_collection
+                  settings.shop_show_location !== false ? entry.location?.trim() : null,
+                  settings.shop_show_collection !== false
                     ? categoryName.get(entry.categoryIds[0] ?? '')
                     : null,
-                  settings.shop_show_price && from !== null
+                  settings.shop_show_price !== false && from !== null
                     ? formatMoney(from, settings.shop_currency)
                     : null,
                 ]
@@ -125,7 +129,7 @@ export default async function ShopPage({
                         alt={entry.photo.alt_text ?? title}
                         width={entry.photo.width}
                         height={entry.photo.height}
-                        eager={index < settings.shop_columns}
+                        eager={index < columns}
                       />
 
                       <div className="piece-meta">
@@ -140,9 +144,11 @@ export default async function ShopPage({
             </div>
           ) : (
             <p className="wall-empty">
-              {active
-                ? `Nothing in ${active.name} yet.`
-                : 'No prints available just yet — check back shortly.'}
+              {failed
+                ? "The prints couldn't be loaded just now. Please try again shortly."
+                : active
+                  ? `Nothing in ${active.name} yet.`
+                  : 'No prints available just yet — check back shortly.'}
             </p>
           )}
         </div>

@@ -92,20 +92,52 @@ export function frameFor(
 
 const PHOTO_COLS = 'id, storage_path, derivatives, caption, alt_text, width, height'
 
+/**
+ * location arrived with the wall layout. A site whose migration hasn't run yet
+ * still has a working shop — every query below drops back to the older column
+ * list rather than failing, because a failed query empties the page and reads
+ * to a visitor as "nothing for sale".
+ */
+const CATALOG_COLS = 'id, photo_id, title, description, location, tags, is_published, sort_order'
+const CATALOG_COLS_LEGACY = 'id, photo_id, title, description, tags, is_published, sort_order'
+
+const TRIMMINGS =
+  'products(id, size_label, type, price_cents, is_active, sort_order), ' +
+  'photo_shop_categories(category_id)'
+
+/** The admin's view: a photograph marked for sale but never written up counts. */
+const adminSelect = (cols: string) =>
+  `${PHOTO_COLS}, catalog_items(${cols}), ${TRIMMINGS}`
+
+/** The shop's view: !inner drops anything without a catalogue entry. */
+const publicSelect = (cols: string) =>
+  `${PHOTO_COLS}, catalog_items!inner(${cols}), ${TRIMMINGS}`
+
+const PUBLIC_SELECT = publicSelect(CATALOG_COLS)
+
+/** True when a failed query was the database missing the column we just added. */
+function isMissingColumn(message: string | undefined): boolean {
+  return !!message && /location/i.test(message)
+}
+
 /** Every photograph marked for sale, with its catalogue entry and prices. */
 export async function getCatalog(): Promise<CatalogEntry[]> {
   const supabase = await createClient()
 
-  const { data: photos } = await supabase
-    .from('photos')
-    .select(
-      `${PHOTO_COLS}, ` +
-        'catalog_items(id, photo_id, title, description, location, tags, is_published, sort_order), ' +
-        'products(id, size_label, type, price_cents, is_active, sort_order), ' +
-        'photo_shop_categories(category_id)'
-    )
-    .eq('is_for_sale', true)
-    .order('created_at', { ascending: false })
+  const run = (select: string) =>
+    supabase
+      .from('photos')
+      .select(select)
+      .eq('is_for_sale', true)
+      .order('created_at', { ascending: false })
+
+  let { data: photos, error } = await run(adminSelect(CATALOG_COLS))
+
+  if (error && isMissingColumn(error.message)) {
+    ;({ data: photos, error } = await run(adminSelect(CATALOG_COLS_LEGACY)))
+  }
+
+  if (error) console.error('[catalog] getCatalog failed:', error.message)
 
   type Row = CatalogPhoto & {
     catalog_items: CatalogItem[] | CatalogItem | null
@@ -150,16 +182,14 @@ export async function getCatalog(): Promise<CatalogEntry[]> {
 export async function getCatalogEntry(photoId: string): Promise<CatalogEntry | null> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('photos')
-    .select(
-      `${PHOTO_COLS}, ` +
-        'catalog_items(id, photo_id, title, description, location, tags, is_published, sort_order), ' +
-        'products(id, size_label, type, price_cents, is_active, sort_order), ' +
-        'photo_shop_categories(category_id)'
-    )
-    .eq('id', photoId)
-    .maybeSingle()
+  const run = (select: string) =>
+    supabase.from('photos').select(select).eq('id', photoId).maybeSingle()
+
+  let { data, error } = await run(adminSelect(CATALOG_COLS))
+
+  if (error && isMissingColumn(error.message)) {
+    ;({ data, error } = await run(adminSelect(CATALOG_COLS_LEGACY)))
+  }
 
   // A query failure and a missing print are different problems
   if (error) console.error('[catalog] getCatalogEntry failed:', error.message)
@@ -203,11 +233,6 @@ export async function getCatalogEntry(photoId: string): Promise<CatalogEntry | n
 
 // ── Public shop ──────────────────────────────────────────────────────────────
 
-const PUBLIC_SELECT =
-  `${PHOTO_COLS}, ` +
-  'catalog_items!inner(id, photo_id, title, description, location, tags, is_published, sort_order), ' +
-  'products(id, size_label, type, price_cents, is_active, sort_order), ' +
-  'photo_shop_categories(category_id)'
 
 type PublicRow = CatalogPhoto & {
   catalog_items: CatalogItem[] | CatalogItem | null
@@ -255,17 +280,43 @@ function shape(row: PublicRow, fallbackId: string): CatalogEntry {
  * !inner on catalog_items means a photograph with no catalogue entry simply
  * doesn't appear, rather than showing up untitled and unpriced.
  */
-export async function getPublishedCatalog(categoryId?: string | null): Promise<CatalogEntry[]> {
+export type CatalogResult = {
+  entries: CatalogEntry[]
+  /**
+   * The query itself failed. An empty shop and a broken shop look identical to
+   * a visitor otherwise, and the caller should say so rather than claiming
+   * there's nothing for sale.
+   */
+  failed: boolean
+}
+
+export async function getPublishedCatalogResult(
+  categoryId?: string | null
+): Promise<CatalogResult> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('photos')
-    .select(PUBLIC_SELECT)
-    .eq('is_for_sale', true)
-    .eq('catalog_items.is_published', true)
-    .order('created_at', { ascending: false })
+  const run = (select: string) =>
+    supabase
+      .from('photos')
+      .select(select)
+      .eq('is_for_sale', true)
+      .eq('catalog_items.is_published', true)
+      .order('created_at', { ascending: false })
 
-  if (error) console.error('[shop] getPublishedCatalog failed:', error.message)
+  let { data, error } = await run(PUBLIC_SELECT)
+
+  if (error && isMissingColumn(error.message)) {
+    console.warn(
+      '[shop] catalog_items.location is missing — run the shop wall migration. ' +
+        'Falling back to the older column list.'
+    )
+    ;({ data, error } = await run(publicSelect(CATALOG_COLS_LEGACY)))
+  }
+
+  if (error) {
+    console.error('[shop] getPublishedCatalog failed:', error.message)
+    return { entries: [], failed: true }
+  }
 
   let entries = ((data ?? []) as unknown as PublicRow[]).map((row) => shape(row, row.id))
 
@@ -273,21 +324,33 @@ export async function getPublishedCatalog(categoryId?: string | null): Promise<C
     entries = entries.filter((e) => e.categoryIds.includes(categoryId))
   }
 
-  return entries
+  return { entries, failed: false }
+}
+
+export async function getPublishedCatalog(categoryId?: string | null): Promise<CatalogEntry[]> {
+  return (await getPublishedCatalogResult(categoryId)).entries
 }
 
 /** One published print. Returns null when it isn't for sale or isn't published. */
 export async function getPublishedEntry(photoId: string): Promise<CatalogEntry | null> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('photos')
-    .select(PUBLIC_SELECT)
-    .eq('id', photoId)
-    .eq('is_for_sale', true)
-    .eq('catalog_items.is_published', true)
-    .maybeSingle()
+  const run = (select: string) =>
+    supabase
+      .from('photos')
+      .select(select)
+      .eq('id', photoId)
+      .eq('is_for_sale', true)
+      .eq('catalog_items.is_published', true)
+      .maybeSingle()
 
+  let { data, error } = await run(PUBLIC_SELECT)
+
+  if (error && isMissingColumn(error.message)) {
+    ;({ data, error } = await run(publicSelect(CATALOG_COLS_LEGACY)))
+  }
+
+  // A query failure and a print that isn't for sale are different problems
   if (error) console.error('[shop] getPublishedEntry failed:', error.message)
   if (!data) return null
 

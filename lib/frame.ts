@@ -20,8 +20,18 @@
 /** Moulding thickness, as a fraction of the column width. */
 export const MOULDING = 0.022
 
-/** Mat border, as a fraction of the column width. */
-export const MAT = 0.08
+/**
+ * The mat, as a fraction of the column width — cut in two boards.
+ *
+ * A bright, narrow board sits against the moulding and a slightly warmer,
+ * much wider one carries the photograph, which is how a double mount reads:
+ * the join is a hairline you only notice once you look for it. Measured off
+ * the frame photograph itself, where the bright board is about a sixth of the
+ * total mat.
+ */
+export const MAT_OUTER = 0.014
+export const MAT_INNER = 0.066
+export const MAT = MAT_OUTER + MAT_INNER
 
 /** What mat + moulding take out of the column, both sides. */
 export const SURROUND = 2 * (MOULDING + MAT)

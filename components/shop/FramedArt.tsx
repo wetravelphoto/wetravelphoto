@@ -17,6 +17,7 @@ export default function FramedArt({
   height,
   sizes = '(max-width: 560px) 84vw, (max-width: 900px) 42vw, (max-width: 1200px) 28vw, 300px',
   eager = false,
+  fill = false,
 }: {
   imageUrl: string
   srcSet?: string
@@ -26,8 +27,17 @@ export default function FramedArt({
   sizes?: string
   /** The one piece a visitor came to see; everything else waits until it's near. */
   eager?: boolean
+  /**
+   * Fill the enclosing box rather than take a share of a column. A frame hung
+   * alone on a wall has no neighbours to keep in proportion with, so it takes
+   * the whole space its container gives it.
+   */
+  fill?: boolean
 }) {
   const m = frameMetrics(width, height)
+
+  const widthFactor = fill ? 1 : m.widthFactor
+  const heightFactor = fill ? m.heightFactor / m.widthFactor : m.heightFactor
 
   // The window is cut to the photograph. Whichever way the art is more extreme
   // than the frame allows is the side that runs out first, and the rest of the
@@ -40,22 +50,27 @@ export default function FramedArt({
       className="framed"
       style={
         {
-          '--wf': String(m.widthFactor),
-          '--hf': String(m.heightFactor),
+          '--wf': String(widthFactor),
+          '--hf': String(heightFactor),
         } as React.CSSProperties
       }
     >
-      <div className="framed-window" style={{ aspectRatio: String(m.artRatio), ...fills }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageUrl}
-          srcSet={srcSet}
-          sizes={sizes}
-          alt={alt}
-          decoding="async"
-          loading={eager ? 'eager' : 'lazy'}
-          fetchPriority={eager ? 'high' : 'auto'}
-        />
+      {/* The under-board. The bright sliver against the moulding is the padding
+          on .framed; this is the wider, warmer board that carries the
+          photograph, and the join between them reads as a cut edge. */}
+      <div className="framed-mat">
+        <div className="framed-window" style={{ aspectRatio: String(m.artRatio), ...fills }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            srcSet={srcSet}
+            sizes={sizes}
+            alt={alt}
+            decoding="async"
+            loading={eager ? 'eager' : 'lazy'}
+            fetchPriority={eager ? 'high' : 'auto'}
+          />
+        </div>
       </div>
     </div>
   )

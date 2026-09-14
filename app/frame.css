@@ -99,7 +99,10 @@
 
 .framed {
   --mould: calc(100cqw * 0.022);
-  --mat: calc(100cqw * 0.08);
+  /* Two boards: a bright sliver against the moulding, then the wider warmer
+     one that carries the photograph. */
+  --mat-outer: calc(100cqw * 0.014);
+  --mat-inner: calc(100cqw * 0.066);
 
   box-sizing: border-box;
   width: calc(100cqw * var(--wf, 1));
@@ -117,8 +120,8 @@
   border-image-slice: 25 24 25 24;
   border-image-repeat: stretch;
 
-  padding: var(--mat);
-  background: #fbfaf9;
+  padding: var(--mat-outer);
+  background: #fcfcfb;
   background-clip: padding-box;
 
   box-shadow:
@@ -126,6 +129,20 @@
     10px 15px 28px -15px rgba(0, 0, 0, 0.42);
   transition: transform 0.45s cubic-bezier(0.2, 0.6, 0.2, 1),
     box-shadow 0.45s cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+
+/* The under-board. Very slightly warmer and darker than the sliver above it,
+   so the join reads as a bevelled cut rather than a printing error. */
+.framed-mat {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: var(--mat-inner);
+  background: #f1f0ed;
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* The window cut in the mat board. It takes the photograph's real
@@ -185,4 +202,37 @@ a.piece:hover .framed {
 
   /* On one column a vertical has nothing to straddle, so it just stands */
   .piece { margin-bottom: 0; }
+}
+
+/* ---------- A print hung in a photograph of a room ---------- */
+
+.scene {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #efeeec;
+}
+
+.scene-room {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Laid out at a reference size, then carried onto the wall's four corners by
+   the perspective transform. The container-type is what lets the frame inside
+   measure itself against this box rather than the page. */
+.scene-art {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  container-type: inline-size;
+}
+
+.scene-art .framed {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    14px 22px 34px -16px rgba(0, 0, 0, 0.55);
 }

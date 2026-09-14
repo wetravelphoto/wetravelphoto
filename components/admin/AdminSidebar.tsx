@@ -17,6 +17,7 @@ const groups: { label: string; links: { href: string; label: string; exact?: boo
     label: 'Selling',
     links: [
       { href: '/admin/shop/catalog', label: 'Catalogue' },
+      { href: '/admin/shop/scenes', label: 'Rooms' },
       { href: '/admin/shop', label: 'Sizes & categories', exact: true },
     ],
   },

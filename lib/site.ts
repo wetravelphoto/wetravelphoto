@@ -122,6 +122,23 @@ export type SiteSettings = {
   shop_title_font: string | null
   shop_quote: string | null
   shop_quote_by: string | null
+
+  /** The product page's own words. */
+  shop_corner_line: string | null
+  shop_show_breadcrumbs: boolean
+  shop_feature1_icon: string | null
+  shop_feature1_title: string | null
+  shop_feature1_body: string | null
+  shop_feature2_icon: string | null
+  shop_feature2_title: string | null
+  shop_feature2_body: string | null
+  shop_feature3_icon: string | null
+  shop_feature3_title: string | null
+  shop_feature3_body: string | null
+  shop_related_overline: string | null
+  shop_related_heading: string | null
+  shop_footer_left: string | null
+  shop_footer_right: string | null
 }
 
 const FALLBACK: SiteSettings = {
@@ -226,7 +243,7 @@ const FALLBACK: SiteSettings = {
   shop_order_note: null,
   shop_frames: {},
   shop_subheading: null,
-  shop_columns: 4,
+  shop_columns: 3,
   shop_show_collection: true,
   shop_show_location: true,
   shop_show_price: true,
@@ -234,6 +251,21 @@ const FALLBACK: SiteSettings = {
   shop_title_font: null,
   shop_quote: null,
   shop_quote_by: null,
+  shop_corner_line: null,
+  shop_show_breadcrumbs: true,
+  shop_feature1_icon: null,
+  shop_feature1_title: null,
+  shop_feature1_body: null,
+  shop_feature2_icon: null,
+  shop_feature2_title: null,
+  shop_feature2_body: null,
+  shop_feature3_icon: null,
+  shop_feature3_title: null,
+  shop_feature3_body: null,
+  shop_related_overline: null,
+  shop_related_heading: null,
+  shop_footer_left: null,
+  shop_footer_right: null,
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {

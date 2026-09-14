@@ -43,7 +43,7 @@ export default async function ShopPage({
 
   // A shop with nothing in it and a shop that couldn't be read look identical
   // to a visitor, so they get different words.
-  const columns = Number(settings.shop_columns) || 4
+  const columns = Number(settings.shop_columns) || 3
 
   const categoryName = new Map(categories.map((c) => [c.id, c.name]))
   const fontHref = googleFontHref(settings.shop_title_font)

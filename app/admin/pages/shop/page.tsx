@@ -3,6 +3,7 @@ import { updateShopPage } from '@/app/actions/site'
 import { countPhotosForSale, centsToInput } from '@/lib/shop'
 import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
+import { FEATURE_ICONS } from '@/components/shop/FeatureIcon'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -216,6 +217,132 @@ export default async function ShopPageEditor() {
           />
         </div>
 
+        {/* ---------- PRODUCT PAGE ---------- */}
+
+        <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+          <h2 className="admin-h2">The product page</h2>
+          <p className="admin-meta" style={{ margin: '0 0 1rem', lineHeight: 1.6 }}>
+            Each print gets its own page: the piece on a wall, in every room you&rsquo;ve added
+            under <Link href="/admin/shop/scenes">Rooms</Link>, with the buying column beside it.
+          </p>
+
+          <Toggle
+            name="shop_show_breadcrumbs"
+            label="Breadcrumbs"
+            defaultChecked={settings.shop_show_breadcrumbs !== false}
+            note="Home / Prints / the print's name. Off gives a plain back link instead."
+          />
+
+          <label className="admin-field">
+            Line in the top corner
+            <input
+              type="text"
+              name="shop_corner_line"
+              defaultValue={settings.shop_corner_line ?? ''}
+              placeholder="Art lives brighter on your walls"
+              className="admin-input"
+            />
+          </label>
+        </div>
+
+        {/* ---------- REASSURANCE ---------- */}
+
+        <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+          <h2 className="admin-h2">Three things worth saying</h2>
+          <p className="admin-meta" style={{ margin: '0 0 1rem', lineHeight: 1.6 }}>
+            The row under the buy button — paper, shipping, however you print. Leave a title
+            blank and that one is left out; leave all three blank and the row goes away.
+          </p>
+
+          {([1, 2, 3] as const).map((n) => {
+            const icon = settings[`shop_feature${n}_icon` as const] ?? ''
+            const title = settings[`shop_feature${n}_title` as const] ?? ''
+            const body = settings[`shop_feature${n}_body` as const] ?? ''
+
+            return (
+              <div key={n} className="shop-feature-row">
+                <label className="admin-field">
+                  Title
+                  <input
+                    type="text"
+                    name={`shop_feature${n}_title`}
+                    defaultValue={title}
+                    placeholder={
+                      n === 1
+                        ? 'Museum-quality fine art paper'
+                        : n === 2
+                          ? 'Worldwide shipping'
+                          : 'Sustainable printing'
+                    }
+                    className="admin-input"
+                  />
+                </label>
+
+                <label className="admin-field">
+                  Detail
+                  <input
+                    type="text"
+                    name={`shop_feature${n}_body`}
+                    defaultValue={body}
+                    placeholder={
+                      n === 1
+                        ? 'Archival, gallery-grade materials.'
+                        : n === 2
+                          ? 'Carefully packaged and fully insured.'
+                          : 'Thoughtful production for a brighter tomorrow.'
+                    }
+                    className="admin-input"
+                  />
+                </label>
+
+                <label className="admin-field">
+                  Icon
+                  <select
+                    name={`shop_feature${n}_icon`}
+                    defaultValue={icon}
+                    className="admin-select"
+                  >
+                    <option value="">Leaf</option>
+                    {FEATURE_ICONS.map((key) => (
+                      <option key={key} value={key}>
+                        {key[0].toUpperCase() + key.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* ---------- RELATED ---------- */}
+
+        <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+          <h2 className="admin-h2">More prints, at the foot of a product page</h2>
+
+          <label className="admin-field">
+            Line above the heading
+            <input
+              type="text"
+              name="shop_related_overline"
+              defaultValue={settings.shop_related_overline ?? ''}
+              placeholder="Curated for your space"
+              className="admin-input"
+            />
+          </label>
+
+          <label className="admin-field">
+            Heading
+            <input
+              type="text"
+              name="shop_related_heading"
+              defaultValue={settings.shop_related_heading ?? ''}
+              placeholder="You may also like"
+              className="admin-input"
+            />
+          </label>
+        </div>
+
         {/* ---------- CLOSING QUOTE ---------- */}
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
@@ -243,6 +370,31 @@ export default async function ShopPageEditor() {
               defaultValue={settings.shop_quote_by ?? ''}
               placeholder="Anonymous"
               className="admin-input"
+            />
+          </label>
+
+          <label className="admin-field">
+            Left of the quote
+            <textarea
+              name="shop_footer_left"
+              defaultValue={settings.shop_footer_left ?? ''}
+              placeholder={'Fine art photographs\nfor modern living'}
+              className="admin-input"
+              rows={2}
+            />
+            <span className="admin-meta" style={{ display: 'block', marginTop: '0.3rem' }}>
+              Up to two lines — put each on its own line.
+            </span>
+          </label>
+
+          <label className="admin-field">
+            Right of the quote
+            <textarea
+              name="shop_footer_right"
+              defaultValue={settings.shop_footer_right ?? ''}
+              placeholder={'Worldwide shipping\nArt lives brighter'}
+              className="admin-input"
+              rows={2}
             />
           </label>
         </div>

@@ -42,3 +42,46 @@ export function googleFontHref(family: string | null | undefined): string | null
 
   return `https://fonts.googleapis.com/css2?family=${name.replace(/ /g, '+')}:ital,wght@0,300;0,400;1,400&display=swap`
 }
+
+export type Feature = { icon: string | null; title: string; body: string | null }
+
+type FeatureSettings = Pick<
+  SiteSettings,
+  | 'shop_feature1_icon' | 'shop_feature1_title' | 'shop_feature1_body'
+  | 'shop_feature2_icon' | 'shop_feature2_title' | 'shop_feature2_body'
+  | 'shop_feature3_icon' | 'shop_feature3_title' | 'shop_feature3_body'
+>
+
+/**
+ * The reassurance blurbs on a product page, in order, skipping any without a
+ * title. Three slots rather than a list because three is what the row holds —
+ * a fourth would wrap and look like a mistake.
+ */
+export function features(settings: FeatureSettings): Feature[] {
+  return [
+    {
+      icon: settings.shop_feature1_icon,
+      title: settings.shop_feature1_title?.trim() ?? '',
+      body: settings.shop_feature1_body,
+    },
+    {
+      icon: settings.shop_feature2_icon,
+      title: settings.shop_feature2_title?.trim() ?? '',
+      body: settings.shop_feature2_body,
+    },
+    {
+      icon: settings.shop_feature3_icon,
+      title: settings.shop_feature3_title?.trim() ?? '',
+      body: settings.shop_feature3_body,
+    },
+  ].filter((f) => f.title.length > 0)
+}
+
+/** One line per line typed, at most two — the band has room for two. */
+export function footerLines(value: string | null | undefined): string[] {
+  return (value ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+}

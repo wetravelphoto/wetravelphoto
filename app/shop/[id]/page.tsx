@@ -1,14 +1,16 @@
 import { getPublishedEntry, getRelated, displayTitle } from '@/lib/catalog'
 import { getShopCategories, formatMoney } from '@/lib/shop'
 import { getSiteSettings } from '@/lib/site'
+import { getRoomScenes } from '@/lib/scenes'
 import { srcSetFor, displayUrl } from '@/lib/srcset'
-import { pieceStyle } from '@/lib/frame'
-import { wallStyle, googleFontHref } from '@/lib/wall'
+import { pieceStyle, shapeOf } from '@/lib/frame'
+import { wallStyle, googleFontHref, features, footerLines } from '@/lib/wall'
 import FramedArt from '@/components/shop/FramedArt'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
-import FramedPrint from '@/components/shop/FramedPrint'
+import ProductViews from '@/components/shop/ProductViews'
 import BuyPanel, { type BuyOption } from '@/components/shop/BuyPanel'
+import FeatureIcon from '@/components/shop/FeatureIcon'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import '../../frame.css'
@@ -44,15 +46,15 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const entry = await getPublishedEntry(id)
   if (!entry) notFound()
 
-  const [categories, related] = await Promise.all([getShopCategories(), getRelated(entry, 3)])
+  const [categories, related, scenes] = await Promise.all([
+    getShopCategories(),
+    getRelated(entry, 4),
+    getRoomScenes(),
+  ])
 
   const title = displayTitle(entry, entry.photo)
   const categoryName = new Map(categories.map((c) => [c.id, c.name]))
-
-  // The eyebrow names the section this print belongs to, falling back to the
-  // site itself — the same slot a shop would use for a collection or a label
-  const firstCategory = categories.find((c) => entry.categoryIds.includes(c.id))
-  const eyebrow = firstCategory?.name ?? settings.site_title
+  const collection = categories.find((c) => entry.categoryIds.includes(c.id))?.name ?? null
 
   const options: BuyOption[] = entry.products.map((p) => ({
     id: p.id,
@@ -61,52 +63,89 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     price_cents: p.price_cents,
   }))
 
+  const shape = shapeOf(entry.photo.width, entry.photo.height)
+  const orientation =
+    shape === 'portrait' ? 'Portrait' : shape === 'square' ? 'Square' : 'Landscape'
+
+  const blurbs = features(settings)
   const fontHref = googleFontHref(settings.shop_title_font)
+  const shopLabel = settings.shop_heading || 'Prints'
 
   return (
-    <main className="wall shop-page" style={wallStyle(settings)}>
+    <main className="shop-page product-page" style={wallStyle(settings)}>
       {fontHref && <link rel="stylesheet" href={fontHref} />}
 
       <SiteHeader />
 
       <div className="shop-body">
         <div className="shop-inner">
-          <p className="shop-crumb">
-            <Link href="/shop">← {settings.shop_heading || 'Prints'}</Link>
-          </p>
+          {/* ---------- Crumbs and the corner line ---------- */}
+          <div className="product-top">
+            {settings.shop_show_breadcrumbs !== false ? (
+              <nav className="shop-crumb" aria-label="Breadcrumb">
+                <Link href="/">Home</Link>
+                <span aria-hidden>/</span>
+                <Link href="/shop">{shopLabel}</Link>
+                <span aria-hidden>/</span>
+                <span aria-current="page">{title}</span>
+              </nav>
+            ) : (
+              <nav className="shop-crumb" aria-label="Breadcrumb">
+                <Link href="/shop">← {shopLabel}</Link>
+              </nav>
+            )}
+
+            {settings.shop_corner_line && (
+              <p className="product-corner">{settings.shop_corner_line}</p>
+            )}
+          </div>
 
           <div className="product-layout">
-            <FramedPrint
+            {/* ---------- Views ---------- */}
+            <ProductViews
               imageUrl={displayUrl(entry.photo)}
               srcSet={srcSetFor(entry.photo)}
               alt={entry.photo.alt_text ?? title}
               width={entry.photo.width}
               height={entry.photo.height}
+              scenes={scenes}
+              hint="Click to enlarge"
             />
 
+            {/* ---------- Buying ---------- */}
             <div className="product-buy">
-              {eyebrow && <p className="product-eyebrow">{eyebrow}</p>}
               <h1 className="product-title">{title}</h1>
+
+              {collection && settings.shop_show_collection !== false && (
+                <p className="product-collection">{collection}</p>
+              )}
 
               {settings.shop_show_location !== false && entry.location?.trim() && (
                 <p className="product-location">{entry.location.trim()}</p>
               )}
 
+              <span className="product-rule" aria-hidden />
+
               <BuyPanel
                 options={options}
                 currency={settings.shop_currency}
                 orderNote={settings.shop_order_note}
+                orientation={orientation}
+                description={entry.description}
               />
 
-              {entry.description && (
-                <div className="product-description">
-                  {entry.description
-                    .split('\n\n')
-                    .filter(Boolean)
-                    .map((para, i) => (
-                      <p key={i}>{para}</p>
-                    ))}
-                </div>
+              {blurbs.length > 0 && (
+                <ul className="product-features">
+                  {blurbs.map((blurb, i) => (
+                    <li key={i}>
+                      <FeatureIcon name={blurb.icon} />
+                      <div>
+                        <p className="product-feature-title">{blurb.title}</p>
+                        {blurb.body && <p className="product-feature-body">{blurb.body}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
 
               {entry.tags.length > 0 && (
@@ -119,16 +158,18 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
+          {/* ---------- You may also like ---------- */}
           {related.length > 0 && (
             <section className="related">
-              <h2 className="related-heading">You may also like</h2>
+              {settings.shop_related_overline && (
+                <p className="wall-overline">{settings.shop_related_overline}</p>
+              )}
+              <h2 className="related-heading">
+                {settings.shop_related_heading || 'You may also like'}
+              </h2>
+              <span className="wall-rule" aria-hidden />
 
-              {/* Framed and hung by the same rules as the shop wall, so a
-                  vertical sitting between two landscapes still lines up. */}
-              <div
-                className="wall-grid"
-                style={{ '--cols-wide': '3' } as React.CSSProperties}
-              >
+              <div className="wall-grid" style={{ '--cols-wide': '4' } as React.CSSProperties}>
                 {related.map((item) => {
                   const itemTitle = displayTitle(item, item.photo)
                   const from = item.products.length
@@ -139,9 +180,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                     settings.shop_show_location !== false ? item.location?.trim() : null,
                     settings.shop_show_collection !== false
                       ? categoryName.get(item.categoryIds[0] ?? '')
-                      : null,
-                    settings.shop_show_price !== false && from !== null
-                      ? formatMoney(from, settings.shop_currency)
                       : null,
                   ]
                     .filter(Boolean)
@@ -160,13 +198,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                           alt={item.photo.alt_text ?? itemTitle}
                           width={item.photo.width}
                           height={item.photo.height}
-                          sizes="(max-width: 560px) 84vw, (max-width: 900px) 42vw, 300px"
+                          sizes="(max-width: 560px) 84vw, (max-width: 900px) 42vw, 260px"
                         />
 
-                        <div className="piece-meta">
+                        <div className="piece-meta piece-meta-centre">
                           <div className="piece-title">{itemTitle}</div>
                           {sub && <div className="piece-sub">{sub}</div>}
-                          <span className="piece-rule" aria-hidden />
+                          {settings.shop_show_price !== false && from !== null && (
+                            <div className="piece-price">
+                              {formatMoney(from, settings.shop_currency)}
+                            </div>
+                          )}
                         </div>
                       </Link>
                     </div>
@@ -178,11 +220,28 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {settings.shop_quote && (
-        <section className="wall-quote">
-          <div className="shop-inner">
-            <p className="wall-quote-text">{settings.shop_quote}</p>
-            {settings.shop_quote_by && <p className="wall-quote-by">— {settings.shop_quote_by}</p>}
+      {/* ---------- Footer band ---------- */}
+      {(settings.shop_quote || settings.shop_footer_left || settings.shop_footer_right) && (
+        <section className="wall-band">
+          <div className="wall-band-inner">
+            <div className="wall-band-side">
+              {footerLines(settings.shop_footer_left).map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
+
+            <div className="wall-band-centre">
+              {settings.shop_quote && (
+                <p className="wall-quote-text">&ldquo;{settings.shop_quote}&rdquo;</p>
+              )}
+              {settings.shop_quote_by && <p className="wall-quote-by">— {settings.shop_quote_by}</p>}
+            </div>
+
+            <div className="wall-band-side wall-band-end">
+              {footerLines(settings.shop_footer_right).map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
           </div>
         </section>
       )}

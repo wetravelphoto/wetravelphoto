@@ -189,7 +189,7 @@ export async function updateShopPage(formData: FormData) {
   const typedColumns = Number(formData.get('shop_columns'))
   const columns = Number.isFinite(typedColumns)
     ? Math.min(5, Math.max(2, Math.round(typedColumns)))
-    : 4
+    : 3
 
   await patch(
     {
@@ -218,6 +218,23 @@ export async function updateShopPage(formData: FormData) {
       shop_title_font: text(formData, 'shop_title_font'),
       shop_quote: text(formData, 'shop_quote'),
       shop_quote_by: text(formData, 'shop_quote_by'),
+
+      // ── The product page ──────────────────────────────────────────────────
+      shop_corner_line: text(formData, 'shop_corner_line'),
+      shop_show_breadcrumbs: on(formData, 'shop_show_breadcrumbs'),
+      shop_feature1_icon: text(formData, 'shop_feature1_icon'),
+      shop_feature1_title: text(formData, 'shop_feature1_title'),
+      shop_feature1_body: text(formData, 'shop_feature1_body'),
+      shop_feature2_icon: text(formData, 'shop_feature2_icon'),
+      shop_feature2_title: text(formData, 'shop_feature2_title'),
+      shop_feature2_body: text(formData, 'shop_feature2_body'),
+      shop_feature3_icon: text(formData, 'shop_feature3_icon'),
+      shop_feature3_title: text(formData, 'shop_feature3_title'),
+      shop_feature3_body: text(formData, 'shop_feature3_body'),
+      shop_related_overline: text(formData, 'shop_related_overline'),
+      shop_related_heading: text(formData, 'shop_related_heading'),
+      shop_footer_left: text(formData, 'shop_footer_left'),
+      shop_footer_right: text(formData, 'shop_footer_right'),
     },
     ['/shop', '/', '/admin/pages/shop']
   )

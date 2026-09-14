@@ -1,31 +1,26 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Frame } from '@/lib/catalog'
+import FramedArt from '@/components/shop/FramedArt'
 
 /**
- * A photograph shown inside the shop's mockup frame.
+ * The framed print on a product page: click to see it larger.
  *
- * The frame is a real photograph of a real frame, and the print is positioned
- * into its mat opening using percentages measured from that image — so it
- * holds at any width and a tenant can swap in their own frame by supplying
- * new measurements.
- *
- * `contain`, never `cover`: a print is not cropped to fit its mat. A panorama
- * sits with more mat above and below, which is how one is actually mounted.
+ * The enlarged view shows the frame too — what's being sold is the piece on a
+ * wall, not the file.
  */
 export default function FramedPrint({
-  frame,
   imageUrl,
   srcSet,
   alt,
-  sizes = '(max-width: 900px) 100vw, 55vw',
+  width,
+  height,
 }: {
-  frame: Frame
   imageUrl: string
   srcSet?: string
   alt: string
-  sizes?: string
+  width: number | null
+  height: number | null
 }) {
   const [open, setOpen] = useState(false)
 
@@ -46,23 +41,6 @@ export default function FramedPrint({
     }
   }, [open])
 
-  const art = (
-    <div className="framed-art" style={{ backgroundImage: `url(${frame.path})` }}>
-      <div
-        className="framed-opening"
-        style={{
-          top: `${frame.top}%`,
-          left: `${frame.left}%`,
-          width: `${frame.width}%`,
-          height: `${frame.height}%`,
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} srcSet={srcSet} sizes={sizes} alt={alt} decoding="async" />
-      </div>
-    </div>
-  )
-
   return (
     <>
       <button
@@ -71,7 +49,14 @@ export default function FramedPrint({
         onClick={() => setOpen(true)}
         aria-label="View larger"
       >
-        {art}
+        <FramedArt
+          imageUrl={imageUrl}
+          srcSet={srcSet}
+          alt={alt}
+          width={width}
+          height={height}
+          sizes="(max-width: 900px) 92vw, 46vw"
+        />
         <span className="framed-hint" aria-hidden>
           Click to enlarge
         </span>
@@ -94,22 +79,16 @@ export default function FramedPrint({
             &times;
           </button>
 
-          {/* Stop a click on the artwork itself from closing the view */}
+          {/* A click on the artwork shouldn't dismiss the view */}
           <div className="framed-lightbox-stage" onClick={(e) => e.stopPropagation()}>
-            <div className="framed-art" style={{ backgroundImage: `url(${frame.path})` }}>
-              <div
-                className="framed-opening"
-                style={{
-                  top: `${frame.top}%`,
-                  left: `${frame.left}%`,
-                  width: `${frame.width}%`,
-                  height: `${frame.height}%`,
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imageUrl} srcSet={srcSet} sizes="92vw" alt={alt} decoding="async" />
-              </div>
-            </div>
+            <FramedArt
+              imageUrl={imageUrl}
+              srcSet={srcSet}
+              alt={alt}
+              width={width}
+              height={height}
+              sizes="90vw"
+            />
           </div>
         </div>
       )}

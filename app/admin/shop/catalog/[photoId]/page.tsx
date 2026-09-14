@@ -1,8 +1,8 @@
-import { getCatalogEntry, displayTitle, orientationOf, frameFor } from '@/lib/catalog'
+import { getCatalogEntry, displayTitle, orientationOf } from '@/lib/catalog'
 import { getShopCategories, centsToInput } from '@/lib/shop'
-import { getSiteSettings } from '@/lib/site'
 import { saveCatalogItem } from '@/app/actions/catalog'
-import { displayUrl, srcSetFor, SIZES_ATTR } from '@/lib/srcset'
+import { displayUrl, srcSetFor } from '@/lib/srcset'
+import FramedArt from '@/components/shop/FramedArt'
 import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
 import Link from 'next/link'
@@ -17,10 +17,9 @@ export default async function CatalogItemEditor({
 }) {
   const { photoId } = await params
 
-  const [entry, categories, settings] = await Promise.all([
+  const [entry, categories] = await Promise.all([
     getCatalogEntry(photoId),
     getShopCategories(),
-    getSiteSettings(),
   ])
 
   if (!entry) notFound()
@@ -28,7 +27,6 @@ export default async function CatalogItemEditor({
   const save = saveCatalogItem.bind(null, photoId)
 
   const orientation = orientationOf(entry.photo.width, entry.photo.height)
-  const frame = frameFor(settings.shop_frames, orientation)
 
   return (
     <div style={{ maxWidth: 980 }}>
@@ -42,31 +40,19 @@ export default async function CatalogItemEditor({
         <div className="catalog-editor">
           {/* ---------- PREVIEW ---------- */}
           <div>
-            <div className="catalog-frame" style={{ backgroundImage: `url(${frame.path})` }}>
-              <div
-                className="catalog-frame-opening"
-                style={{
-                  top: `${frame.top}%`,
-                  left: `${frame.left}%`,
-                  width: `${frame.width}%`,
-                  height: `${frame.height}%`,
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={displayUrl(entry.photo)}
-                  srcSet={srcSetFor(entry.photo)}
-                  sizes={SIZES_ATTR.halfWidth}
-                  alt=""
-                  decoding="async"
-                />
-              </div>
-            </div>
+            <FramedArt
+              imageUrl={displayUrl(entry.photo)}
+              srcSet={srcSetFor(entry.photo)}
+              alt=""
+              width={entry.photo.width}
+              height={entry.photo.height}
+              sizes="(max-width: 900px) 92vw, 42vw"
+            />
 
             <p className="admin-meta" style={{ marginTop: '0.75rem', lineHeight: 1.6 }}>
-              {orientation === 'landscape' && 'Landscape frame'}
-              {orientation === 'portrait' && 'Portrait frame'}
-              {orientation === 'square' && 'Square frame'}
+              {orientation === 'landscape' && 'Landscape'}
+              {orientation === 'portrait' && 'Portrait'}
+              {orientation === 'square' && 'Square'}
               {entry.photo.width && entry.photo.height && (
                 <> · {entry.photo.width} × {entry.photo.height}px</>
               )}

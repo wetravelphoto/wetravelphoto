@@ -1,13 +1,15 @@
-import { getPublishedEntry, getRelated, displayTitle, orientationOf, frameFor } from '@/lib/catalog'
+import { getPublishedEntry, getRelated, displayTitle } from '@/lib/catalog'
 import { getShopCategories, formatMoney } from '@/lib/shop'
 import { getSiteSettings } from '@/lib/site'
-import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
+import { srcSetFor, displayUrl } from '@/lib/srcset'
+import FramedArt from '@/components/shop/FramedArt'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import FramedPrint from '@/components/shop/FramedPrint'
 import BuyPanel, { type BuyOption } from '@/components/shop/BuyPanel'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import '../../frame.css'
 import '../shop.css'
 import type { Metadata } from 'next'
 
@@ -43,7 +45,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const [categories, related] = await Promise.all([getShopCategories(), getRelated(entry, 3)])
 
   const title = displayTitle(entry, entry.photo)
-  const frame = frameFor(settings.shop_frames, orientationOf(entry.photo.width, entry.photo.height))
 
   // The eyebrow names the section this print belongs to, falling back to the
   // site itself — the same slot a shop would use for a collection or a label
@@ -69,10 +70,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
           <div className="product-layout">
             <FramedPrint
-              frame={frame}
               imageUrl={displayUrl(entry.photo)}
               srcSet={srcSetFor(entry.photo)}
               alt={entry.photo.alt_text ?? title}
+              width={entry.photo.width}
+              height={entry.photo.height}
             />
 
             <div className="product-buy">
@@ -119,28 +121,15 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
                   return (
                     <Link key={item.photo_id} href={`/shop/${item.photo_id}`} className="shop-card">
-                      <div
-                        className="shop-card-image"
-                        style={{
-                          aspectRatio: String(
-                            item.photo.width && item.photo.height
-                              ? item.photo.width / item.photo.height
-                              : 1
-                          ),
-                        }}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={displayUrl(item.photo)}
-                          srcSet={srcSetFor(item.photo)}
-                          sizes={SIZES_ATTR.grid}
-                          alt={item.photo.alt_text ?? itemTitle}
-                          width={item.photo.width ?? undefined}
-                          height={item.photo.height ?? undefined}
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      </div>
+                      <FramedArt
+                        imageUrl={displayUrl(item.photo)}
+                        srcSet={srcSetFor(item.photo)}
+                        alt={item.photo.alt_text ?? itemTitle}
+                        width={item.photo.width}
+                        height={item.photo.height}
+                        sizes="(max-width: 700px) 84vw, 28vw"
+                        compact
+                      />
 
                       <div className="shop-card-meta">
                         <span className="shop-card-title">{itemTitle}</span>

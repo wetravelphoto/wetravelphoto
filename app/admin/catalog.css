@@ -93,37 +93,6 @@
   align-items: start;
 }
 
-/* The frame mockup: the uploaded frame is the background, the photograph is
-   positioned into its mat opening using percentages measured from that image,
-   so it stays correct at any width. */
-.catalog-frame {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1448 / 1086;
-  background-size: cover;
-  background-position: center;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.catalog-frame-opening {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-/* contain, not cover — a print is never cropped to fit its mat */
-.catalog-frame-opening img {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  display: block;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-}
-
 .catalog-cat-grid {
   display: flex;
   flex-wrap: wrap;

@@ -1,11 +1,13 @@
 import { getSiteSettings } from '@/lib/site'
 import { getShopCategories, formatMoney } from '@/lib/shop'
 import { getPublishedCatalog, displayTitle } from '@/lib/catalog'
-import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
+import { srcSetFor, displayUrl } from '@/lib/srcset'
+import FramedArt from '@/components/shop/FramedArt'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import '../frame.css'
 import './shop.css'
 import type { Metadata } from 'next'
 
@@ -74,26 +76,17 @@ export default async function ShopPage({
                   ? Math.min(...entry.products.map((p) => p.price_cents))
                   : null
 
-                const ratio =
-                  entry.photo.width && entry.photo.height
-                    ? entry.photo.width / entry.photo.height
-                    : 1
-
                 return (
                   <Link key={entry.photo_id} href={`/shop/${entry.photo_id}`} className="shop-card">
-                    <div className="shop-card-image" style={{ aspectRatio: String(ratio) }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={displayUrl(entry.photo)}
-                        srcSet={srcSetFor(entry.photo)}
-                        sizes={SIZES_ATTR.grid}
-                        alt={entry.photo.alt_text ?? title}
-                        width={entry.photo.width ?? undefined}
-                        height={entry.photo.height ?? undefined}
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </div>
+                    <FramedArt
+                      imageUrl={displayUrl(entry.photo)}
+                      srcSet={srcSetFor(entry.photo)}
+                      alt={entry.photo.alt_text ?? title}
+                      width={entry.photo.width}
+                      height={entry.photo.height}
+                      sizes="(max-width: 620px) 70vw, (max-width: 1000px) 34vw, 22vw"
+                      compact
+                    />
 
                     <div className="shop-card-meta">
                       <span className="shop-card-title">{title}</span>

@@ -17,6 +17,7 @@ import './admin-ui.css'
 import './hero-picker.css'
 import './chrome-device.css'
 import './shop.css'
+import './catalog.css'
 
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -1,24 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import WallMockup from '@/components/shop/WallMockup'
 
 export type BuyOption = {
   id: string
   label: string
   kind: string
   price_cents: number
-}
-
-/** Pulls '16 × 24' out of a label so the mockup can draw it at the right size. */
-function inchesFrom(label: string): { w: number; h: number } | null {
-  const match = label.match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/i)
-  if (!match) return null
-
-  const w = Number(match[1])
-  const h = Number(match[2])
-
-  return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? { w, h } : null
 }
 
 function money(cents: number, currency: string) {
@@ -29,79 +17,86 @@ function money(cents: number, currency: string) {
   }).format(cents / 100)
 }
 
+/**
+ * The buying column. Size and quantity are live; the cart is the one piece
+ * still stubbed, so the button says so rather than pretending to work.
+ */
 export default function BuyPanel({
   options,
-  imageUrl,
-  srcSet,
-  alt,
-  aspect,
   currency = 'usd',
   orderNote,
 }: {
   options: BuyOption[]
-  imageUrl: string
-  srcSet?: string
-  alt: string
-  aspect: number
   currency?: string
   orderNote?: string | null
 }) {
   const [selectedId, setSelectedId] = useState(options[0]?.id ?? '')
+  const [quantity, setQuantity] = useState(1)
 
   const selected = options.find((o) => o.id === selectedId) ?? options[0]
+  const total = selected ? selected.price_cents * quantity : 0
 
-  // The print's real dimensions drive the mockup. Landscape images get the
-  // long edge as width; portrait ones get it as height.
-  const parsed = selected ? inchesFrom(selected.label) : null
-  const long = parsed ? Math.max(parsed.w, parsed.h) : 24
-  const short = parsed ? Math.min(parsed.w, parsed.h) : 16
-
-  const widthInches = aspect >= 1 ? long : short
-  const heightInches = aspect >= 1 ? short : long
+  if (options.length === 0) {
+    return (
+      <p className="product-pending" style={{ marginTop: 0 }}>
+        This print isn&apos;t available to order yet.
+      </p>
+    )
+  }
 
   return (
-    <div className="product-layout">
-      <WallMockup
-        imageUrl={imageUrl}
-        srcSet={srcSet}
-        alt={alt}
-        aspect={aspect}
-        widthInches={widthInches}
-        heightInches={heightInches}
-      />
+    <>
+      <p className="product-price">{money(total, currency)}</p>
+      <p className="product-tax">Shipping calculated at checkout.</p>
 
-      <div className="product-buy">
-        <fieldset className="product-sizes">
-          <legend className="product-label">Size</legend>
-
+      <fieldset className="product-options">
+        <legend className="product-label">Size</legend>
+        <div className="product-pills">
           {options.map((option) => (
-            <label key={option.id} className="product-size" data-active={option.id === selected?.id}>
-              <input
-                type="radio"
-                name="print_option"
-                value={option.id}
-                checked={option.id === selected?.id}
-                onChange={() => setSelectedId(option.id)}
-              />
-              <span className="product-size-label">{option.label}</span>
-              <span className="product-size-kind">{option.kind}</span>
-              <span className="product-size-price">{money(option.price_cents, currency)}</span>
-            </label>
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setSelectedId(option.id)}
+              data-active={option.id === selected?.id}
+              className="product-pill"
+            >
+              {option.label}
+              {option.kind && option.kind !== 'print' && (
+                <span className="product-pill-kind"> · {option.kind}</span>
+              )}
+            </button>
           ))}
-        </fieldset>
-
-        <div className="product-total">
-          <span>{selected ? money(selected.price_cents, currency) : '—'}</span>
-          <span className="product-total-note">plus shipping</span>
         </div>
+      </fieldset>
 
-        <button type="button" className="product-buy-btn" disabled>
-          Add to cart
-        </button>
-        <p className="product-pending">Checkout isn&apos;t switched on yet.</p>
-
-        {orderNote && <p className="product-note">{orderNote}</p>}
+      <div className="product-qty-block">
+        <span className="product-label">Quantity</span>
+        <div className="product-qty">
+          <button
+            type="button"
+            onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+            aria-label="Decrease quantity"
+            disabled={quantity <= 1}
+          >
+            −
+          </button>
+          <span aria-live="polite">{quantity}</span>
+          <button
+            type="button"
+            onClick={() => setQuantity((q) => Math.min(20, q + 1))}
+            aria-label="Increase quantity"
+          >
+            +
+          </button>
+        </div>
       </div>
-    </div>
+
+      <button type="button" className="product-buy-btn" disabled>
+        Add to cart
+      </button>
+      <p className="product-pending">Checkout isn&apos;t switched on yet.</p>
+
+      {orderNote && <p className="product-note">{orderNote}</p>}
+    </>
   )
 }

@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { getSiteSettings } from '@/lib/site'
-import { getShopCategories, getPrintOptions, formatMoney } from '@/lib/shop'
+import { getShopCategories, formatMoney } from '@/lib/shop'
+import { getPublishedCatalog, displayTitle } from '@/lib/catalog'
 import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
@@ -19,19 +19,6 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-type ShopPhoto = {
-  id: string
-  storage_path: string
-  derivatives: Record<string, string> | null
-  caption: string | null
-  alt_text: string | null
-  width: number | null
-  height: number | null
-  is_for_sale: boolean
-  products: { price_cents: number; is_active: boolean }[]
-  photo_shop_categories: { category_id: string }[]
-}
-
 export default async function ShopPage({
   searchParams,
 }: {
@@ -39,53 +26,23 @@ export default async function ShopPage({
 }) {
   const settings = await getSiteSettings()
 
-  // Unpublished shop stays invisible rather than showing an empty page
+  // An unpublished shop stays invisible rather than showing an empty page
   if (!settings.show_shop) notFound()
 
   const { c: activeSlug } = await searchParams
-  const supabase = await createClient()
-
-  const [categories, priceList] = await Promise.all([getShopCategories(), getPrintOptions()])
-
-  const sellsEverything = settings.shop_mode === 'all'
-
-  let query = supabase
-    .from('photos')
-    .select(
-      'id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, ' +
-        'products(price_cents, is_active), photo_shop_categories(category_id)'
-    )
-    .order('created_at', { ascending: false })
-
-  if (!sellsEverything) query = query.eq('is_for_sale', true)
-
-  const { data } = await query
-  let photos = (data ?? []) as unknown as ShopPhoto[]
-
+  const categories = await getShopCategories()
   const active = categories.find((cat) => cat.slug === activeSlug) ?? null
 
-  if (active) {
-    photos = photos.filter((p) =>
-      (p.photo_shop_categories ?? []).some((link) => link.category_id === active.id)
-    )
-  }
-
-  // In curated mode the price comes from the photo's own product rows. In
-  // everything mode most photos have none, so the live price list stands in.
-  const listPrice = priceList.length ? Math.min(...priceList.map((o) => o.price_cents)) : null
-
-  function fromPrice(photo: ShopPhoto): number | null {
-    const live = (photo.products ?? []).filter((p) => p.is_active).map((p) => p.price_cents)
-    if (live.length > 0) return Math.min(...live)
-    return sellsEverything ? listPrice : null
-  }
+  // Only prints with a published catalogue entry — a photograph marked for
+  // sale but never written up doesn't belong in front of a customer
+  const entries = await getPublishedCatalog(active?.id ?? null)
 
   return (
     <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <SiteHeader />
 
       <div style={{ flex: 1, padding: '7rem clamp(1.25rem, 4vw, 3rem) 5rem' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div className="shop-head">
             {settings.shop_eyebrow && <p className="eyebrow">{settings.shop_eyebrow}</p>}
             <h1 className="display shop-title">{settings.shop_heading || 'Prints'}</h1>
@@ -109,34 +66,40 @@ export default async function ShopPage({
             </nav>
           )}
 
-          {photos.length > 0 ? (
+          {entries.length > 0 ? (
             <div className="shop-grid">
-              {photos.map((photo) => {
-                const price = fromPrice(photo)
+              {entries.map((entry) => {
+                const title = displayTitle(entry, entry.photo)
+                const from = entry.products.length
+                  ? Math.min(...entry.products.map((p) => p.price_cents))
+                  : null
+
                 const ratio =
-                  photo.width && photo.height ? photo.width / photo.height : 1
+                  entry.photo.width && entry.photo.height
+                    ? entry.photo.width / entry.photo.height
+                    : 1
 
                 return (
-                  <Link key={photo.id} href={`/shop/${photo.id}`} className="shop-card">
+                  <Link key={entry.photo_id} href={`/shop/${entry.photo_id}`} className="shop-card">
                     <div className="shop-card-image" style={{ aspectRatio: String(ratio) }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={displayUrl(photo)}
-                        srcSet={srcSetFor(photo)}
+                        src={displayUrl(entry.photo)}
+                        srcSet={srcSetFor(entry.photo)}
                         sizes={SIZES_ATTR.grid}
-                        alt={photo.alt_text ?? photo.caption ?? 'Photograph'}
-                        width={photo.width ?? undefined}
-                        height={photo.height ?? undefined}
+                        alt={entry.photo.alt_text ?? title}
+                        width={entry.photo.width ?? undefined}
+                        height={entry.photo.height ?? undefined}
                         loading="lazy"
                         decoding="async"
                       />
                     </div>
 
                     <div className="shop-card-meta">
-                      <span className="shop-card-title">{photo.caption || 'Untitled'}</span>
-                      {price !== null && (
+                      <span className="shop-card-title">{title}</span>
+                      {from !== null && (
                         <span className="shop-card-price">
-                          from {formatMoney(price, settings.shop_currency)}
+                          from {formatMoney(from, settings.shop_currency)}
                         </span>
                       )}
                     </div>

@@ -1,9 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+import { getPublishedEntry, getRelated, displayTitle, orientationOf, frameFor } from '@/lib/catalog'
+import { getShopCategories, formatMoney } from '@/lib/shop'
 import { getSiteSettings } from '@/lib/site'
-import { getPrintOptions } from '@/lib/shop'
 import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
+import FramedPrint from '@/components/shop/FramedPrint'
 import BuyPanel, { type BuyOption } from '@/components/shop/BuyPanel'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -12,65 +13,21 @@ import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
 
-type ProductRow = {
-  id: string
-  type: string | null
-  size_label: string | null
-  price_cents: number
-  is_active: boolean
-  sort_order: number
-}
-
-type PhotoRow = {
-  id: string
-  storage_path: string
-  derivatives: Record<string, string> | null
-  caption: string | null
-  alt_text: string | null
-  width: number | null
-  height: number | null
-  is_for_sale: boolean
-  taken_at: string | null
-  products: ProductRow[]
-  albums: { title: string | null; location: string | null; privacy_type: string } | null
-}
-
-async function loadPhoto(id: string): Promise<PhotoRow | null> {
-  const supabase = await createClient()
-
-  // The FK has to be named. There are two relationships between photos and
-  // albums — photos.album_id and albums.cover_photo_id — so a bare
-  // `albums(...)` embed is ambiguous, and PostgREST answers with an error
-  // rather than data. That surfaces here as a photo that doesn't exist.
-  const { data, error } = await supabase
-    .from('photos')
-    .select(
-      'id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, ' +
-        'products(id, type, size_label, price_cents, is_active, sort_order), ' +
-        'albums!photos_album_id_fkey(title, location, privacy_type)'
-    )
-    .eq('id', id)
-    .maybeSingle()
-
-  // Never let a query failure masquerade as a 404
-  if (error) console.error('[shop] loadPhoto failed:', error.message)
-
-  return (data as unknown as PhotoRow) ?? null
-}
-
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>
 }): Promise<Metadata> {
   const { id } = await params
-  const [settings, photo] = await Promise.all([getSiteSettings(), loadPhoto(id)])
+  const [settings, entry] = await Promise.all([getSiteSettings(), getPublishedEntry(id)])
 
-  const title = photo?.caption || 'Print'
+  if (!entry) return { title: settings.site_title }
+
+  const title = displayTitle(entry, entry.photo)
 
   return {
     title: `${title} — ${settings.shop_heading || 'Prints'} — ${settings.site_title}`,
-    description: settings.shop_intro ?? undefined,
+    description: entry.description ?? settings.shop_intro ?? undefined,
   }
 }
 
@@ -80,89 +37,124 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   if (!settings.show_shop) notFound()
 
-  const photo = await loadPhoto(id)
-  if (!photo) notFound()
+  const entry = await getPublishedEntry(id)
+  if (!entry) notFound()
 
-  const sellsEverything = settings.shop_mode === 'all'
+  const [categories, related] = await Promise.all([getShopCategories(), getRelated(entry, 3)])
 
-  // Curated mode sells only what's been marked. Everything mode still won't
-  // sell a photo from a private gallery.
-  if (!sellsEverything && !photo.is_for_sale) notFound()
-  if (sellsEverything && photo.albums?.privacy_type !== 'public' && !photo.is_for_sale) notFound()
+  const title = displayTitle(entry, entry.photo)
+  const frame = frameFor(settings.shop_frames, orientationOf(entry.photo.width, entry.photo.height))
 
-  const own = (photo.products ?? [])
-    .filter((p) => p.is_active)
-    .sort((a, b) => a.sort_order - b.sort_order)
+  // The eyebrow names the section this print belongs to, falling back to the
+  // site itself — the same slot a shop would use for a collection or a label
+  const firstCategory = categories.find((c) => entry.categoryIds.includes(c.id))
+  const eyebrow = firstCategory?.name ?? settings.site_title
 
-  // A photo listed before an option existed, or one being sold under
-  // "everything" mode, falls back to the live price list.
-  const options: BuyOption[] =
-    own.length > 0
-      ? own.map((p) => ({
-          id: p.id,
-          label: p.size_label ?? 'Print',
-          kind: p.type ?? 'print',
-          price_cents: p.price_cents,
-        }))
-      : (await getPrintOptions()).map((o) => ({
-          id: o.id,
-          label: o.label,
-          kind: o.kind,
-          price_cents: o.price_cents,
-        }))
-
-  const aspect = photo.width && photo.height ? photo.width / photo.height : 1
-  const title = photo.caption || 'Untitled'
+  const options: BuyOption[] = entry.products.map((p) => ({
+    id: p.id,
+    label: p.size_label ?? 'Print',
+    kind: p.type ?? 'print',
+    price_cents: p.price_cents,
+  }))
 
   return (
     <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <SiteHeader />
 
       <div style={{ flex: 1, padding: '7rem clamp(1.25rem, 4vw, 3rem) 5rem' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <p className="shop-crumb">
             <Link href="/shop">← {settings.shop_heading || 'Prints'}</Link>
           </p>
 
-          <div className="product-head">
-            <h1 className="display product-title">{title}</h1>
-            {(photo.albums?.location || photo.albums?.title) && (
-              <p className="product-origin">
-                {photo.albums?.location || photo.albums?.title}
-              </p>
-            )}
+          <div className="product-layout">
+            <FramedPrint
+              frame={frame}
+              imageUrl={displayUrl(entry.photo)}
+              srcSet={srcSetFor(entry.photo)}
+              alt={entry.photo.alt_text ?? title}
+            />
+
+            <div className="product-buy">
+              {eyebrow && <p className="product-eyebrow">{eyebrow}</p>}
+              <h1 className="product-title">{title}</h1>
+
+              <BuyPanel
+                options={options}
+                currency={settings.shop_currency}
+                orderNote={settings.shop_order_note}
+              />
+
+              {entry.description && (
+                <div className="product-description">
+                  {entry.description
+                    .split('\n\n')
+                    .filter(Boolean)
+                    .map((para, i) => (
+                      <p key={i}>{para}</p>
+                    ))}
+                </div>
+              )}
+
+              {entry.tags.length > 0 && (
+                <p className="product-tags">
+                  {entry.tags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </p>
+              )}
+            </div>
           </div>
 
-          {options.length > 0 ? (
-            <BuyPanel
-              options={options}
-              imageUrl={displayUrl(photo)}
-              srcSet={srcSetFor(photo)}
-              alt={photo.alt_text ?? title}
-              aspect={aspect}
-              currency={settings.shop_currency}
-              orderNote={settings.shop_order_note}
-            />
-          ) : (
-            <div className="product-layout">
-              <div className="wall">
-                <div className="wall-surface">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={displayUrl(photo)}
-                    srcSet={srcSetFor(photo)}
-                    sizes={SIZES_ATTR.halfWidth}
-                    alt={photo.alt_text ?? title}
-                    style={{ maxWidth: '70%', height: 'auto' }}
-                  />
-                </div>
+          {related.length > 0 && (
+            <section className="related">
+              <h2 className="related-heading">You may also like</h2>
+
+              <div className="related-grid">
+                {related.map((item) => {
+                  const itemTitle = displayTitle(item, item.photo)
+                  const from = item.products.length
+                    ? Math.min(...item.products.map((p) => p.price_cents))
+                    : null
+
+                  return (
+                    <Link key={item.photo_id} href={`/shop/${item.photo_id}`} className="shop-card">
+                      <div
+                        className="shop-card-image"
+                        style={{
+                          aspectRatio: String(
+                            item.photo.width && item.photo.height
+                              ? item.photo.width / item.photo.height
+                              : 1
+                          ),
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={displayUrl(item.photo)}
+                          srcSet={srcSetFor(item.photo)}
+                          sizes={SIZES_ATTR.grid}
+                          alt={item.photo.alt_text ?? itemTitle}
+                          width={item.photo.width ?? undefined}
+                          height={item.photo.height ?? undefined}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </div>
+
+                      <div className="shop-card-meta">
+                        <span className="shop-card-title">{itemTitle}</span>
+                        {from !== null && (
+                          <span className="shop-card-price">
+                            from {formatMoney(from, settings.shop_currency)}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
-              <div className="product-buy">
-                <p style={{ color: 'var(--ink-mute)' }}>
-                  No sizes are set up yet. Add some in the admin under Shop.
-                </p>
-              </div>
-            </div>
+            </section>
           )}
         </div>
       </div>

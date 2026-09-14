@@ -23,6 +23,15 @@ export async function syncProductsForPhoto(photoId: string): Promise<void> {
 
   if (!photo) return
 
+  // Marking a photograph for sale puts it in the catalogue. The entry is
+  // upserted rather than inserted, so unmarking and remarking a print brings
+  // back its title, description and tags instead of a blank record.
+  if (photo.is_for_sale) {
+    await supabase
+      .from('catalog_items')
+      .upsert({ photo_id: photoId }, { onConflict: 'photo_id', ignoreDuplicates: true })
+  }
+
   const { data: existingRows } = await supabase
     .from('products')
     .select('id, print_option_id, is_active')

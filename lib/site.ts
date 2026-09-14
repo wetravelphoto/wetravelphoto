@@ -110,6 +110,7 @@ export type SiteSettings = {
   shop_currency: string
   shop_shipping_flat_cents: number
   shop_order_note: string | null
+  shop_frames: Record<string, { path: string; top: number; left: number; width: number; height: number }>
 }
 
 const FALLBACK: SiteSettings = {
@@ -212,6 +213,7 @@ const FALLBACK: SiteSettings = {
   shop_currency: 'usd',
   shop_shipping_flat_cents: 1200,
   shop_order_note: null,
+  shop_frames: {},
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {

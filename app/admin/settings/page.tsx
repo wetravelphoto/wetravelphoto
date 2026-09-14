@@ -218,10 +218,16 @@ export default async function SettingsPage() {
         </div>
       </form>
 
-      <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-        <h2 className="admin-h2">Photograph sizes</h2>
-        <BackfillPanel initialRemaining={unprocessed} />
-      </div>
+      {/* Only shown when there's actually something to process. New uploads
+          build their own display sizes, so this is a recovery tool — it
+          matters again if photographs ever arrive without them, such as a
+          library imported from another platform. */}
+      {unprocessed > 0 && (
+        <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+          <h2 className="admin-h2">Photograph sizes</h2>
+          <BackfillPanel initialRemaining={unprocessed} />
+        </div>
+      )}
 
       <div className="admin-panel">
         <h2 className="admin-h2">Team</h2>

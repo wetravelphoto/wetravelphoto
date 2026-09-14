@@ -168,7 +168,11 @@ export default function DragCarousel({ items }: { items: CarouselItem[] }) {
             <div className="carousel-mat">
               <div className="carousel-cover">
                 {/* The gallery's own cover composition, scaled to the frame */}
-                <CoverRenderer settings={item.cover} height="100%" />
+                <CoverRenderer
+                  settings={item.cover}
+                  height="100%"
+                  sizes="(max-width: 620px) 86vw, (max-width: 1000px) 46vw, 31vw"
+                />
               </div>
             </div>
 

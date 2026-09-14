@@ -9,6 +9,9 @@ export default function TripCover({ settings }: { settings: CoverSettings }) {
       <CoverRenderer
         settings={settings}
         height="min(80vh, 700px)"
+        /* The gallery hero is the one image a visitor is waiting for */
+        priority
+        sizes="100vw"
         onButtonClick={() => {
           document.getElementById('gallery')?.scrollIntoView({ behavior: 'smooth' })
         }}

@@ -37,10 +37,21 @@ export default function CoverRenderer({
   settings,
   height = '78vh',
   onButtonClick,
+  sizes = '100vw',
+  priority = false,
 }: {
   settings: CoverSettings
   height?: string
   onButtonClick?: () => void
+  /**
+   * How wide this cover is actually drawn. The default suits a full-bleed
+   * gallery hero, but the same component renders 475px carousel cards — and
+   * a card that claims 100vw makes the browser fetch the 1600px file for a
+   * slot a quarter that size.
+   */
+  sizes?: string
+  /** Only the one cover a visitor waits for should pre-empt other downloads. */
+  priority?: boolean
 }) {
   const layout = getLayout(settings.layout)
   const font = getFont(settings.font)
@@ -201,9 +212,10 @@ export default function CoverRenderer({
     <img
       src={settings.imageUrl}
       srcSet={settings.imageSrcSet}
-      sizes="100vw"
+      sizes={sizes}
       alt=""
-      fetchPriority="high"
+      loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : 'auto'}
       decoding="async"
       draggable={false}
       style={{

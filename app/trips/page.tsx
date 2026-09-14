@@ -91,6 +91,7 @@ export default async function GalleriesPage() {
                     {/* The gallery's own composed cover, as set in its settings */}
                     <CoverRenderer
                       height="100%"
+                      sizes="(max-width: 620px) 100vw, (max-width: 1000px) 50vw, 33vw"
                       settings={{
                         title: showText ? album.cover_title_text || album.title : '',
                         subtitle: showText ? album.cover_subtitle : null,

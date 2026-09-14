@@ -88,12 +88,20 @@ export async function deleteAlbum(albumId: string) {
   return { kept: candidates.length - deletable.length }
 }
 
-/** Persists the order shown on the admin grid and the public index. */
+/**
+ * Persists the order shown on the admin grid and the public index.
+ *
+ * This writes `display_order`, not `sort_order`. `albums.sort_order` is text
+ * and holds the photo sort mode *inside* an album ('manual' | 'date_asc' |
+ * 'date_desc') — writing positions into it silently destroyed that setting.
+ */
 export async function reorderAlbums(ids: string[]) {
   const supabase = await createClient()
 
   await Promise.all(
-    ids.map((id, index) => supabase.from('albums').update({ sort_order: index + 1 }).eq('id', id))
+    ids.map((id, index) =>
+      supabase.from('albums').update({ display_order: index + 1 }).eq('id', id)
+    )
   )
 
   revalidatePath('/admin/trips')

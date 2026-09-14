@@ -19,7 +19,9 @@ export default async function GalleriesPage({
   const { data: albums, error } = await supabase
     .from('albums')
     .select('*, photos!photos_album_id_fkey(id, storage_path)')
-    .order('sort_order', { ascending: true })
+    // display_order is the gallery's position. albums.sort_order is text and
+    // means the photo sort mode inside the album — don't order by it here.
+    .order('display_order', { ascending: true })
 
   const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
 
@@ -38,7 +40,7 @@ export default async function GalleriesPage({
       coverUrl: coverPath ? `${publicUrl}/${coverPath}` : null,
       createdAt: album.created_at as string,
       updatedAt: (album.updated_at as string) ?? (album.created_at as string),
-      sortOrder: (album.sort_order as number) ?? 0,
+      sortOrder: (album.display_order as number) ?? 0,
     }
   })
 

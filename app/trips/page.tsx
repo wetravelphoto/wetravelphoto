@@ -55,7 +55,9 @@ export default async function GalleriesPage() {
     .from('albums')
     .select('*, photos!photos_album_id_fkey(id, storage_path)')
     .eq('privacy_type', 'public')
-    .order('sort_order', { ascending: true })
+    // display_order is the gallery's position, set by dragging in the admin.
+    // albums.sort_order is text and means the photo sort mode inside an album.
+    .order('display_order', { ascending: true })
 
   const albums = (data ?? []) as unknown as AlbumRow[]
 

@@ -2,6 +2,7 @@ import { getSiteSettings } from '@/lib/site'
 import { updateJournalPage } from '@/app/actions/site'
 import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
+import RangeField from '@/components/admin/RangeField'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -54,21 +55,16 @@ export default async function JournalPageEditor() {
             />
           </label>
 
-          <label className="admin-field">
-            Story title size — {Math.round((settings.journal_title_scale ?? 1) * 100)}%
-            <input
-              type="range"
-              name="journal_title_scale"
-              min="0.7"
-              max="1.8"
-              step="0.05"
-              defaultValue={settings.journal_title_scale ?? 1}
-              style={{ width: '100%', marginTop: '0.35rem', accentColor: 'var(--admin-accent)' }}
-            />
-            <span className="admin-meta" style={{ display: 'block', marginTop: '0.3rem' }}>
-              Applies to every story title on the index.
-            </span>
-          </label>
+          <RangeField
+            name="journal_title_scale"
+            label="Story title size"
+            defaultValue={settings.journal_title_scale ?? 1}
+            min={0.7}
+            max={1.8}
+            step={0.05}
+            unit="percent"
+            note="Applies to every story title on the index."
+          />
         </div>
 
         <div className="admin-panel">

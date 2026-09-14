@@ -231,10 +231,51 @@ a.piece:hover .framed {
   container-type: inline-size;
 }
 
+/* Exposed down to the room's own light. A frame drawn at full brightness on a
+   photograph of a dim room is the single thing that makes it look stuck on. */
+.scene-art > .framed,
+.scene-art > .scene-print {
+  filter: brightness(var(--exposure, 1));
+}
+
 .scene-art .framed {
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    14px 22px 34px -16px rgba(0, 0, 0, 0.55);
+    0 1px 2px rgba(0, 0, 0, calc(var(--shadow, 0.4) * 0.6)),
+    14px 22px 34px -16px rgba(0, 0, 0, var(--shadow, 0.4));
+}
+
+/* The fall-off across the piece, away from the window. Multiply, so it only
+   ever darkens — and only a gradient, because exposure is already handled by
+   the brightness filter above. Darkening twice turns a black frame grey. */
+.scene-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  background:
+    linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(0, 0, 0, calc(var(--falloff, 0.05) * 0.3)) 55%,
+      rgba(0, 0, 0, var(--falloff, 0.05)) 100%
+    ),
+    var(--wash, transparent);
+}
+
+/* Glass catching the window: one soft diagonal band. Soft-light rather than
+   screen, because screen lifts the blacks and the moulding stops being
+   black — which was worse than having no sheen at all. */
+.scene-glass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.14) 24%,
+    rgba(255, 255, 255, 0) 48%
+  );
 }
 
 /* A print dropped into a frame that's already in the room photograph. The

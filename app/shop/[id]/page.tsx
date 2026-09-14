@@ -1,7 +1,7 @@
 import { getPublishedEntry, getRelated, displayTitle } from '@/lib/catalog'
 import { getShopCategories, formatMoney } from '@/lib/shop'
 import { getSiteSettings } from '@/lib/site'
-import { getRoomScenes } from '@/lib/scenes'
+import { roomFor } from '@/lib/preset-rooms'
 import { srcSetFor, displayUrl } from '@/lib/srcset'
 import { pieceStyle, shapeOf } from '@/lib/frame'
 import { wallStyle, googleFontHref, features, footerLines } from '@/lib/wall'
@@ -46,11 +46,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const entry = await getPublishedEntry(id)
   if (!entry) notFound()
 
-  const [categories, related, scenes] = await Promise.all([
+  const [categories, related] = await Promise.all([
     getShopCategories(),
     getRelated(entry, 4),
-    getRoomScenes(false, settings.shop_preset_rooms !== false),
   ])
+
+  // One room, chosen once for the whole site — see lib/preset-rooms.ts
+  const room = roomFor(settings.shop_room)
 
   const title = displayTitle(entry, entry.photo)
   const categoryName = new Map(categories.map((c) => [c.id, c.name]))
@@ -108,7 +110,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               alt={entry.photo.alt_text ?? title}
               width={entry.photo.width}
               height={entry.photo.height}
-              scenes={scenes}
+              room={room}
               hint="Click to enlarge"
             />
 

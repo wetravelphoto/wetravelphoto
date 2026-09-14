@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import FramedArt from '@/components/shop/FramedArt'
 import RoomScene from '@/components/shop/RoomScene'
 import { frameMetrics } from '@/lib/frame'
-import type { RoomSceneRecord } from '@/lib/scenes'
+import type { PresetRoom } from '@/lib/preset-rooms'
 
 /**
  * The picture side of a product page: one large view, a strip of alternatives
@@ -19,7 +19,7 @@ export default function ProductViews({
   alt,
   width,
   height,
-  scenes,
+  room,
   hint,
 }: {
   imageUrl: string
@@ -27,7 +27,8 @@ export default function ProductViews({
   alt: string
   width: number | null
   height: number | null
-  scenes: RoomSceneRecord[]
+  /** The room this site shows prints in, or null for none. */
+  room: PresetRoom | null
   hint?: string | null
 }) {
   const [active, setActive] = useState(0)
@@ -71,7 +72,7 @@ export default function ProductViews({
   }, [open, measure])
 
   const art = { imageUrl, srcSet, alt, width, height }
-  const views = [null, ...scenes]
+  const views = room ? [null, room] : [null]
   const current = views[Math.min(active, views.length - 1)]
 
   // How wide the frame may be drawn on the bare wall, as a percentage of the
@@ -97,7 +98,7 @@ export default function ProductViews({
       >
         {current ? (
           <RoomScene
-            scene={current}
+            room={current}
             {...art}
             sizes="(max-width: 900px) 92vw, 46vw"
             eager={active === 1}
@@ -125,13 +126,13 @@ export default function ProductViews({
               type="button"
               role="tab"
               aria-selected={index === active}
-              aria-label={view ? view.name : 'The print, framed'}
+              aria-label={view ? `Hanging in the ${view.name.toLowerCase()}` : 'The print, framed'}
               className="views-thumb"
               data-active={index === active}
               onClick={() => setActive(index)}
             >
               {view ? (
-                <RoomScene scene={view} {...art} sizes="180px" />
+                <RoomScene room={view} {...art} sizes="180px" />
               ) : (
                 <div className="views-plain">
                   <div

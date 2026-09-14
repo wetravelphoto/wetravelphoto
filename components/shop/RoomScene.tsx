@@ -3,28 +3,27 @@
 import { useEffect, useRef, useState } from 'react'
 import FramedArt from '@/components/shop/FramedArt'
 import { frameMetrics } from '@/lib/frame'
-import { fitInQuad, matrix3dFor, quadToPixels, referenceWidth, type Quad } from '@/lib/perspective'
-import type { RoomSceneRecord } from '@/lib/scenes'
+import { fitInQuad, matrix3dFor, quadToPixels, referenceWidth } from '@/lib/perspective'
+import { imageFor, type PresetRoom } from '@/lib/preset-rooms'
 
 /**
  * A print hung in a photograph of a real room.
  *
- * Nothing is composited and nothing is stored: the artwork is mapped onto the
- * four corners of the wall space with a CSS perspective transform. Replace the
- * photograph and every room updates — there are no stale mockups to
- * regenerate.
+ * Nothing is composited and nothing is stored: the frame is the same frame the
+ * rest of the shop uses, mapped onto the four corners of the wall with a CSS
+ * perspective transform. Replace the photograph and every mockup updates.
  *
- * A room comes one of two ways. If it already has a frame in it, that frame
- * has real light and a real shadow and we only drop the photograph into its
- * opening; drawing our own over the top would give a frame inside a frame. An
- * empty wall gets the whole framed piece instead.
+ * What stops it looking like a sticker is the light. The frame is exposed down
+ * to the room's own level, washed with the wall's colour, and darkened across
+ * its width the way the window light falls off — all measured off the room
+ * photograph itself. See lib/preset-rooms.ts.
  *
  * The corners are percentages, so the maths needs the drawn size of the
  * picture, which only the browser knows. Until it's measured the frame is held
- * back rather than shown in the wrong place for a frame.
+ * back rather than shown in the wrong place.
  */
 export default function RoomScene({
-  scene,
+  room,
   imageUrl,
   srcSet,
   alt,
@@ -33,7 +32,7 @@ export default function RoomScene({
   sizes,
   eager = false,
 }: {
-  scene: RoomSceneRecord
+  room: PresetRoom
   imageUrl: string
   srcSet?: string
   alt: string
@@ -59,16 +58,12 @@ export default function RoomScene({
   }, [])
 
   const m = frameMetrics(width, height)
-
-  // With a frame already in the picture, the corners mark the artwork opening
-  // and the print's own shape is what has to fit; otherwise it's the frame's
-  // outer shape, mat and moulding included.
-  const aspect = scene.hasFrame ? m.artRatio : m.widthFactor / m.heightFactor
+  const aspect = m.widthFactor / m.heightFactor
 
   let art: { transform: string; width: number; height: number } | null = null
 
   if (box) {
-    const wall = quadToPixels(scene.corners as Quad, box.w, box.h)
+    const wall = quadToPixels(room.corners, box.w, box.h)
     const piece = fitInQuad(wall, aspect)
     const refW = referenceWidth(piece)
     const refH = refW / aspect
@@ -77,19 +72,21 @@ export default function RoomScene({
     if (transform) art = { transform, width: refW, height: refH }
   }
 
+  const photo = imageFor(room)
+
   return (
     <div
       ref={ref}
       className="scene"
-      style={{ aspectRatio: scene.width && scene.height ? `${scene.width} / ${scene.height}` : '3 / 2' }}
+      style={{ aspectRatio: `${room.width} / ${room.height}` }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         className="scene-room"
-        src={scene.imageUrl}
-        srcSet={scene.srcSet}
+        src={photo.src}
+        srcSet={photo.srcSet}
         sizes={sizes}
-        alt={scene.name}
+        alt={room.name}
         decoding="async"
         loading={eager ? 'eager' : 'lazy'}
       />
@@ -97,31 +94,35 @@ export default function RoomScene({
       {art && (
         <div
           className="scene-art"
-          style={{ width: art.width, height: art.height, transform: art.transform }}
+          style={
+            {
+              width: art.width,
+              height: art.height,
+              transform: art.transform,
+              '--exposure': String(room.light.exposure),
+              '--wash': room.light.wash,
+              '--falloff': String(room.light.falloff),
+              '--shadow': String(room.light.shadow),
+            } as React.CSSProperties
+          }
         >
-          {scene.hasFrame ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              className="scene-print"
-              src={imageUrl}
-              srcSet={srcSet}
-              sizes={sizes}
-              alt={alt}
-              decoding="async"
-              loading={eager ? 'eager' : 'lazy'}
-            />
-          ) : (
-            <FramedArt
-              imageUrl={imageUrl}
-              srcSet={srcSet}
-              alt={alt}
-              width={width}
-              height={height}
-              sizes={sizes}
-              eager={eager}
-              fill
-            />
-          )}
+          <FramedArt
+            imageUrl={imageUrl}
+            srcSet={srcSet}
+            alt={alt}
+            width={width}
+            height={height}
+            sizes={sizes}
+            eager={eager}
+            fill
+          />
+
+          {/* The room's light, over the piece: its colour, and the fall-off
+              away from the window. Multiply, so it only ever darkens. */}
+          <span className="scene-light" aria-hidden />
+
+          {/* A whisper of glass catching the window */}
+          <span className="scene-glass" aria-hidden />
         </div>
       )}
     </div>

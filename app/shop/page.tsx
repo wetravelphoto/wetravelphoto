@@ -69,36 +69,44 @@ export default async function ShopPage({
           )}
 
           {entries.length > 0 ? (
-            <div className="shop-grid">
-              {entries.map((entry) => {
-                const title = displayTitle(entry, entry.photo)
-                const from = entry.products.length
-                  ? Math.min(...entry.products.map((p) => p.price_cents))
-                  : null
+            /* Every frame shares one height, so mixed shapes still line up and
+               the moulding reads the same thickness right across the wall. */
+            <div className="wall shop-wall">
+              <div className="wall-row">
+                {entries.map((entry, index) => {
+                  const title = displayTitle(entry, entry.photo)
+                  const from = entry.products.length
+                    ? Math.min(...entry.products.map((p) => p.price_cents))
+                    : null
 
-                return (
-                  <Link key={entry.photo_id} href={`/shop/${entry.photo_id}`} className="shop-card">
-                    <FramedArt
-                      imageUrl={displayUrl(entry.photo)}
-                      srcSet={srcSetFor(entry.photo)}
-                      alt={entry.photo.alt_text ?? title}
-                      width={entry.photo.width}
-                      height={entry.photo.height}
-                      sizes="(max-width: 620px) 70vw, (max-width: 1000px) 34vw, 22vw"
-                      compact
-                    />
+                  return (
+                    <Link
+                      key={entry.photo_id}
+                      href={`/shop/${entry.photo_id}`}
+                      className="piece"
+                    >
+                      <FramedArt
+                        imageUrl={displayUrl(entry.photo)}
+                        srcSet={srcSetFor(entry.photo)}
+                        alt={entry.photo.alt_text ?? title}
+                        width={entry.photo.width}
+                        height={entry.photo.height}
+                        sizes="(max-width: 620px) 45vw, 340px"
+                        eager={index < 3}
+                      />
 
-                    <div className="shop-card-meta">
-                      <span className="shop-card-title">{title}</span>
-                      {from !== null && (
-                        <span className="shop-card-price">
-                          from {formatMoney(from, settings.shop_currency)}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                )
-              })}
+                      <div className="piece-caption">
+                        <span className="piece-title">{title}</span>
+                        {from !== null && (
+                          <span className="piece-price">
+                            {formatMoney(from, settings.shop_currency)}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
             </div>
           ) : (
             <p style={{ color: 'var(--ink-mute)' }}>

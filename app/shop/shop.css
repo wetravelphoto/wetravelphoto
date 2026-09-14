@@ -1,4 +1,8 @@
-/* Public shop — index, product page, framed mockup. */
+/* Public shop — index and product page.
+ *
+ * The frames themselves live in app/frame.css, which the admin loads too.
+ * What's here is the shop's own furniture: heading, filters, the buying
+ * column, and the enlarged view. */
 
 .shop-head {
   max-width: 46rem;
@@ -49,55 +53,17 @@
   border-bottom-color: currentColor;
 }
 
-/* ---------- Grids (index and "you may also like") ---------- */
+/* ---------- The wall ---------- */
 
-.shop-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: clamp(1.5rem, 3vw, 2.5rem);
-  align-items: start;
+/* Room around the frames so the pieces sit on a wall rather than in a box. */
+.shop-wall {
+  padding: clamp(2.5rem, 6vw, 5rem) clamp(1rem, 4vw, 3.5rem);
 }
 
-.shop-card {
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-
-.shop-card .wall {
-  transition: filter 0.4s ease;
-}
-
-.shop-card .frame {
-  transition: transform 0.45s cubic-bezier(0.2, 0.6, 0.2, 1),
-    box-shadow 0.45s cubic-bezier(0.2, 0.6, 0.2, 1);
-}
-
-.shop-card:hover .frame {
-  transform: translateY(-3px);
-  box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.25),
-    16px 22px 34px -14px rgba(0, 0, 0, 0.45);
-}
-
-.shop-card-meta {
+.product-wall {
+  padding: clamp(2rem, 4vw, 3.5rem) clamp(1rem, 3vw, 2.5rem);
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  margin-top: 0.75rem;
-}
-
-.shop-card-title {
-  font-size: 0.9rem;
-  letter-spacing: 0.01em;
-}
-
-.shop-card-price {
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  color: var(--ink-mute, #77706a);
-  white-space: nowrap;
+  justify-content: center;
 }
 
 /* ---------- Product page ---------- */
@@ -125,36 +91,10 @@
   align-items: start;
 }
 
-/* ---------- Framed print: interaction ---------- */
-
-.framed-trigger {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  cursor: zoom-in;
-  position: relative;
-}
-
-.framed-trigger .frame {
-  transition: transform 0.45s cubic-bezier(0.2, 0.6, 0.2, 1),
-    box-shadow 0.45s cubic-bezier(0.2, 0.6, 0.2, 1);
-}
-
-.framed-trigger:hover .frame {
-  transform: translateY(-2px);
-  box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.25),
-    16px 22px 36px -14px rgba(0, 0, 0, 0.45);
-}
-
 .framed-hint {
   position: absolute;
-  bottom: 0.9rem;
-  right: 1.1rem;
+  bottom: 0.2rem;
+  right: 0.4rem;
   font-size: 0.68rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -163,8 +103,8 @@
   transition: opacity 0.25s ease;
 }
 
-.framed-trigger:hover .framed-hint,
-.framed-trigger:focus-visible .framed-hint {
+.framed-hero:hover .framed-hint,
+.framed-hero:focus-visible .framed-hint {
   opacity: 1;
 }
 
@@ -189,8 +129,13 @@
 }
 
 .framed-lightbox-stage {
-  width: min(94vw, calc(94vh * 4 / 3));
   cursor: default;
+}
+
+/* The height is measured on open — the tallest that still fits the whole
+   frame on screen — and the frame's width follows from it. */
+.framed-lightbox-stage .framed {
+  --fh: var(--stage-h, 70vh);
 }
 
 .framed-lightbox-close {
@@ -395,10 +340,9 @@
   margin: 0 0 2rem;
 }
 
-.related-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(1.25rem, 3vw, 2.5rem);
+/* The related strip hangs a little smaller than the main wall */
+.related .framed {
+  --fh: clamp(150px, 17vw, 240px);
 }
 
 @media (max-width: 900px) {
@@ -407,8 +351,8 @@
   }
 }
 
-@media (max-width: 700px) {
-  .related-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 620px) {
+  .related .framed {
+    --fh: clamp(140px, 34vw, 200px);
   }
 }

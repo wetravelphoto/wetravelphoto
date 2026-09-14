@@ -1,15 +1,11 @@
-import { frameWidthPercent, ratioOf } from '@/lib/frame'
+import { artRatio, frameRatio } from '@/lib/frame'
 
 /**
- * A photograph mounted on a wall, framed and matted.
+ * A framed, matted print.
  *
- * The frame is drawn rather than photographed, so it fits any shape — the mat
- * and moulding are percentage padding, which CSS resolves against width on
- * every side, giving an even border exactly like a cut mat. The photograph's
- * own proportions then determine the frame's outer shape.
- *
- * Only the frame's width has to be worked out, and that's what keeps a tall
- * print from filling the wall: see lib/frame.ts.
+ * Height comes from the wall (a CSS variable), so every piece shares one
+ * height and one moulding thickness. Only the width varies, driven by the
+ * photograph's own proportions — see lib/frame.ts and app/frame.css.
  */
 export default function FramedArt({
   imageUrl,
@@ -17,8 +13,8 @@ export default function FramedArt({
   alt,
   width,
   height,
-  sizes = '(max-width: 900px) 100vw, 55vw',
-  compact = false,
+  sizes = '(max-width: 620px) 45vw, 340px',
+  eager = false,
 }: {
   imageUrl: string
   srcSet?: string
@@ -26,28 +22,31 @@ export default function FramedArt({
   width: number | null
   height: number | null
   sizes?: string
-  /** Grids use a shallower wall so the cards aren't mostly empty plaster. */
-  compact?: boolean
+  /** The one piece a visitor came to see; everything else waits until it's near. */
+  eager?: boolean
 }) {
-  const ratio = ratioOf(width, height)
+  const art = artRatio(width, height)
+  const frame = frameRatio(width, height)
+
+  // The window is cut to the photograph. Whichever way the art is more
+  // extreme than the frame allows is the side that runs out first, and the
+  // rest of the opening becomes mat.
+  const fills: React.CSSProperties = art >= frame ? { width: '100%' } : { height: '100%' }
 
   return (
-    <div className="wall" data-compact={compact}>
-      <figure className="frame" style={{ width: `${frameWidthPercent(ratio)}%` }}>
-        <div className="mat">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            srcSet={srcSet}
-            sizes={sizes}
-            alt={alt}
-            width={width ?? undefined}
-            height={height ?? undefined}
-            decoding="async"
-            loading={compact ? 'lazy' : undefined}
-          />
-        </div>
-      </figure>
+    <div className="framed" style={{ '--ratio': String(frame) } as React.CSSProperties}>
+      <div className="framed-window" style={{ aspectRatio: String(art), ...fills }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          srcSet={srcSet}
+          sizes={sizes}
+          alt={alt}
+          decoding="async"
+          loading={eager ? 'eager' : 'lazy'}
+          fetchPriority={eager ? 'high' : 'auto'}
+        />
+      </div>
     </div>
   )
 }

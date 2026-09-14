@@ -1,14 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import FramedArt from '@/components/shop/FramedArt'
+import { frameAspect, frameRatio } from '@/lib/frame'
 
-/**
- * The framed print on a product page: click to see it larger.
- *
- * The enlarged view shows the frame too — what's being sold is the piece on a
- * wall, not the file.
- */
+/** The large framed print on a product page. Click shows it bigger, framed. */
 export default function FramedPrint({
   imageUrl,
   srcSet,
@@ -23,29 +19,42 @@ export default function FramedPrint({
   height: number | null
 }) {
   const [open, setOpen] = useState(false)
+  const [stageHeight, setStageHeight] = useState<number | null>(null)
+
+  // The frame's width follows from its height, so the enlarged view works out
+  // the tallest height that still leaves the whole frame on screen. A panorama
+  // is limited by the window's width, a portrait by its height.
+  const measure = useCallback(() => {
+    const aspect = frameAspect(frameRatio(width, height))
+    setStageHeight(Math.floor(Math.min(window.innerHeight * 0.88, (window.innerWidth * 0.94) / aspect)))
+  }, [width, height])
 
   useEffect(() => {
     if (!open) return
+
+    measure()
 
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false)
     }
 
     document.addEventListener('keydown', onKey)
+    window.addEventListener('resize', measure)
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
     return () => {
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', measure)
       document.body.style.overflow = previous
     }
-  }, [open])
+  }, [open, measure])
 
   return (
     <>
       <button
         type="button"
-        className="framed-trigger"
+        className="framed-hero"
         onClick={() => setOpen(true)}
         aria-label="View larger"
       >
@@ -55,7 +64,8 @@ export default function FramedPrint({
           alt={alt}
           width={width}
           height={height}
-          sizes="(max-width: 900px) 92vw, 46vw"
+          sizes="(max-width: 900px) 80vw, 620px"
+          eager
         />
         <span className="framed-hint" aria-hidden>
           Click to enlarge
@@ -80,14 +90,23 @@ export default function FramedPrint({
           </button>
 
           {/* A click on the artwork shouldn't dismiss the view */}
-          <div className="framed-lightbox-stage" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="framed-lightbox-stage"
+            style={
+              stageHeight
+                ? ({ '--stage-h': `${stageHeight}px` } as React.CSSProperties)
+                : undefined
+            }
+            onClick={(e) => e.stopPropagation()}
+          >
             <FramedArt
               imageUrl={imageUrl}
               srcSet={srcSet}
               alt={alt}
               width={width}
               height={height}
-              sizes="90vw"
+              sizes="88vw"
+              eager
             />
           </div>
         </div>

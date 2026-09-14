@@ -1,49 +1,65 @@
 /**
  * Frame geometry.
  *
- * The frame is drawn around the photograph rather than being a fixed picture of
- * a frame, so any aspect ratio works — landscape, portrait, square, panorama —
- * with no per-shape asset to supply.
+ * Every frame on a wall shares one height. The mat and the moulding are
+ * derived from that shared height, which is what makes them identical on every
+ * piece — a real frame's moulding doesn't get thicker because the print is
+ * wider. Only the outer width varies, and it varies with the photograph.
  *
- * It works because percentage padding in CSS always resolves against the
- * element's WIDTH, top and bottom included. So a mat of `padding: 7%` is the
- * same number of pixels on every side, exactly like a real cut mat, and the
- * frame's outer shape falls out of the photograph's own proportions.
+ * The frame itself is the real thing: a nine-slice of a photograph of your
+ * frame, stretched along its edges by CSS border-image. The corners stay
+ * crisp, the moulding keeps its actual grain and sheen, and one asset covers
+ * every aspect ratio at any size.
  */
 
-/** Moulding thickness, as a fraction of the frame's outer width. */
-export const MOULDING = 0.022
+/** Moulding thickness, as a fraction of the shared frame height. */
+export const MOULDING = 0.032
 
-/** Mat border, as a fraction of the frame's outer width. */
-export const MAT = 0.07
+/** Mat border, as a fraction of the shared frame height. */
+export const MAT = 0.105
 
-/** Everything the frame adds around the print, both sides combined. */
-const SURROUND = 2 * (MOULDING + MAT)
-
-/** The wall panel's shape, and how much wall shows around the frame. */
-const STAGE_RATIO = 4 / 3
-const STAGE_PAD = 0.07
+/** Total height (and width) eaten by mat + moulding, both sides. */
+export const SURROUND = 2 * (MOULDING + MAT)
 
 /**
- * How wide the frame should be, as a percentage of the wall panel.
+ * How far a print may stray from square before the mat takes up the slack.
  *
- * A tall print has to be narrower to fit the same wall, which is what makes a
- * portrait read as a portrait instead of being stretched to fill the space.
- * Returns a width-limited value for wide images and a height-limited one for
- * tall ones.
+ * Without a cap, a 3:1 panorama at a shared height becomes a box three times
+ * wider than its neighbours and wrecks the row. Past these limits the frame
+ * stops growing and the photograph sits inside with more mat around it —
+ * which is how an extreme panorama is actually mounted. Nothing is cropped.
  */
-export function frameWidthPercent(ratio: number): number {
-  const safe = Number.isFinite(ratio) && ratio > 0 ? ratio : 1.5
+export const MIN_RATIO = 0.5
+export const MAX_RATIO = 2.2
 
-  // Outer shape of the frame once the mat and moulding are added
-  const frameRatio = 1 / ((1 - SURROUND) / safe + SURROUND)
+const DEFAULT_RATIO = 1.5
 
-  const innerWidth = 1 - 2 * STAGE_PAD
-  const innerHeight = 1 / STAGE_RATIO - 2 * STAGE_PAD
-
-  return Math.min(innerWidth, innerHeight * frameRatio) * 100
+/** The photograph's own width-to-height ratio. */
+export function artRatio(width: number | null, height: number | null): number {
+  if (!width || !height) return DEFAULT_RATIO
+  const ratio = width / height
+  if (!Number.isFinite(ratio) || ratio <= 0) return DEFAULT_RATIO
+  return ratio
 }
 
-export function ratioOf(width: number | null, height: number | null): number {
-  return width && height ? width / height : 1.5
+/** The frame's width-to-height ratio, clamped to keep rows readable. */
+export function frameRatio(width: number | null, height: number | null): number {
+  const ratio = artRatio(width, height)
+  return Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio))
+}
+
+/** True when the cap kicked in, so the mat is carrying the difference. */
+export function isClamped(width: number | null, height: number | null): boolean {
+  const ratio = artRatio(width, height)
+  return ratio > MAX_RATIO || ratio < MIN_RATIO
+}
+
+/**
+ * Outer width ÷ outer height for a frame of the given art ratio.
+ *
+ * Used where something has to fit the whole frame into a known box — the
+ * enlarged view works out its height from this.
+ */
+export function frameAspect(ratio: number): number {
+  return (1 - SURROUND) * ratio + SURROUND
 }

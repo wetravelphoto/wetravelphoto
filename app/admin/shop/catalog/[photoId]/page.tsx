@@ -40,14 +40,17 @@ export default async function CatalogItemEditor({
         <div className="catalog-editor">
           {/* ---------- PREVIEW ---------- */}
           <div>
-            <FramedArt
-              imageUrl={displayUrl(entry.photo)}
-              srcSet={srcSetFor(entry.photo)}
-              alt=""
-              width={entry.photo.width}
-              height={entry.photo.height}
-              sizes="(max-width: 900px) 92vw, 42vw"
-            />
+            <div className="wall framed-single">
+              <FramedArt
+                imageUrl={displayUrl(entry.photo)}
+                srcSet={srcSetFor(entry.photo)}
+                alt=""
+                width={entry.photo.width}
+                height={entry.photo.height}
+                sizes="(max-width: 900px) 80vw, 420px"
+                eager
+              />
+            </div>
 
             <p className="admin-meta" style={{ marginTop: '0.75rem', lineHeight: 1.6 }}>
               {orientation === 'landscape' && 'Landscape'}

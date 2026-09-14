@@ -69,13 +69,15 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           </p>
 
           <div className="product-layout">
-            <FramedPrint
-              imageUrl={displayUrl(entry.photo)}
-              srcSet={srcSetFor(entry.photo)}
-              alt={entry.photo.alt_text ?? title}
-              width={entry.photo.width}
-              height={entry.photo.height}
-            />
+            <div className="wall product-wall">
+              <FramedPrint
+                imageUrl={displayUrl(entry.photo)}
+                srcSet={srcSetFor(entry.photo)}
+                alt={entry.photo.alt_text ?? title}
+                width={entry.photo.width}
+                height={entry.photo.height}
+              />
+            </div>
 
             <div className="product-buy">
               {eyebrow && <p className="product-eyebrow">{eyebrow}</p>}
@@ -112,36 +114,39 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <section className="related">
               <h2 className="related-heading">You may also like</h2>
 
-              <div className="related-grid">
-                {related.map((item) => {
-                  const itemTitle = displayTitle(item, item.photo)
-                  const from = item.products.length
-                    ? Math.min(...item.products.map((p) => p.price_cents))
-                    : null
+              {/* Framed too, and on the same shared height — so a portrait
+                  sitting between two landscapes still lines up. */}
+              <div className="wall shop-wall">
+                <div className="wall-row">
+                  {related.map((item) => {
+                    const itemTitle = displayTitle(item, item.photo)
+                    const from = item.products.length
+                      ? Math.min(...item.products.map((p) => p.price_cents))
+                      : null
 
-                  return (
-                    <Link key={item.photo_id} href={`/shop/${item.photo_id}`} className="shop-card">
-                      <FramedArt
-                        imageUrl={displayUrl(item.photo)}
-                        srcSet={srcSetFor(item.photo)}
-                        alt={item.photo.alt_text ?? itemTitle}
-                        width={item.photo.width}
-                        height={item.photo.height}
-                        sizes="(max-width: 700px) 84vw, 28vw"
-                        compact
-                      />
+                    return (
+                      <Link key={item.photo_id} href={`/shop/${item.photo_id}`} className="piece">
+                        <FramedArt
+                          imageUrl={displayUrl(item.photo)}
+                          srcSet={srcSetFor(item.photo)}
+                          alt={item.photo.alt_text ?? itemTitle}
+                          width={item.photo.width}
+                          height={item.photo.height}
+                          sizes="(max-width: 620px) 45vw, 300px"
+                        />
 
-                      <div className="shop-card-meta">
-                        <span className="shop-card-title">{itemTitle}</span>
-                        {from !== null && (
-                          <span className="shop-card-price">
-                            from {formatMoney(from, settings.shop_currency)}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  )
-                })}
+                        <div className="piece-caption">
+                          <span className="piece-title">{itemTitle}</span>
+                          {from !== null && (
+                            <span className="piece-price">
+                              {formatMoney(from, settings.shop_currency)}
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
               </div>
             </section>
           )}

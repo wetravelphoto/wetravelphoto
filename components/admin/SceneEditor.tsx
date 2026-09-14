@@ -123,9 +123,10 @@ export default function SceneEditor({ scene }: { scene: RoomSceneRecord }) {
       <input type="hidden" name="corners" value={JSON.stringify(corners)} />
 
       <p className="admin-meta scene-editor-note">
-        Drag the four corners onto the wall space where a print should hang, in the order
-        1–2–3–4. Pull the far corners in to match the angle of the wall. Arrow keys nudge a
-        selected corner; hold shift to move faster.
+        Drag the four corners, in the order 1–2–3–4, onto the space a print should fill — the
+        opening inside the existing frame, or the bare wall, depending on the switch below.
+        Follow the angle of the wall with the far corners. Arrow keys nudge a selected corner;
+        hold shift to move faster.
       </p>
     </div>
   )

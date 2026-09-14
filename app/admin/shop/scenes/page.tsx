@@ -36,8 +36,9 @@ export default async function RoomScenesPage() {
       <form action={uploadRoomScene} className="admin-panel" style={{ marginBottom: '1.25rem' }}>
         <h2 className="admin-h2">Add a room</h2>
         <p className="admin-meta" style={{ margin: '0 0 1rem', lineHeight: 1.6 }}>
-          A photograph of a room with a clear stretch of empty wall. Shot straight on or at an
-          angle — you mark the corners next, so either works.
+          Either a room with a clear stretch of empty wall, or one of the stock interior mockups
+          that already has an empty frame hanging in it — there&rsquo;s a switch for which.
+          Straight on or at an angle both work; you mark the corners next.
         </p>
 
         <label className="admin-field">
@@ -102,6 +103,13 @@ export default async function RoomScenesPage() {
               className="admin-input"
             />
           </label>
+
+          <Toggle
+            name="has_frame"
+            label="This room already has a frame in it"
+            defaultChecked={scene.hasFrame}
+            note="On: mark the corners of the artwork opening inside the existing frame, and only the photograph is placed — the frame in the picture keeps its own light and shadow. Off: mark the bare wall and the whole framed piece is drawn onto it."
+          />
 
           <Toggle
             name="is_active"

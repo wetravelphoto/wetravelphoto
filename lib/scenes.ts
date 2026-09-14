@@ -17,6 +17,12 @@ export type RoomSceneRecord = {
   width: number | null
   height: number | null
   corners: Quad
+  /**
+   * The room photograph already contains a frame and a mat, so the corners
+   * mark the artwork opening and only the photograph is placed. False means an
+   * empty wall, and the whole framed piece is drawn onto it.
+   */
+  hasFrame: boolean
   sortOrder: number
   isActive: boolean
 }
@@ -28,6 +34,7 @@ type Row = {
   width: number | null
   height: number | null
   corners: unknown
+  has_frame: boolean | null
   sort_order: number
   is_active: boolean
 }
@@ -45,22 +52,40 @@ function shape(row: Row): RoomSceneRecord {
     width: row.width,
     height: row.height,
     corners: toQuad(row.corners),
+    // A database that hasn't had the migration yet has no column; a room with
+    // a frame in it is the commoner case, so that's the assumption.
+    hasFrame: row.has_frame !== false,
     sortOrder: row.sort_order,
     isActive: row.is_active,
   }
 }
 
+/**
+ * has_frame arrived after the table did, so a database that's a migration
+ * behind still lists its rooms rather than showing none.
+ */
+const COLS = 'id, name, image_path, width, height, corners, has_frame, sort_order, is_active'
+const COLS_LEGACY = 'id, name, image_path, width, height, corners, sort_order, is_active'
+
+const isMissingColumn = (message: string | undefined) => !!message && /has_frame/i.test(message)
+
 export async function getRoomScenes(includeInactive = false): Promise<RoomSceneRecord[]> {
   const supabase = await createClient()
 
-  let query = supabase
-    .from('room_scenes')
-    .select('id, name, image_path, width, height, corners, sort_order, is_active')
-    .order('sort_order', { ascending: true })
+  const run = (select: string) => {
+    const query = supabase
+      .from('room_scenes')
+      .select(select)
+      .order('sort_order', { ascending: true })
 
-  if (!includeInactive) query = query.eq('is_active', true)
+    return includeInactive ? query : query.eq('is_active', true)
+  }
 
-  const { data, error } = await query
+  let { data, error } = await run(COLS)
+
+  if (error && isMissingColumn(error.message)) {
+    ;({ data, error } = await run(COLS_LEGACY))
+  }
 
   // A shop with no rooms is normal; a shop that couldn't read them is not, and
   // either way the product page still has its plain framed view to fall back on
@@ -75,11 +100,14 @@ export async function getRoomScenes(includeInactive = false): Promise<RoomSceneR
 export async function getRoomScene(id: string): Promise<RoomSceneRecord | null> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('room_scenes')
-    .select('id, name, image_path, width, height, corners, sort_order, is_active')
-    .eq('id', id)
-    .maybeSingle()
+  const run = (select: string) =>
+    supabase.from('room_scenes').select(select).eq('id', id).maybeSingle()
+
+  let { data, error } = await run(COLS)
+
+  if (error && isMissingColumn(error.message)) {
+    ;({ data, error } = await run(COLS_LEGACY))
+  }
 
   if (error) console.error('[scenes] getRoomScene failed:', error.message)
   if (!data) return null

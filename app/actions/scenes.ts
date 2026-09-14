@@ -70,12 +70,20 @@ export async function saveRoomScene(id: string, formData: FormData) {
   const updates: Record<string, unknown> = {
     name: (formData.get('name') as string)?.trim() || 'Room',
     is_active: formData.get('is_active') === 'on',
+    has_frame: formData.get('has_frame') === 'on',
   }
 
   if (isQuad(corners)) updates.corners = corners
 
   const supabase = await createClient()
-  const { error } = await supabase.from('room_scenes').update(updates).eq('id', id)
+  let { error } = await supabase.from('room_scenes').update(updates).eq('id', id)
+
+  // A database still waiting on the has_frame migration shouldn't lose the
+  // corners the user just spent a minute placing
+  if (error && /has_frame/i.test(error.message)) {
+    delete updates.has_frame
+    ;({ error } = await supabase.from('room_scenes').update(updates).eq('id', id))
+  }
 
   if (error) throw new Error(error.message)
   revalidate()

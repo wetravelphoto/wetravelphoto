@@ -2,6 +2,8 @@ import { getSiteSettings } from '@/lib/site'
 import { getShopCategories, formatMoney } from '@/lib/shop'
 import { getPublishedCatalog, displayTitle } from '@/lib/catalog'
 import { srcSetFor, displayUrl } from '@/lib/srcset'
+import { pieceStyle } from '@/lib/frame'
+import { wallStyle, googleFontHref } from '@/lib/wall'
 import FramedArt from '@/components/shop/FramedArt'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
@@ -17,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings()
   return {
     title: `${settings.shop_heading || 'Prints'} — ${settings.site_title}`,
-    description: settings.shop_intro ?? settings.tagline ?? undefined,
+    description: settings.shop_subheading ?? settings.shop_intro ?? settings.tagline ?? undefined,
   }
 }
 
@@ -39,51 +41,83 @@ export default async function ShopPage({
   // sale but never written up doesn't belong in front of a customer
   const entries = await getPublishedCatalog(active?.id ?? null)
 
+  const categoryName = new Map(categories.map((c) => [c.id, c.name]))
+  const fontHref = googleFontHref(settings.shop_title_font)
+
   return (
-    <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <main className="wall shop-page" style={wallStyle(settings)}>
+      {/* The wall's typeface is the owner's choice, so it's fetched at runtime
+          the same way the gallery covers fetch theirs. */}
+      {fontHref && <link rel="stylesheet" href={fontHref} />}
+
       <SiteHeader />
 
-      <div style={{ flex: 1, padding: '7rem clamp(1.25rem, 4vw, 3rem) 5rem' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div className="shop-head">
-            {settings.shop_eyebrow && <p className="eyebrow">{settings.shop_eyebrow}</p>}
-            <h1 className="display shop-title">{settings.shop_heading || 'Prints'}</h1>
-            {settings.shop_intro && <p className="shop-intro">{settings.shop_intro}</p>}
-          </div>
+      <div className="shop-body">
+        <div className="shop-inner">
+          <header className="wall-head">
+            {settings.shop_eyebrow && <p className="wall-overline">{settings.shop_eyebrow}</p>}
 
-          {categories.length > 0 && (
-            <nav className="shop-filters" aria-label="Categories">
-              <Link href="/shop" data-active={!active}>
-                All
-              </Link>
-              {categories.map((category) => (
-                <Link
-                  key={category.id}
-                  href={`/shop?c=${category.slug}`}
-                  data-active={active?.id === category.id}
-                >
-                  {category.name}
+            <h1 className="wall-title">{settings.shop_heading || 'Prints'}</h1>
+
+            {settings.shop_subheading && (
+              <p className="wall-subhead">{settings.shop_subheading}</p>
+            )}
+
+            <span className="wall-rule" aria-hidden />
+
+            {categories.length > 0 && (
+              <nav className="wall-filters" aria-label="Categories">
+                <Link href="/shop" data-active={!active}>
+                  All
                 </Link>
-              ))}
-            </nav>
-          )}
+                {categories.map((category) => (
+                  <Link
+                    key={category.id}
+                    href={`/shop?c=${category.slug}`}
+                    data-active={active?.id === category.id}
+                  >
+                    {category.name}
+                  </Link>
+                ))}
+              </nav>
+            )}
+          </header>
+
+          {settings.shop_intro && <p className="wall-intro">{settings.shop_intro}</p>}
 
           {entries.length > 0 ? (
-            /* Every frame shares one height, so mixed shapes still line up and
-               the moulding reads the same thickness right across the wall. */
-            <div className="wall shop-wall">
-              <div className="wall-row">
-                {entries.map((entry, index) => {
-                  const title = displayTitle(entry, entry.photo)
-                  const from = entry.products.length
-                    ? Math.min(...entry.products.map((p) => p.price_cents))
-                    : null
+            <div
+              className="wall-grid"
+              style={{ '--cols-wide': String(settings.shop_columns) } as React.CSSProperties}
+            >
+              {entries.map((entry, index) => {
+                const title = displayTitle(entry, entry.photo)
 
-                  return (
+                const from = entry.products.length
+                  ? Math.min(...entry.products.map((p) => p.price_cents))
+                  : null
+
+                // One quiet line under the title. Each part can be switched
+                // off in the shop settings, and an empty line simply isn't
+                // rendered rather than leaving a gap.
+                const sub = [
+                  settings.shop_show_location ? entry.location?.trim() : null,
+                  settings.shop_show_collection
+                    ? categoryName.get(entry.categoryIds[0] ?? '')
+                    : null,
+                  settings.shop_show_price && from !== null
+                    ? formatMoney(from, settings.shop_currency)
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+
+                return (
+                  <div key={entry.photo_id} className="wall-col">
                     <Link
-                      key={entry.photo_id}
                       href={`/shop/${entry.photo_id}`}
                       className="piece"
+                      style={pieceStyle(entry.photo.width, entry.photo.height) as React.CSSProperties}
                     >
                       <FramedArt
                         imageUrl={displayUrl(entry.photo)}
@@ -91,25 +125,21 @@ export default async function ShopPage({
                         alt={entry.photo.alt_text ?? title}
                         width={entry.photo.width}
                         height={entry.photo.height}
-                        sizes="(max-width: 620px) 45vw, 340px"
-                        eager={index < 3}
+                        eager={index < settings.shop_columns}
                       />
 
-                      <div className="piece-caption">
-                        <span className="piece-title">{title}</span>
-                        {from !== null && (
-                          <span className="piece-price">
-                            {formatMoney(from, settings.shop_currency)}
-                          </span>
-                        )}
+                      <div className="piece-meta">
+                        <div className="piece-title">{title}</div>
+                        {sub && <div className="piece-sub">{sub}</div>}
+                        <span className="piece-rule" aria-hidden />
                       </div>
                     </Link>
-                  )
-                })}
-              </div>
+                  </div>
+                )
+              })}
             </div>
           ) : (
-            <p style={{ color: 'var(--ink-mute)' }}>
+            <p className="wall-empty">
               {active
                 ? `Nothing in ${active.name} yet.`
                 : 'No prints available just yet — check back shortly.'}
@@ -117,6 +147,17 @@ export default async function ShopPage({
           )}
         </div>
       </div>
+
+      {settings.shop_quote && (
+        <section className="wall-quote">
+          <div className="shop-inner">
+            <p className="wall-quote-text">{settings.shop_quote}</p>
+            {settings.shop_quote_by && (
+              <p className="wall-quote-by">— {settings.shop_quote_by}</p>
+            )}
+          </div>
+        </section>
+      )}
 
       <SiteFooter />
     </main>

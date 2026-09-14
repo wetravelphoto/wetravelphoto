@@ -40,16 +40,18 @@ export default async function CatalogItemEditor({
         <div className="catalog-editor">
           {/* ---------- PREVIEW ---------- */}
           <div>
-            <div className="wall framed-single">
-              <FramedArt
-                imageUrl={displayUrl(entry.photo)}
-                srcSet={srcSetFor(entry.photo)}
-                alt=""
-                width={entry.photo.width}
-                height={entry.photo.height}
-                sizes="(max-width: 900px) 80vw, 420px"
-                eager
-              />
+            <div className="wall catalog-wall">
+              <div className="framed-solo">
+                <FramedArt
+                  imageUrl={displayUrl(entry.photo)}
+                  srcSet={srcSetFor(entry.photo)}
+                  alt=""
+                  width={entry.photo.width}
+                  height={entry.photo.height}
+                  sizes="(max-width: 900px) 80vw, 420px"
+                  eager
+                />
+              </div>
             </div>
 
             <p className="admin-meta" style={{ marginTop: '0.75rem', lineHeight: 1.6 }}>
@@ -86,6 +88,21 @@ export default async function CatalogItemEditor({
                 />
                 <span className="admin-meta" style={{ display: 'block', marginTop: '0.3rem' }}>
                   What the customer sees. Separate from the gallery caption.
+                </span>
+              </label>
+
+              <label className="admin-field">
+                Where it was taken
+                <input
+                  type="text"
+                  name="location"
+                  defaultValue={entry.location ?? ''}
+                  placeholder="Torres del Paine, Chile"
+                  className="admin-input"
+                />
+                <span className="admin-meta" style={{ display: 'block', marginTop: '0.3rem' }}>
+                  Shown under the title on the wall, if that line is switched on in the shop
+                  settings.
                 </span>
               </label>
 

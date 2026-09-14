@@ -184,6 +184,13 @@ export async function updateShopPage(formData: FormData) {
     ((formData.get('shop_shipping_flat') as string) ?? '').replace(/[$,\s]/g, '')
   )
 
+  // Anything outside 2–5 would be rejected by the database check anyway, and a
+  // silent fallback beats a saved form that throws.
+  const typedColumns = Number(formData.get('shop_columns'))
+  const columns = Number.isFinite(typedColumns)
+    ? Math.min(5, Math.max(2, Math.round(typedColumns)))
+    : 4
+
   await patch(
     {
       show_shop: on(formData, 'show_shop'),
@@ -196,6 +203,21 @@ export async function updateShopPage(formData: FormData) {
       // Typed in dollars, stored in cents
       shop_shipping_flat_cents:
         Number.isFinite(shipping) && shipping >= 0 ? Math.round(shipping * 100) : 0,
+
+      // ── The wall ──────────────────────────────────────────────────────────
+      shop_subheading: text(formData, 'shop_subheading'),
+      shop_columns: columns,
+      shop_show_collection: on(formData, 'shop_show_collection'),
+      shop_show_location: on(formData, 'shop_show_location'),
+      shop_show_price: on(formData, 'shop_show_price'),
+      // An empty string is a plain wall; null means the plaster we ship with,
+      // so the two have to stay distinguishable.
+      shop_wall_texture: on(formData, 'shop_plain_wall')
+        ? ''
+        : text(formData, 'shop_wall_texture'),
+      shop_title_font: text(formData, 'shop_title_font'),
+      shop_quote: text(formData, 'shop_quote'),
+      shop_quote_by: text(formData, 'shop_quote_by'),
     },
     ['/shop', '/', '/admin/pages/shop']
   )

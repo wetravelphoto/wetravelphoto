@@ -1,11 +1,13 @@
-import { artRatio, frameRatio } from '@/lib/frame'
+import { frameMetrics } from '@/lib/frame'
 
 /**
- * A framed, matted print.
+ * A framed, matted print hanging in its column.
  *
- * Height comes from the wall (a CSS variable), so every piece shares one
- * height and one moulding thickness. Only the width varies, driven by the
- * photograph's own proportions — see lib/frame.ts and app/frame.css.
+ * Its size comes from the column it sits in — the enclosing element declares
+ * `container-type: inline-size` and everything here is a multiple of 100cqw.
+ * Since every column on a wall is the same width, the moulding and mat come
+ * out identical on every piece; only the frame's height and how it hangs
+ * change with the photograph. See lib/frame.ts and app/frame.css.
  */
 export default function FramedArt({
   imageUrl,
@@ -13,7 +15,7 @@ export default function FramedArt({
   alt,
   width,
   height,
-  sizes = '(max-width: 620px) 45vw, 340px',
+  sizes = '(max-width: 560px) 84vw, (max-width: 900px) 42vw, (max-width: 1200px) 28vw, 300px',
   eager = false,
 }: {
   imageUrl: string
@@ -25,17 +27,25 @@ export default function FramedArt({
   /** The one piece a visitor came to see; everything else waits until it's near. */
   eager?: boolean
 }) {
-  const art = artRatio(width, height)
-  const frame = frameRatio(width, height)
+  const m = frameMetrics(width, height)
 
-  // The window is cut to the photograph. Whichever way the art is more
-  // extreme than the frame allows is the side that runs out first, and the
-  // rest of the opening becomes mat.
-  const fills: React.CSSProperties = art >= frame ? { width: '100%' } : { height: '100%' }
+  // The window is cut to the photograph. Whichever way the art is more extreme
+  // than the frame allows is the side that runs out first, and the rest of the
+  // opening stays mat.
+  const fills: React.CSSProperties =
+    m.artRatio >= m.openingRatio ? { width: '100%' } : { height: '100%' }
 
   return (
-    <div className="framed" style={{ '--ratio': String(frame) } as React.CSSProperties}>
-      <div className="framed-window" style={{ aspectRatio: String(art), ...fills }}>
+    <div
+      className="framed"
+      style={
+        {
+          '--wf': String(m.widthFactor),
+          '--hf': String(m.heightFactor),
+        } as React.CSSProperties
+      }
+    >
+      <div className="framed-window" style={{ aspectRatio: String(m.artRatio), ...fills }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={imageUrl}

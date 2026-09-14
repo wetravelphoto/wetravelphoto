@@ -118,3 +118,18 @@
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- Catalogue preview ---------- */
+
+/* The same wall the shop hangs on, so what you see here is what a customer
+   sees. The texture is the shipped default; a site with its own is only
+   different behind the frame. */
+.catalog-wall {
+  --wall-texture: url('/textures/plaster.webp');
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem);
+}
+
+.catalog-wall .framed-solo {
+  width: min(100%, 26rem);
+  margin: 0 auto;
+}

@@ -1,82 +1,147 @@
-/* Public shop — index and product page.
+/* Public shop — the wall's furniture.
  *
  * The frames themselves live in app/frame.css, which the admin loads too.
- * What's here is the shop's own furniture: heading, filters, the buying
- * column, and the enlarged view. */
+ * What's here is the page around them: the three header lines, the category
+ * row, the product column, the enlarged view and the closing quote. */
 
-.shop-head {
+.shop-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shop-body {
+  flex: 1;
+  padding: clamp(5.5rem, 9vw, 8.5rem) clamp(1.25rem, 4vw, 3.5rem) clamp(4rem, 7vw, 6rem);
+}
+
+.shop-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+/* ---------- Header: overline, title, sub-heading, rule ---------- */
+
+.wall-head {
   max-width: 46rem;
-  margin: 0 0 2rem;
+  margin: 0 auto clamp(3rem, 6vw, 5rem);
+  text-align: center;
 }
 
-.shop-title {
-  font-size: clamp(2rem, 5vw, 3.1rem);
-  line-height: 1;
-  margin: 0.5rem 0 0;
+.wall-overline {
+  font-size: 0.68rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ink-mute, #8a837c);
+  margin: 0 0 1.15rem;
 }
 
-.shop-intro {
-  color: var(--ink-mute, #77706a);
-  line-height: 1.7;
-  margin: 1rem 0 0;
-  max-width: 34rem;
+.wall-title {
+  font-family: var(--font-shop-title), Georgia, serif;
+  font-size: clamp(2.3rem, 6vw, 4.2rem);
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: 0.005em;
+  color: var(--ink, #1c1a18);
+  margin: 0;
 }
 
-/* ---------- Category filters ---------- */
+.wall-subhead {
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-mute, #8a837c);
+  margin: 1.15rem 0 0;
+}
 
-.shop-filters {
+.wall-rule {
+  display: block;
+  width: 3.25rem;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.24);
+  margin: 1.7rem auto 0;
+}
+
+/* ---------- Category row ---------- */
+
+.wall-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem 1.25rem;
-  margin: 0 0 2.5rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  justify-content: center;
+  gap: 0.6rem clamp(1.1rem, 2.6vw, 2.2rem);
+  margin-top: clamp(1.6rem, 3vw, 2.4rem);
 }
 
-.shop-filters a {
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
+.wall-filters a {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-mute, #77706a);
+  color: var(--ink-mute, #8a837c);
   text-decoration: none;
-  padding-bottom: 0.2rem;
+  padding-bottom: 0.3rem;
   border-bottom: 1px solid transparent;
   transition: color 0.18s ease, border-color 0.18s ease;
 }
 
-.shop-filters a:hover {
+.wall-filters a:hover {
   color: var(--ink, #1c1a18);
 }
 
-.shop-filters a[data-active='true'] {
+.wall-filters a[data-active='true'] {
   color: var(--ink, #1c1a18);
   border-bottom-color: currentColor;
 }
 
-/* ---------- The wall ---------- */
-
-/* Room around the frames so the pieces sit on a wall rather than in a box. */
-.shop-wall {
-  padding: clamp(2.5rem, 6vw, 5rem) clamp(1rem, 4vw, 3.5rem);
+.wall-intro {
+  max-width: 34rem;
+  margin: 0 auto clamp(3rem, 6vw, 4.5rem);
+  text-align: center;
+  line-height: 1.8;
+  color: var(--ink-mute, #77706a);
 }
 
-.product-wall {
-  padding: clamp(2rem, 4vw, 3.5rem) clamp(1rem, 3vw, 2.5rem);
-  display: flex;
-  justify-content: center;
+.wall-empty {
+  text-align: center;
+  color: var(--ink-mute, #77706a);
+  padding: 4rem 0;
+}
+
+/* ---------- Closing quote ---------- */
+
+.wall-quote {
+  border-top: 1px solid rgba(0, 0, 0, 0.09);
+  padding: clamp(2.5rem, 5vw, 4rem) clamp(1.25rem, 4vw, 3.5rem);
+  text-align: center;
+}
+
+.wall-quote-text {
+  font-family: var(--font-shop-title), Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.05rem, 2.2vw, 1.45rem);
+  line-height: 1.5;
+  color: var(--ink, #1c1a18);
+  margin: 0;
+}
+
+.wall-quote-by {
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-mute, #8a837c);
+  margin: 0.9rem 0 0;
 }
 
 /* ---------- Product page ---------- */
 
 .shop-crumb {
-  margin: 0 0 1.75rem;
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
+  margin: 0 0 clamp(1.5rem, 3vw, 2.5rem);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .shop-crumb a {
-  color: var(--ink-mute, #77706a);
+  color: var(--ink-mute, #8a837c);
   text-decoration: none;
 }
 
@@ -86,25 +151,52 @@
 
 .product-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: clamp(2rem, 5vw, 5rem);
-  align-items: start;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 5.5rem);
+  align-items: center;
+}
+
+/* The hero hangs on the same wall as everything else, just alone */
+.product-trigger {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: zoom-in;
+  position: relative;
+}
+
+.product-trigger .framed-solo {
+  width: min(100%, 34rem);
+  margin: 0 auto;
+}
+
+.product-trigger:hover .framed {
+  transform: translateY(-3px);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.24),
+    16px 24px 38px -15px rgba(0, 0, 0, 0.46);
 }
 
 .framed-hint {
   position: absolute;
-  bottom: 0.2rem;
-  right: 0.4rem;
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
+  bottom: -1.6rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.64rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.42);
+  color: rgba(0, 0, 0, 0.38);
   opacity: 0;
   transition: opacity 0.25s ease;
 }
 
-.framed-hero:hover .framed-hint,
-.framed-hero:focus-visible .framed-hint {
+.product-trigger:hover .framed-hint,
+.product-trigger:focus-visible .framed-hint {
   opacity: 1;
 }
 
@@ -128,14 +220,18 @@
   to { opacity: 1; }
 }
 
+/* Measured on open: the widest column that still leaves the whole frame on
+   screen. The frame sizes itself from it like any other column. */
 .framed-lightbox-stage {
+  container-type: inline-size;
+  width: var(--stage-w, 70vw);
   cursor: default;
+  display: flex;
+  justify-content: center;
 }
 
-/* The height is measured on open — the tallest that still fits the whole
-   frame on screen — and the frame's width follows from it. */
 .framed-lightbox-stage .framed {
-  --fh: var(--stage-h, 70vh);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.8);
 }
 
 .framed-lightbox-close {
@@ -159,23 +255,31 @@
 /* ---------- Buying column ---------- */
 
 .product-eyebrow {
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--ink-mute, #77706a);
-  margin: 0 0 0.75rem;
+  color: var(--ink-mute, #8a837c);
+  margin: 0 0 0.9rem;
 }
 
 .product-title {
-  font-family: var(--font-display), serif;
-  font-size: clamp(1.9rem, 3.4vw, 2.75rem);
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-  margin: 0 0 1.25rem;
+  font-family: var(--font-shop-title), Georgia, serif;
+  font-size: clamp(1.9rem, 3.4vw, 2.9rem);
+  font-weight: 400;
+  line-height: 1.08;
+  margin: 0 0 0.6rem;
+}
+
+.product-location {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute, #8a837c);
+  margin: 0 0 1.5rem;
 }
 
 .product-price {
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   margin: 0 0 0.35rem;
 }
 
@@ -187,10 +291,10 @@
 
 .product-label {
   display: block;
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-mute, #77706a);
+  color: var(--ink-mute, #8a837c);
   padding: 0;
   margin-bottom: 0.6rem;
 }
@@ -273,8 +377,8 @@
   background: var(--ink, #1c1a18);
   color: #faf9f6;
   font: inherit;
-  font-size: 0.8rem;
-  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   cursor: pointer;
   transition: opacity 0.18s ease;
@@ -300,7 +404,7 @@
 }
 
 .product-description p {
-  line-height: 1.75;
+  line-height: 1.8;
   margin: 0 0 1rem;
 }
 
@@ -316,10 +420,10 @@
 }
 
 .product-tags span {
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-mute, #77706a);
+  color: var(--ink-mute, #8a837c);
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 999px;
   padding: 0.25rem 0.7rem;
@@ -328,31 +432,22 @@
 /* ---------- You may also like ---------- */
 
 .related {
-  margin-top: clamp(4rem, 8vw, 7rem);
-  padding-top: clamp(2rem, 4vw, 3rem);
+  margin-top: clamp(4.5rem, 9vw, 8rem);
+  padding-top: clamp(2.5rem, 4vw, 3.5rem);
   border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .related-heading {
-  font-family: var(--font-display), serif;
-  font-size: clamp(1.3rem, 2.4vw, 1.9rem);
+  font-family: var(--font-shop-title), Georgia, serif;
+  font-size: clamp(1.25rem, 2.4vw, 1.8rem);
   font-weight: 400;
-  margin: 0 0 2rem;
-}
-
-/* The related strip hangs a little smaller than the main wall */
-.related .framed {
-  --fh: clamp(150px, 17vw, 240px);
+  text-align: center;
+  margin: 0 0 clamp(2.5rem, 5vw, 4rem);
 }
 
 @media (max-width: 900px) {
   .product-layout {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 620px) {
-  .related .framed {
-    --fh: clamp(140px, 34vw, 200px);
+    gap: clamp(2.5rem, 7vw, 4rem);
   }
 }

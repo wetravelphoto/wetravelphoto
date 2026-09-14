@@ -30,6 +30,7 @@ export async function saveCatalogItem(photoId: string, formData: FormData) {
       photo_id: photoId,
       title: text('title'),
       description: text('description'),
+      location: text('location'),
       tags,
       is_published: formData.get('is_published') === 'on',
       updated_at: new Date().toISOString(),

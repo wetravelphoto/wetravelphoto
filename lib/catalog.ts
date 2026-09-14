@@ -6,6 +6,8 @@ export type CatalogItem = {
   photo_id: string
   title: string | null
   description: string | null
+  /** Where it was taken. Shown under the title in the shop. */
+  location: string | null
   tags: string[]
   is_published: boolean
   sort_order: number
@@ -98,7 +100,7 @@ export async function getCatalog(): Promise<CatalogEntry[]> {
     .from('photos')
     .select(
       `${PHOTO_COLS}, ` +
-        'catalog_items(id, photo_id, title, description, tags, is_published, sort_order), ' +
+        'catalog_items(id, photo_id, title, description, location, tags, is_published, sort_order), ' +
         'products(id, size_label, type, price_cents, is_active, sort_order), ' +
         'photo_shop_categories(category_id)'
     )
@@ -120,6 +122,7 @@ export async function getCatalog(): Promise<CatalogEntry[]> {
       photo_id: row.id,
       title: null,
       description: null,
+      location: null,
       tags: [],
       is_published: true,
       sort_order: 0,
@@ -151,7 +154,7 @@ export async function getCatalogEntry(photoId: string): Promise<CatalogEntry | n
     .from('photos')
     .select(
       `${PHOTO_COLS}, ` +
-        'catalog_items(id, photo_id, title, description, tags, is_published, sort_order), ' +
+        'catalog_items(id, photo_id, title, description, location, tags, is_published, sort_order), ' +
         'products(id, size_label, type, price_cents, is_active, sort_order), ' +
         'photo_shop_categories(category_id)'
     )
@@ -175,6 +178,7 @@ export async function getCatalogEntry(photoId: string): Promise<CatalogEntry | n
     photo_id: photoId,
     title: null,
     description: null,
+    location: null,
     tags: [],
     is_published: true,
     sort_order: 0,
@@ -201,7 +205,7 @@ export async function getCatalogEntry(photoId: string): Promise<CatalogEntry | n
 
 const PUBLIC_SELECT =
   `${PHOTO_COLS}, ` +
-  'catalog_items!inner(id, photo_id, title, description, tags, is_published, sort_order), ' +
+  'catalog_items!inner(id, photo_id, title, description, location, tags, is_published, sort_order), ' +
   'products(id, size_label, type, price_cents, is_active, sort_order), ' +
   'photo_shop_categories(category_id)'
 
@@ -219,6 +223,7 @@ function shape(row: PublicRow, fallbackId: string): CatalogEntry {
     photo_id: fallbackId,
     title: null,
     description: null,
+    location: null,
     tags: [],
     is_published: true,
     sort_order: 0,

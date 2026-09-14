@@ -111,6 +111,17 @@ export type SiteSettings = {
   shop_shipping_flat_cents: number
   shop_order_note: string | null
   shop_frames: Record<string, { path: string; top: number; left: number; width: number; height: number }>
+
+  /** How the shop wall is laid out and labelled. */
+  shop_subheading: string | null
+  shop_columns: number
+  shop_show_collection: boolean
+  shop_show_location: boolean
+  shop_show_price: boolean
+  shop_wall_texture: string | null
+  shop_title_font: string | null
+  shop_quote: string | null
+  shop_quote_by: string | null
 }
 
 const FALLBACK: SiteSettings = {
@@ -214,6 +225,15 @@ const FALLBACK: SiteSettings = {
   shop_shipping_flat_cents: 1200,
   shop_order_note: null,
   shop_frames: {},
+  shop_subheading: null,
+  shop_columns: 4,
+  shop_show_collection: true,
+  shop_show_location: true,
+  shop_show_price: true,
+  shop_wall_texture: null,
+  shop_title_font: null,
+  shop_quote: null,
+  shop_quote_by: null,
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {

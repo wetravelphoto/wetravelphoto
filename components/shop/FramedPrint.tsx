@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import FramedArt from '@/components/shop/FramedArt'
-import { frameAspect, frameRatio } from '@/lib/frame'
+import { frameMetrics } from '@/lib/frame'
 
-/** The large framed print on a product page. Click shows it bigger, framed. */
+/** The hero print on a product page. Click shows it bigger, still framed. */
 export default function FramedPrint({
   imageUrl,
   srcSet,
@@ -19,14 +19,21 @@ export default function FramedPrint({
   height: number | null
 }) {
   const [open, setOpen] = useState(false)
-  const [stageHeight, setStageHeight] = useState<number | null>(null)
+  const [stageWidth, setStageWidth] = useState<number | null>(null)
 
-  // The frame's width follows from its height, so the enlarged view works out
-  // the tallest height that still leaves the whole frame on screen. A panorama
-  // is limited by the window's width, a portrait by its height.
+  // A frame sizes itself from the column it hangs in, so the enlarged view
+  // works out the widest column that still leaves the whole frame on screen —
+  // a panorama runs out of width first, a portrait runs out of height.
   const measure = useCallback(() => {
-    const aspect = frameAspect(frameRatio(width, height))
-    setStageHeight(Math.floor(Math.min(window.innerHeight * 0.88, (window.innerWidth * 0.94) / aspect)))
+    const m = frameMetrics(width, height)
+    setStageWidth(
+      Math.floor(
+        Math.min(
+          (window.innerWidth * 0.94) / m.widthFactor,
+          (window.innerHeight * 0.9) / m.heightFactor
+        )
+      )
+    )
   }, [width, height])
 
   useEffect(() => {
@@ -54,19 +61,21 @@ export default function FramedPrint({
     <>
       <button
         type="button"
-        className="framed-hero"
+        className="product-trigger"
         onClick={() => setOpen(true)}
         aria-label="View larger"
       >
-        <FramedArt
-          imageUrl={imageUrl}
-          srcSet={srcSet}
-          alt={alt}
-          width={width}
-          height={height}
-          sizes="(max-width: 900px) 80vw, 620px"
-          eager
-        />
+        <div className="framed-solo">
+          <FramedArt
+            imageUrl={imageUrl}
+            srcSet={srcSet}
+            alt={alt}
+            width={width}
+            height={height}
+            sizes="(max-width: 900px) 84vw, 520px"
+            eager
+          />
+        </div>
         <span className="framed-hint" aria-hidden>
           Click to enlarge
         </span>
@@ -93,9 +102,7 @@ export default function FramedPrint({
           <div
             className="framed-lightbox-stage"
             style={
-              stageHeight
-                ? ({ '--stage-h': `${stageHeight}px` } as React.CSSProperties)
-                : undefined
+              stageWidth ? ({ '--stage-w': `${stageWidth}px` } as React.CSSProperties) : undefined
             }
             onClick={(e) => e.stopPropagation()}
           >
@@ -105,7 +112,7 @@ export default function FramedPrint({
               alt={alt}
               width={width}
               height={height}
-              sizes="88vw"
+              sizes="90vw"
               eager
             />
           </div>

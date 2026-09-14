@@ -1,4 +1,4 @@
-/* Framed prints on a wall.
+/* Framed prints on a hung wall.
  *
  * Shared by the public shop and by the catalogue editor in the admin, which is
  * why it lives outside shop.css — the two areas load different stylesheets.
@@ -7,34 +7,103 @@
  * keeps the four corners crisp and stretches the four edges to whatever length
  * is needed, so one asset covers every aspect ratio and stays sharp at any
  * size. The moulding you see is the real moulding, not a gradient.
+ *
+ * Every measurement here is a multiple of 100cqw — the width of the column the
+ * piece hangs in. All the columns on a wall are the same width, so the
+ * moulding and the mat come out identical on every frame. Only the height and
+ * the hang change, and lib/frame.ts works those out as --wf, --hf and --drop.
  */
 
+/* ---------- The wall itself ---------- */
+
 .wall {
-  /* Near-flat, like a gallery wall. Texture here reads as fake. */
-  background: #f2f0ed;
+  background-color: #f1f0ee;
+  background-image: var(--wall-texture, none);
+  background-repeat: repeat;
+  background-size: 620px auto;
 }
 
-.wall-row {
+.wall-grid {
+  --cols: var(--cols-wide, 4);
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  column-gap: clamp(1.25rem, 3vw, 2.75rem);
+  /* Generous, because verticals hang down into this gap */
+  row-gap: clamp(4rem, 7vw, 7rem);
+  align-items: stretch;
+}
+
+/* The column. Everything inside measures itself against this width, and the
+   pieces sit on its floor — which is what puts the horizontals on one line. */
+.wall-col {
+  container-type: inline-size;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: flex-start;
-  gap: clamp(2rem, 4.5vw, 4rem) clamp(1.75rem, 3.5vw, 3.25rem);
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
 }
 
-/* One height for every piece on the wall. Everything else derives from it,
-   which is what keeps the moulding and mat identical across the row. */
+/* ---------- A piece: frame plus caption ---------- */
+
+.piece {
+  width: calc(100cqw * var(--wf, 1));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-decoration: none;
+  color: inherit;
+  /* Verticals hang below the line the horizontals stand on */
+  margin-bottom: calc(-100cqw * var(--drop, 0));
+}
+
+.piece-meta {
+  margin-top: clamp(0.9rem, 2.2cqw, 1.4rem);
+  max-width: 100%;
+}
+
+.piece-title {
+  font-size: clamp(0.66rem, 2.6cqw, 0.78rem);
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--ink, #1c1a18);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.piece-sub {
+  font-family: var(--font-shop-title, inherit);
+  font-size: clamp(0.72rem, 2.8cqw, 0.86rem);
+  color: var(--ink-mute, #77706a);
+  line-height: 1.5;
+  margin-top: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* The short rule the reference hangs under every caption */
+.piece-rule {
+  display: block;
+  width: 1.6rem;
+  height: 1px;
+  margin-top: 0.7rem;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+/* ---------- The frame ---------- */
+
 .framed {
-  --fh: clamp(170px, 21vw, 300px);
-  --mould: calc(var(--fh) * 0.032);
-  --mat: calc(var(--fh) * 0.105);
-  --surround: calc(2 * (var(--mould) + var(--mat)));
+  --mould: calc(100cqw * 0.022);
+  --mat: calc(100cqw * 0.08);
 
   box-sizing: border-box;
-  height: var(--fh);
-  /* The art area fills what's left after the mat and moulding; its shape then
-     decides how wide the whole frame is. */
-  width: calc((var(--fh) - var(--surround)) * var(--ratio, 1.5) + var(--surround));
+  width: calc(100cqw * var(--wf, 1));
+  height: calc(100cqw * var(--hf, 0.735));
 
   display: flex;
   align-items: center;
@@ -49,19 +118,20 @@
   border-image-repeat: stretch;
 
   padding: var(--mat);
-  background: #faf9f7;
+  background: #fbfaf9;
   background-clip: padding-box;
 
   box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.22),
-    12px 16px 28px -14px rgba(0, 0, 0, 0.42);
+    0 1px 1px rgba(0, 0, 0, 0.2),
+    10px 15px 28px -15px rgba(0, 0, 0, 0.42);
   transition: transform 0.45s cubic-bezier(0.2, 0.6, 0.2, 1),
     box-shadow 0.45s cubic-bezier(0.2, 0.6, 0.2, 1);
 }
 
-/* The window cut in the mat board. It takes the photograph's real proportions,
-   so when the ratio cap applies the difference shows as mat — exactly as it
-   would in a real mount — rather than as empty space inside the bevel. */
+/* The window cut in the mat board. It takes the photograph's real
+   proportions, so when the ratio cap applies the difference shows as mat —
+   exactly as it would in a real mount — rather than as empty space inside the
+   bevel. */
 .framed-window {
   max-width: 100%;
   max-height: 100%;
@@ -76,97 +146,43 @@
   display: block;
 }
 
-/* ---------- A piece with its caption ---------- */
-
-.piece {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-decoration: none;
-  color: inherit;
-}
-
-/* Frames share a height, so captions land on a common baseline */
-.piece-caption {
-  display: flex;
-  justify-content: center;
-  align-items: baseline;
-  gap: 0.9rem;
-  margin-top: 1.15rem;
-  max-width: 100%;
-}
-
-.piece-title {
-  font-size: 0.78rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink, #1c1a18);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.piece-price {
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  color: var(--ink-mute, #77706a);
-  white-space: nowrap;
-}
-
 a.piece:hover .framed {
   transform: translateY(-4px);
   box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.25),
-    16px 24px 36px -14px rgba(0, 0, 0, 0.45);
+    0 1px 1px rgba(0, 0, 0, 0.24),
+    14px 22px 36px -15px rgba(0, 0, 0, 0.46);
 }
 
-/* ---------- Product page: one large piece ---------- */
+/* ---------- One piece on its own ---------- */
 
-.framed-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  cursor: zoom-in;
-  position: relative;
-}
-
-.framed-hero .framed {
-  --fh: clamp(280px, 40vw, 520px);
-}
-
-.framed-hero:hover .framed {
-  transform: translateY(-2px);
-  box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.25),
-    16px 24px 38px -14px rgba(0, 0, 0, 0.45);
-}
-
-/* ---------- One piece on its own (the catalogue preview) ---------- */
-
-.framed-single {
+/* The product hero and the catalogue preview are a single column with nothing
+   to line up against, so they just declare their own width. */
+.framed-solo {
+  container-type: inline-size;
   display: flex;
   justify-content: center;
-  padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem);
+  width: 100%;
 }
 
-.framed-single .framed {
-  --fh: clamp(220px, 24vw, 380px);
+/* ---------- Fewer columns as the wall narrows ---------- */
+
+@media (max-width: 1200px) {
+  .wall-grid { --cols: 3; }
 }
 
-/* ---------- Smaller screens ---------- */
+@media (max-width: 860px) {
+  .wall-grid {
+    --cols: 2;
+    row-gap: clamp(3rem, 11vw, 5rem);
+  }
+}
 
-@media (max-width: 620px) {
-  .framed {
-    --fh: clamp(160px, 40vw, 230px);
+@media (max-width: 520px) {
+  .wall-grid {
+    --cols: 1;
+    row-gap: 3.5rem;
   }
 
-  .framed-hero .framed {
-    --fh: clamp(220px, 62vw, 340px);
-  }
+  /* On one column a vertical has nothing to straddle, so it just stands */
+  .piece { margin-bottom: 0; }
 }

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
+import { srcSetFor, displayUrl, srcSetFromPath } from '@/lib/srcset'
 import { formatTripDate } from '@/lib/dates'
 import SiteHeader from '@/components/SiteHeader'
 import AlbumPasswordGate from '@/components/AlbumPasswordGate'
@@ -31,18 +32,26 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
 
   const settings = await getSiteSettings()
 
+  // Explicit columns, not '*'. At 300 photographs the unused columns (tags,
+  // gps, timestamps) are pure weight in the server-rendered payload, which is
+  // sent to every visitor whether they scroll that far or not.
   const { data: photos } = await supabase
     .from('photos')
-    .select('*')
+    .select('id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, sort_order')
     .eq('album_id', album.id)
     .order(orderColumn, { ascending, nullsFirst: false })
 
   const coverPhoto = photos?.find((p) => p.id === album.cover_photo_id) ?? photos?.[0]
-  const imageUrl = album.cover_custom_path
-    ? photoUrl(album.cover_custom_path)
+
+  // The cover is the largest thing on the page and was being served at full
+  // size with no alternatives offered.
+  const customCoverUrl = album.cover_custom_path ? photoUrl(album.cover_custom_path) : null
+  const imageUrl = customCoverUrl ?? (coverPhoto ? displayUrl(coverPhoto) : null)
+  const imageSrcSet = customCoverUrl
+    ? srcSetFromPath(customCoverUrl)
     : coverPhoto
-      ? photoUrl(coverPhoto.storage_path)
-      : null
+      ? srcSetFor(coverPhoto)
+      : undefined
 
   const dateLabel = formatTripDate(
     album.trip_start_date ?? album.created_at,
@@ -77,6 +86,7 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
             overlayType: album.cover_overlay_type,
             overlayOpacity: album.cover_overlay_opacity ?? 0.35,
             imageUrl,
+            imageSrcSet,
             videoUrl: album.cover_video_path ? photoUrl(album.cover_video_path) : null,
             showButton: showText && album.cover_show_button,
             buttonText: album.cover_button_text,

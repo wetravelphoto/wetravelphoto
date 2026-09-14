@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
-import { srcSetFor, displayUrl } from '@/lib/srcset'
+import { srcSetFor, displayUrl, srcSetFromPath } from '@/lib/srcset'
 import type { Derivatives } from '@/lib/image-sizes'
 
 /**
@@ -79,10 +79,14 @@ export async function attachCovers<T extends { id: string; cover_photo_id: strin
 
   return albums.map((album) => {
     if (album.cover_custom_path) {
+      const url = photoUrl(album.cover_custom_path)
       return {
         ...album,
-        coverUrl: photoUrl(album.cover_custom_path),
-        coverSrcSet: undefined,
+        coverUrl: url,
+        // Custom covers have no derivatives column, so the ladder is derived
+        // from the path. Covers uploaded before that existed return undefined
+        // and simply fall back to the single file.
+        coverSrcSet: srcSetFromPath(url),
       }
     }
 

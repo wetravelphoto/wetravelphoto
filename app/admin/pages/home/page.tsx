@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getSiteSettings } from '@/lib/site'
+import { attachCovers } from '@/lib/album-covers'
 import { updateHomepage } from '@/app/actions/site'
 import HomepageEditor from '@/components/admin/HomepageEditor'
 import Link from 'next/link'
@@ -20,30 +21,35 @@ export default async function HomePageEditor() {
     .from('instagram_media')
     .select('id', { count: 'exact', head: true })
 
+  // No photo embed. This used to pull every photo row of all six galleries
+  // just to resolve six cover thumbnails; attachCovers fetches only the
+  // covers themselves, and still honours each gallery's chosen cover.
   const { data: albumRows, count: galleryCount } = await supabase
     .from('albums')
-    .select('id, title, location, cover_photo_id, cover_custom_path, photos!photos_album_id_fkey(id, storage_path)', {
-      count: 'exact',
-    })
+    .select('id, title, location, cover_photo_id, cover_custom_path', { count: 'exact' })
     .eq('privacy_type', 'public')
     .order('created_at', { ascending: false })
     .limit(6)
 
+  const withCovers = await attachCovers(
+    (albumRows ?? []) as {
+      id: string
+      cover_photo_id: string | null
+      cover_custom_path: string | null
+      [key: string]: unknown
+    }[]
+  )
+
   const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''
 
-  const galleries = (albumRows ?? []).map((album) => {
-    const photos = (album.photos ?? []) as { id: string; storage_path: string }[]
-    const cover = album.cover_custom_path
-      ? album.cover_custom_path
-      : (photos.find((p) => p.id === album.cover_photo_id) ?? photos[0])?.storage_path
-
-    return {
-      id: album.id as string,
-      title: album.title as string,
-      location: (album.location as string) ?? null,
-      coverPath: cover ?? null,
-    }
-  })
+  // HomepageEditor takes storage paths and builds its own URLs, so hand the
+  // prefix back off. Both sides read the same env var.
+  const galleries = withCovers.map((album) => ({
+    id: album.id as string,
+    title: album.title as string,
+    location: (album.location as string) ?? null,
+    coverPath: album.coverUrl ? album.coverUrl.replace(`${publicUrl}/`, '') : null,
+  }))
 
   const options = (posts ?? []).map((post) => ({
     id: post.id as string,

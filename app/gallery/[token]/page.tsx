@@ -52,7 +52,7 @@ export default async function ClientGalleryPage({
 
   const { data: allPhotos } = await supabase
     .from('photos')
-    .select('*')
+    .select('id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, sort_order')
     .in('album_id', albumIds)
     .order('sort_order', { ascending: true })
 

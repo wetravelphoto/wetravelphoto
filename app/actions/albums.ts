@@ -5,6 +5,7 @@ import { hashPassword } from '@/lib/password'
 import { r2Client } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
+import { processExistingOriginal } from '@/lib/derivatives'
 import { randomUUID } from 'crypto'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -121,32 +122,26 @@ export async function uploadCustomCover(albumId: string, formData: FormData) {
   if (!file || file.size === 0) return
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const optimized = await sharp(buffer)
-    .rotate()
-    .resize(2800, 2800, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 88 })
-    .toBuffer()
 
-  const key = `covers/${albumId}/${randomUUID()}.jpg`
-
-  await r2Client.send(
-    new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME!,
-      Key: key,
-      Body: optimized,
-      ContentType: 'image/jpeg',
-    })
-  )
+  // Covers go through the same ladder as photographs. This used to write a
+  // single 2800px JPEG, which meant a cover drawn 475px wide in the carousel
+  // still cost ~650KB with no smaller file to fall back on. The path ends in
+  // /<size>.webp, which is what srcSetFromPath keys off to build the srcset —
+  // covers have no derivatives column of their own.
+  const keyBase = `covers/${albumId}/${randomUUID()}`
+  const processed = await processExistingOriginal(buffer, keyBase, keyBase)
 
   const supabase = await createClient()
   const { error } = await supabase
     .from('albums')
-    .update({ cover_custom_path: key, cover_photo_id: null })
+    .update({ cover_custom_path: processed.displayPath, cover_photo_id: null })
     .eq('id', albumId)
 
   if (error) throw new Error(error.message)
   revalidatePath('/admin')
   revalidatePath(`/admin/trips/${albumId}/settings`)
+  revalidatePath('/')
+  revalidatePath('/trips')
 }
 
 export async function clearCustomCover(albumId: string) {

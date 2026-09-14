@@ -45,7 +45,17 @@ export default function InstagramFeed({
             aria-label={post.caption ? post.caption.slice(0, 80) : 'View on Instagram'}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={post.media_url} alt={post.caption?.slice(0, 120) ?? ''} loading="lazy" />
+            {/* Instagram serves one size only, so there's no srcset to offer.
+                The square ratio at least reserves the space so the page below
+                doesn't jump as tiles arrive. */}
+            <img
+              src={post.media_url}
+              alt={post.caption?.slice(0, 120) ?? ''}
+              width={1080}
+              height={1080}
+              loading="lazy"
+              decoding="async"
+            />
             {post.media_type === 'VIDEO' && <span className="ig-badge">Video</span>}
           </a>
         ))}

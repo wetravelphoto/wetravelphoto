@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { currentSiteTenantId, scopeToSite } from '@/lib/tenant'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 /**
  * THE ONLY WAY INTO A CLIENT GALLERY
@@ -51,10 +51,8 @@ export async function accessForToken(token: string): Promise<ShareAccess | null>
   const supabase = createAdminClient()
   const tenantId = await currentSiteTenantId()
 
-  const { data: client } = await scopeToSite(
-    supabase.from('clients').select('id, name').eq('access_token', token),
-    tenantId
-  ).maybeSingle()
+  const query = supabase.from('clients').select('id, name').eq('access_token', token)
+  const { data: client } = await (tenantId ? query.eq('tenant_id', tenantId) : query).maybeSingle()
 
   if (!client) return null
 

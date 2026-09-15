@@ -17,18 +17,29 @@ import 'server-only'
  *
  * with a fallback to the first tenant so localhost and preview deployments
  * keep working.
+ *
+ * ── Why there is no scopeToSite() helper here ────────────────────────────────
+ *
+ * There was one. It took a query builder and returned it with `.eq()` applied,
+ * generic over the builder's own type:
+ *
+ *   function scopeToSite<T extends { eq: (c: string, v: unknown) => T }>(...)
+ *
+ * which reads nicely and broke the build. Supabase's builder type is deeply
+ * recursive — each `.eq()` returns a new type parameterised by the last — so
+ * constraining a generic to "returns itself" sends the compiler round that
+ * loop until it gives up with TS2589, "type instantiation is excessively deep
+ * and possibly infinite". The error surfaces at the CALL SITE, in a file that
+ * looks fine, which is a bad afternoon for whoever finds it.
+ *
+ * The call sites do it in two plain lines instead:
+ *
+ *   const query = supabase.from('albums').select('*').eq('slug', slug)
+ *   const { data } = await (tenantId ? query.eq('tenant_id', tenantId) : query).maybeSingle()
+ *
+ * Three repetitions of something obvious beats one abstraction that fights the
+ * type system.
  */
 export async function currentSiteTenantId(): Promise<string | null> {
   return null
-}
-
-/**
- * Applies that filter to a PostgREST query, or leaves it alone while there is
- * one site. Keeps the `if (tenantId)` dance out of every call site.
- */
-export function scopeToSite<T extends { eq: (column: string, value: unknown) => T }>(
-  query: T,
-  tenantId: string | null
-): T {
-  return tenantId ? query.eq('tenant_id', tenantId) : query
 }

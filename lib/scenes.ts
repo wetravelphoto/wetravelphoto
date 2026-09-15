@@ -67,6 +67,23 @@ function shape(row: Row): RoomSceneRecord {
 const COLS = 'id, name, image_path, width, height, corners, has_frame, sort_order, is_active'
 const COLS_LEGACY = 'id, name, image_path, width, height, corners, sort_order, is_active'
 
+/**
+ * Both selects above are passed as a VARIABLE, because which one runs depends
+ * on whether the database has had the has_frame migration. Supabase's types can
+ * only infer a row shape from a string LITERAL, so a variable makes `data` come
+ * back as GenericStringError[] — its "I could not work this out" type — and a
+ * direct `as Row[]` is then rejected as a conversion between unrelated types.
+ *
+ * Going through `unknown` is what the compiler itself suggests, and it is
+ * honest here: the shape is asserted by the two column lists above, not by
+ * inference, so the cast is the assertion rather than a way of hiding one.
+ *
+ * This is what broke every deploy from 2026-09-14 to 2026-09-15 — the build
+ * ran red for nineteen hours while the site kept serving an older one.
+ */
+const asRows = (data: unknown): Row[] => (data ?? []) as unknown as Row[]
+const asRow = (data: unknown): Row => data as unknown as Row
+
 const isMissingColumn = (message: string | undefined) => !!message && /has_frame/i.test(message)
 
 export async function getRoomScenes(includeInactive = false): Promise<RoomSceneRecord[]> {
@@ -94,7 +111,7 @@ export async function getRoomScenes(includeInactive = false): Promise<RoomSceneR
     return []
   }
 
-  return ((data ?? []) as Row[]).map(shape)
+  return asRows(data).map(shape)
 }
 
 export async function getRoomScene(id: string): Promise<RoomSceneRecord | null> {
@@ -112,5 +129,5 @@ export async function getRoomScene(id: string): Promise<RoomSceneRecord | null> 
   if (error) console.error('[scenes] getRoomScene failed:', error.message)
   if (!data) return null
 
-  return shape(data as Row)
+  return shape(asRow(data))
 }

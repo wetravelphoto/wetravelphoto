@@ -2,7 +2,7 @@ import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { verifyPassword } from '@/lib/password'
-import { currentSiteTenantId, scopeToSite } from '@/lib/tenant'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 /**
  * Albums opened by slug on the public site — public ones, and the
@@ -44,10 +44,8 @@ export async function albumBySlug(slug: string): Promise<PublicAlbum | null> {
   const supabase = createAdminClient()
   const tenantId = await currentSiteTenantId()
 
-  const { data } = await scopeToSite(
-    supabase.from('albums').select('*').eq('slug', slug),
-    tenantId
-  ).maybeSingle()
+  const query = supabase.from('albums').select('*').eq('slug', slug)
+  const { data } = await (tenantId ? query.eq('tenant_id', tenantId) : query).maybeSingle()
 
   if (!data) return null
 
@@ -91,10 +89,8 @@ export async function verifyAlbumPassword(
   const supabase = createAdminClient()
   const tenantId = await currentSiteTenantId()
 
-  const { data: album } = await scopeToSite(
-    supabase.from('albums').select('id, password_hash').eq('slug', slug),
-    tenantId
-  ).maybeSingle()
+  const query = supabase.from('albums').select('id, password_hash').eq('slug', slug)
+  const { data: album } = await (tenantId ? query.eq('tenant_id', tenantId) : query).maybeSingle()
 
   if (!album?.password_hash) return null
 

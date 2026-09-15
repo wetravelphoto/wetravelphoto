@@ -1,0 +1,238 @@
+/* The page as a list of sections. */
+
+.sec-list-wrap { max-width: 760px; }
+
+.sec-legacy,
+.sec-error {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  border-left: 2px solid var(--admin-accent);
+  background: var(--admin-panel);
+  color: var(--admin-soft);
+}
+
+.sec-error {
+  border-left-color: var(--admin-danger);
+  color: var(--admin-danger);
+}
+
+.sec-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: opacity 0.15s ease;
+}
+
+.sec-list[data-busy='true'] { opacity: 0.55; pointer-events: none; }
+
+/* ── A row ─────────────────────────────────────────────────────────────── */
+
+.sec-row {
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-line);
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.sec-row[data-open='true'] { border-color: var(--admin-ink); }
+.sec-row[data-hidden='true'] .sec-label { color: var(--admin-mute); }
+.sec-row[data-hidden='true'] .sec-blurb { opacity: 0.6; }
+.sec-row[data-dragging='true'] { opacity: 0.4; }
+
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.sec-grip {
+  cursor: grab;
+  color: var(--admin-mute);
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+  user-select: none;
+}
+
+.sec-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+.sec-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--admin-ink);
+}
+
+.sec-blurb {
+  font-size: 0.78rem;
+  color: var(--admin-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sec-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.sec-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--admin-soft);
+  font-size: 0.85rem;
+  font-family: inherit;
+  line-height: 1;
+  border-radius: 2px;
+}
+
+.sec-icon:hover:not(:disabled) { background: rgba(26, 23, 21, 0.06); color: var(--admin-ink); }
+.sec-icon:disabled { opacity: 0.25; cursor: default; }
+.sec-icon-danger:hover { color: var(--admin-danger); }
+
+/* ── The settings panel ────────────────────────────────────────────────── */
+
+.sec-panel {
+  border-top: 1px solid var(--admin-line);
+  padding: 1rem 0.9rem 0.9rem;
+}
+
+.sec-fields { display: flex; flex-direction: column; gap: 0.9rem; }
+.sec-group { display: flex; flex-direction: column; gap: 0.9rem; }
+
+.sec-group-name {
+  margin: 0.4rem 0 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--admin-mute);
+}
+
+.sec-field > .admin-field { margin: 0; }
+
+.sec-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed var(--admin-line);
+}
+
+.sec-custom-label { font-size: 0.85rem; color: var(--admin-ink); }
+
+.sec-panel-foot {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--admin-line);
+}
+
+/* ── Add a section ─────────────────────────────────────────────────────── */
+
+.sec-add {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border: 1px dashed var(--admin-line);
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--admin-soft);
+}
+
+.sec-add:hover { border-color: var(--admin-ink); color: var(--admin-ink); }
+
+.sec-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(26, 23, 21, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.sec-modal-box {
+  width: min(760px, 100%);
+  max-height: 84vh;
+  overflow: auto;
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-line);
+}
+
+.sec-modal-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.2rem;
+  background: var(--admin-panel);
+  border-bottom: 1px solid var(--admin-line);
+}
+
+.sec-modal-head h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.sec-modal-body { padding: 1.2rem; display: flex; flex-direction: column; gap: 1.4rem; }
+
+.sec-family-name {
+  margin: 0 0 0.6rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--admin-mute);
+}
+
+.sec-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.6rem;
+}
+
+.sec-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: left;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--admin-line);
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sec-card:hover:not(:disabled) { border-color: var(--admin-ink); }
+.sec-card:disabled { opacity: 0.45; cursor: default; }
+
+.sec-card-name { font-size: 0.88rem; color: var(--admin-ink); }
+.sec-card-blurb { font-size: 0.76rem; color: var(--admin-soft); line-height: 1.5; }
+.sec-card-note { font-size: 0.72rem; color: var(--admin-mute); }

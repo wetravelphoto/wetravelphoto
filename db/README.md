@@ -8,6 +8,90 @@ database's history is in version control rather than in a chat log.
 Paste the file into the Supabase SQL editor and run it. Each migration is
 wrapped in a transaction and written to be safe to run twice.
 
+## Row level security
+
+**A new table that belongs to a site does not get a hand-written owner policy.**
+It calls the one in `2026-09-15_tenant_scoping.sql`:
+
+```sql
+select public.apply_tenant_policy('my_table');                        -- has its own tenant_id
+select public.apply_tenant_policy_via('my_join_table', 'photo_id', 'photos');  -- scoped through a parent
+```
+
+This exists because twenty tables were once given the same owner check by
+copy-paste:
+
+```sql
+exists (select 1 from profiles p where p.id = auth.uid())
+```
+
+which asserts only that *somebody* is signed in. With one account it looks like
+ownership. With two, either photographer can read and write the other's data.
+One definition, called from everywhere, is the fix — copying the expression is
+how the problem happened.
+
+The helpers available to a policy:
+
+| Function | Returns |
+|---|---|
+| `current_tenant_id()` | The signed-in account's tenant, or null for a visitor |
+| `is_platform_admin()` | You, working across every site |
+| `tenant_for_insert()` | The caller's tenant, falling back to the first for anonymous writes |
+
+All are `stable security definer` — definer because a policy on `profiles` that
+reads `profiles` through a plain function recurses forever, and stable so
+Postgres evaluates them once per statement instead of once per row.
+
+### Rehearsing a migration
+
+`db/test-fixture.sql` builds a throwaway copy of this schema in a local
+Postgres, so a migration can be run and checked before it is pasted into the
+live database:
+
+```bash
+createdb wtp && psql -d wtp -f db/test-fixture.sql
+psql -d wtp -v ON_ERROR_STOP=1 -f db/migrations/<new>.sql
+psql -d wtp -f db/verify-tenant-isolation.sql
+```
+
+Worth the five minutes. The tenant scoping migration failed twice against it
+first — once on a function defined before the column it reads, once on two
+policies calling each other forever — and both would otherwise have been
+discovered in production.
+
+### Proving it
+
+`db/verify-tenant-isolation.sql` moves your own account to a throwaway tenant,
+checks that your site stops answering to you, checks a platform admin still
+reaches it, and always ends by raising an exception so the whole thing rolls
+back. Run it after any change to policies.
+
+### How a share link works
+
+`clients`, `album_clients`, `favorites` and `downloads` answer to nobody but
+their own site. A share token is not a database credential — the database never
+sees it — so authorization happens one level up, in the server, where the token
+actually is:
+
+| Module | Guards |
+|---|---|
+| `lib/gallery-access.ts` | Everything a share token opens |
+| `lib/album-access.ts` | Public and password-gated albums by slug |
+
+Both run with the service-role key, so **the scoping in those two files is the
+security**. `accessForToken` is the only way to obtain a handle, every other
+function demands one and scopes its query to the albums that token actually
+opened, and nothing outside those files reads those tables for a visitor. Two
+rules when editing them:
+
+1. Never trust an album or photo id from the caller — check it against
+   `access.albumIds`.
+2. Never export something that returns rows without a verified handle.
+
+`password_hash` is read inside `lib/album-access.ts`, compared there, and never
+returned. Before 2026-09-15 the album page selected it with `select('*')` under
+the anon key.
+
 ## The `if not exists` trap
 
 `add column if not exists` matches on the **column name only**. If a column of

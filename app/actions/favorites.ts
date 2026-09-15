@@ -1,7 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { accessForToken, setFavorite } from '@/lib/gallery-access'
 
 export async function toggleFavorite(
   token: string,
@@ -9,30 +9,13 @@ export async function toggleFavorite(
   photoId: string,
   isFavorited: boolean
 ) {
-  const supabase = await createClient()
+  // A server action is a public endpoint: anyone can post to it with any
+  // arguments. The token is checked here, and setFavorite refuses an album the
+  // token does not open, so a guessed album id gets nothing.
+  const access = await accessForToken(token)
+  if (!access) throw new Error('Invalid access token')
 
-  const { data: client } = await supabase
-    .from('clients')
-    .select('id')
-    .eq('access_token', token)
-    .maybeSingle()
-
-  if (!client) throw new Error('Invalid access token')
-
-  if (isFavorited) {
-    await supabase
-      .from('favorites')
-      .delete()
-      .eq('album_id', albumId)
-      .eq('photo_id', photoId)
-      .eq('client_id', client.id)
-  } else {
-    await supabase.from('favorites').insert({
-      album_id: albumId,
-      photo_id: photoId,
-      client_id: client.id,
-    })
-  }
+  await setFavorite(access, albumId, photoId, isFavorited)
 
   revalidatePath(`/gallery/${token}`)
 }

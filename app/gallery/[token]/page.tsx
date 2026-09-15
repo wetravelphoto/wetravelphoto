@@ -1,8 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
 import { photoUrl, focalPosition } from '@/lib/images'
 import ClientGallery from '@/components/ClientGallery'
 import { getSiteSettings } from '@/lib/site'
 import { notFound } from 'next/navigation'
+import {
+  accessForToken,
+  albumsForAccess,
+  favoritePhotoIds,
+  photosForAccess,
+} from '@/lib/gallery-access'
 import '@/app/gallery.css'
 import '@/app/lightbox.css'
 
@@ -12,25 +17,19 @@ export default async function ClientGalleryPage({
   params: Promise<{ token: string }>
 }) {
   const { token } = await params
-  const supabase = await createClient()
+
+  // Everything on this page comes from one verified token. These tables are no
+  // longer readable with the anon key at all, so there is no path to them that
+  // does not start here. See lib/gallery-access.ts.
+  const access = await accessForToken(token)
+  if (!access) notFound()
+
   const settings = await getSiteSettings()
-
-  const { data: client } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('access_token', token)
-    .maybeSingle()
-
-  if (!client) notFound()
-
-  const { data: shares } = await supabase
-    .from('album_clients')
-    .select('album_id, albums(*)')
-    .eq('client_id', client.id)
-
-  const albums = (shares ?? [])
-    .map((s) => s.albums as unknown as Record<string, unknown>)
-    .filter(Boolean)
+  const [albums, allPhotos, favoriteIds] = await Promise.all([
+    albumsForAccess(access),
+    photosForAccess(access),
+    favoritePhotoIds(access),
+  ])
 
   if (albums.length === 0) {
     return (
@@ -48,20 +47,6 @@ export default async function ClientGalleryPage({
     )
   }
 
-  const albumIds = albums.map((a) => a.id as string)
-
-  const { data: allPhotos } = await supabase
-    .from('photos')
-    .select('id, album_id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, sort_order')
-    .in('album_id', albumIds)
-    .order('sort_order', { ascending: true })
-
-  const { data: favorites } = await supabase
-    .from('favorites')
-    .select('photo_id')
-    .eq('client_id', client.id)
-
-  const favoriteIds = favorites?.map((f) => f.photo_id) ?? []
   const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''
 
   return (
@@ -76,7 +61,7 @@ export default async function ClientGalleryPage({
           {settings.site_title} — private gallery
         </p>
         <h1 className="display" style={{ fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', margin: 0, lineHeight: 1 }}>
-          Hello, {client.name}
+          Hello, {access.clientName}
         </h1>
         <p className="meta" style={{ marginTop: '0.75rem', maxWidth: '46ch' }}>
           Star the photos you like so I know which ones stood out, and download anything you want to keep.
@@ -84,9 +69,8 @@ export default async function ClientGalleryPage({
       </header>
 
       {albums.map((album) => {
-        const photos = allPhotos?.filter((p) => p.album_id === album.id) ?? []
-        const cover =
-          photos.find((p) => p.id === album.cover_photo_id) ?? photos[0]
+        const photos = allPhotos.filter((p) => p.album_id === album.id)
+        const cover = photos.find((p) => p.id === album.cover_photo_id) ?? photos[0]
 
         return (
           <section key={album.id as string} style={{ marginBottom: '2rem' }}>
@@ -94,7 +78,7 @@ export default async function ClientGalleryPage({
               <div style={{ position: 'relative', height: 'min(45vh, 380px)', overflow: 'hidden', background: 'var(--ink)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={photoUrl(cover.storage_path)}
+                  src={photoUrl(cover.storage_path as string)}
                   alt=""
                   style={{
                     width: '100%',

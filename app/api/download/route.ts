@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { r2Client } from '@/lib/r2'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { NextRequest, NextResponse } from 'next/server'
+import { accessForToken, photoForDownload, recordDownload } from '@/lib/gallery-access'
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -11,43 +11,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing parameters' }, { status: 400 })
   }
 
-  const supabase = await createClient()
+  const access = await accessForToken(token)
 
-  const { data: client } = await supabase
-    .from('clients')
-    .select('id')
-    .eq('access_token', token)
-    .maybeSingle()
-
-  if (!client) {
+  if (!access) {
     return NextResponse.json({ error: 'Invalid access token' }, { status: 403 })
   }
 
-  const { data: photo } = await supabase
-    .from('photos')
-    .select('id, album_id, storage_path, original_path')
-    .eq('id', photoId)
-    .maybeSingle()
+  // Null covers both "no such photograph" and "not in an album this link
+  // opens" — the two are the same answer from outside, and separating them
+  // would let someone probe for photo ids.
+  const photo = await photoForDownload(access, photoId)
 
   if (!photo) {
-    return NextResponse.json({ error: 'Photo not found' }, { status: 404 })
-  }
-
-  // Confirm this client actually has access to the album the photo belongs to
-  const { data: share } = await supabase
-    .from('album_clients')
-    .select('album_id')
-    .eq('album_id', photo.album_id)
-    .eq('client_id', client.id)
-    .maybeSingle()
-
-  if (!share) {
-    return NextResponse.json({ error: 'Not authorized for this album' }, { status: 403 })
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
   // Clients get the full-resolution original when one exists; photos
   // uploaded before originals were kept fall back to the display copy.
-  const key = photo.original_path ?? photo.storage_path
+  const key = (photo.original_path as string) ?? (photo.storage_path as string)
 
   const object = await r2Client.send(
     new GetObjectCommand({
@@ -58,10 +39,7 @@ export async function GET(request: NextRequest) {
 
   const bytes = await object.Body!.transformToByteArray()
 
-  await supabase.from('downloads').insert({
-    photo_id: photo.id,
-    client_id: client.id,
-  })
+  await recordDownload(access, photo.id as string)
 
   const filename = key.split('/').pop() ?? 'photo.jpg'
 

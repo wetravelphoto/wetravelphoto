@@ -30,7 +30,10 @@ const groups: { label: string; links: { href: string; label: string; exact?: boo
   },
   {
     label: 'Site',
-    links: [{ href: '/admin/settings', label: 'Settings' }],
+    links: [
+      { href: '/admin/design', label: 'Design' },
+      { href: '/admin/settings', label: 'Settings' },
+    ],
   },
 ]
 

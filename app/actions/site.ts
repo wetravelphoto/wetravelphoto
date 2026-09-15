@@ -1,49 +1,18 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { patchSiteSettings } from '@/lib/site-patch'
+import { syncSectionsFromSettings } from '@/app/actions/sections'
 
 /**
  * Settings are split by page so each form only writes its own fields —
  * a single shared action would blank out anything not present in the form.
+ *
+ * The write itself, including the tolerance for a column the database does not
+ * have yet, lives in lib/site-patch.ts so the section actions can use it too.
  */
-/**
- * Pulls the column name out of a Postgres "column ... does not exist" error.
- * PostgREST phrases it a couple of ways depending on where it noticed.
- */
-function missingColumn(message: string): string | null {
-  const quoted = message.match(/column ["']?(?:[\w.]*\.)?([\w]+)["']? (?:of relation [^ ]+ )?does not exist/i)
-  if (quoted) return quoted[1]
-
-  const found = message.match(/Could not find the '([\w]+)' column/i)
-  return found ? found[1] : null
-}
-
 async function patch(values: Record<string, unknown>, paths: string[]) {
-  const supabase = await createClient()
-
-  let payload = { ...values }
-
-  // A settings form writes whatever the deployed code knows about, which can
-  // be ahead of the database — a migration not yet run, or a tenant a release
-  // behind. Rejecting the lot would lose the fields that *are* valid and show
-  // a server error for what is really one missing column, so the unknown ones
-  // are dropped and the rest is saved.
-  for (let attempt = 0; attempt < 12; attempt++) {
-    const { error } = await supabase.from('site_settings').update(payload).eq('id', 1)
-    if (!error) break
-
-    const column = missingColumn(error.message)
-    if (!column || !(column in payload)) throw new Error(error.message)
-
-    console.warn(
-      `[settings] site_settings.${column} is missing — saving without it. ` +
-        'Run the outstanding migration in db/migrations.'
-    )
-
-    delete payload[column]
-    if (Object.keys(payload).length === 0) return
-  }
+  await patchSiteSettings(values)
 
   revalidatePath('/admin/settings')
   paths.forEach((p) => revalidatePath(p))
@@ -136,6 +105,10 @@ export async function updateHomepage(formData: FormData) {
     },
     ['/', '/admin/pages/home']
   )
+
+  // Keep the section list in step with what was just typed here. No-op until
+  // the page has been edited in the section list at least once.
+  await syncSectionsFromSettings('home')
 }
 
 export async function updateAboutPage(formData: FormData) {
@@ -171,6 +144,9 @@ export async function updateContactPage(formData: FormData) {
     },
     ['/contact', '/', '/admin/pages/contact']
   )
+
+  // The same copy drives the homepage's contact section.
+  await syncSectionsFromSettings('home')
 }
 
 export async function updateNewsletter(formData: FormData) {

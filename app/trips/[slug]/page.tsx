@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { albumBySlug, photosForAlbum } from '@/lib/album-access'
 import { photoUrl } from '@/lib/images'
 import { srcSetFor, displayUrl, srcSetFromPath } from '@/lib/srcset'
 import { formatTripDate } from '@/lib/dates'
@@ -14,9 +14,12 @@ import '../../gallery.css'
 
 export default async function TripPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const supabase = await createClient()
 
-  const { data: album } = await supabase.from('albums').select('*').eq('slug', slug).maybeSingle()
+  // A password-gated album cannot be read with the anon key any more — its row
+  // carries password_hash, and the policy that used to expose it handed that
+  // to anyone who asked. albumBySlug reads it server-side and strips the hash
+  // before it can reach a page. The gate below is unchanged.
+  const album = await albumBySlug(slug)
 
   if (!album) notFound()
   if (album.privacy_type === 'client_only') notFound()
@@ -24,7 +27,9 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
   if (album.privacy_type === 'password') {
     const cookieStore = await cookies()
     const granted = cookieStore.get(`album_access_${album.id}`)?.value === 'granted'
-    if (!granted) return <AlbumPasswordGate slug={slug} title={album.title} />
+    // Photographs are fetched below, after this returns — a locked album never
+    // loads them at all, so there is nothing in the payload to read past.
+    if (!granted) return <AlbumPasswordGate slug={slug} title={album.title as string} />
   }
 
   const orderColumn = album.sort_order === 'manual' ? 'sort_order' : 'taken_at'
@@ -35,11 +40,7 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
   // Explicit columns, not '*'. At 300 photographs the unused columns (tags,
   // gps, timestamps) are pure weight in the server-rendered payload, which is
   // sent to every visitor whether they scroll that far or not.
-  const { data: photos } = await supabase
-    .from('photos')
-    .select('id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, sort_order')
-    .eq('album_id', album.id)
-    .order(orderColumn, { ascending, nullsFirst: false })
+  const photos = await photosForAlbum(album.id, orderColumn as string, ascending)
 
   const coverPhoto = photos?.find((p) => p.id === album.cover_photo_id) ?? photos?.[0]
 

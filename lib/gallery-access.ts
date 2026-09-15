@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClientOrNull } from '@/lib/supabase/admin'
 import { currentSiteTenantId } from '@/lib/tenant'
 
 /**
@@ -48,7 +48,13 @@ const PHOTO_COLUMNS =
 export async function accessForToken(token: string): Promise<ShareAccess | null> {
   if (!token || token.length < 8) return null
 
-  const supabase = createAdminClient()
+  // clients and album_clients answer to nobody but their own site now, so
+  // there is no anon path here — this genuinely needs the service role. When
+  // the key is missing it returns null and the gallery 404s, with the reason
+  // in the server log, rather than throwing a 500 at the visitor.
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return null
+
   const tenantId = await currentSiteTenantId()
 
   const query = supabase.from('clients').select('id, name').eq('access_token', token)
@@ -78,7 +84,8 @@ function assertAlbum(access: ShareAccess, albumId: string): void {
 export async function albumsForAccess(access: ShareAccess) {
   if (access.albumIds.length === 0) return []
 
-  const supabase = createAdminClient()
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return []
 
   const { data } = await supabase
     .from('albums')
@@ -96,7 +103,8 @@ export async function albumsForAccess(access: ShareAccess) {
 export async function photosForAccess(access: ShareAccess) {
   if (access.albumIds.length === 0) return []
 
-  const supabase = createAdminClient()
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return []
 
   const { data } = await supabase
     .from('photos')
@@ -108,7 +116,8 @@ export async function photosForAccess(access: ShareAccess) {
 }
 
 export async function favoritePhotoIds(access: ShareAccess): Promise<string[]> {
-  const supabase = createAdminClient()
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return []
 
   const { data } = await supabase
     .from('favorites')
@@ -126,7 +135,8 @@ export async function setFavorite(
 ): Promise<void> {
   assertAlbum(access, albumId)
 
-  const supabase = createAdminClient()
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return
 
   if (favorited) {
     await supabase
@@ -149,7 +159,8 @@ export async function setFavorite(
  * album that photograph belongs to.
  */
 export async function photoForDownload(access: ShareAccess, photoId: string) {
-  const supabase = createAdminClient()
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return null
 
   const { data: photo } = await supabase
     .from('photos')
@@ -167,7 +178,8 @@ export async function photoForDownload(access: ShareAccess, photoId: string) {
 export async function albumForZip(access: ShareAccess, albumId: string) {
   if (!access.albumIds.includes(albumId)) return null
 
-  const supabase = createAdminClient()
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return null
 
   const { data } = await supabase
     .from('albums')
@@ -181,7 +193,8 @@ export async function albumForZip(access: ShareAccess, albumId: string) {
 export async function photosForZip(access: ShareAccess, albumId: string) {
   assertAlbum(access, albumId)
 
-  const supabase = createAdminClient()
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return []
 
   const { data } = await supabase
     .from('photos')
@@ -196,7 +209,8 @@ export async function recordDownload(
   access: ShareAccess,
   photoId: string | null
 ): Promise<void> {
-  const supabase = createAdminClient()
+  const supabase = createAdminClientOrNull()
+  if (!supabase) return
 
   const { error } = await supabase.from('downloads').insert({
     photo_id: photoId,

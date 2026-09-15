@@ -32,3 +32,31 @@ export function createAdminClient() {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 }
+
+/**
+ * The same client, or null when the key is missing.
+ *
+ * `createAdminClient()` throws, which is right for checkout — an order that
+ * cannot be written should fail loudly. It is wrong for a page: on 2026-09-15
+ * the album page started reading through the service role, the key was not set
+ * in Vercel, and every gallery on the site returned a 500 rather than simply
+ * not showing the private ones.
+ *
+ * So a surface that can degrade asks for this instead, and decides for itself
+ * what to do with nothing. A surface that cannot degrade keeps using
+ * createAdminClient().
+ */
+export function createAdminClientOrNull() {
+  try {
+    return createAdminClient()
+  } catch (error) {
+    console.error(
+      '[supabase] SUPABASE_SERVICE_ROLE_KEY is missing, so private galleries, ' +
+        'share links and password-protected albums cannot be read. Add it in ' +
+        'Vercel → Settings → Environment Variables (and .env.local for dev). ' +
+        'Public pages are unaffected.',
+      error instanceof Error ? error.message : error
+    )
+    return null
+  }
+}

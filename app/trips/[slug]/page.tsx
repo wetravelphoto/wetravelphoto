@@ -40,7 +40,15 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
   // Explicit columns, not '*'. At 300 photographs the unused columns (tags,
   // gps, timestamps) are pure weight in the server-rendered payload, which is
   // sent to every visitor whether they scroll that far or not.
-  const photos = await photosForAlbum(album.id, orderColumn as string, ascending)
+  // The anon key can read a public album's photographs under RLS; anything
+  // else needs the privileged read, and we only get here once its gate has
+  // passed.
+  const photos = await photosForAlbum(
+    album.id,
+    orderColumn as string,
+    ascending,
+    album.privacy_type === 'public'
+  )
 
   const coverPhoto = photos?.find((p) => p.id === album.cover_photo_id) ?? photos?.[0]
 

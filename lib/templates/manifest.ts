@@ -45,6 +45,15 @@ export type TemplateSection = {
 export type TemplateStyles = {
   /** Per-section typography, as lib/type-styles.ts reads it. */
   type_styles: Record<string, Record<string, unknown>>
+  /**
+   * The site-wide tokens — colour, typeface, measure — as
+   * lib/styles/tokens.ts stores them.
+   *
+   * Optional because manifests written before 2026-09-16 have none, and
+   * resolveTokens fills the gap. Without this half, switching looks only
+   * reordered sections: Salt and Atelier came out the same colour.
+   */
+  tokens?: Record<string, unknown>
 }
 
 export type TemplateManifest = {
@@ -64,7 +73,7 @@ export type LiveSection = {
 export const EMPTY_MANIFEST: TemplateManifest = {
   schema: MANIFEST_SCHEMA,
   pages: {},
-  styles: { type_styles: {} },
+  styles: { type_styles: {}, tokens: {} },
 }
 
 /**
@@ -193,7 +202,7 @@ export function describeApply(result: ApplyResult): string[] {
 
   if (added.length) lines.push(`Adds ${unique(added).map(label).join(', ')}`)
   if (reordered) lines.push('Changes the order of the page')
-  lines.push('Changes typography, spacing and the look of every section')
+  lines.push('Changes typography, colour, spacing and the look of every section')
   if (parked.length) {
     lines.push(
       `Switches off ${unique(parked).map(label).join(', ')} — kept on the page, nothing deleted`

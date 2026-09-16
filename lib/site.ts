@@ -141,6 +141,14 @@ export type SiteSettings = {
   shop_footer_right: string | null
   /** Which of the built-in rooms a print is shown hanging in. 'none' for none. */
   shop_room: string
+
+  /**
+   * Colour, typography and measure for the whole site. Shape and defaults live
+   * in lib/styles/tokens.ts; this is only where the overrides are kept, so an
+   * empty object means "the defaults", not "unstyled".
+   */
+  global_styles: Record<string, unknown>
+  global_styles_version: number
 }
 
 const FALLBACK: SiteSettings = {
@@ -269,6 +277,8 @@ const FALLBACK: SiteSettings = {
   shop_footer_left: null,
   shop_footer_right: null,
   shop_room: 'living-room',
+  global_styles: {},
+  global_styles_version: 1,
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {

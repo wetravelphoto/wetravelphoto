@@ -89,9 +89,14 @@ export default async function DesignPage() {
             control what is on each page.
           </p>
         </div>
-        <Link href="/" target="_blank" className="admin-btn admin-btn-ghost admin-btn-sm">
-          View ↗
-        </Link>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link href="/admin/design/style" className="admin-btn admin-btn-sm">
+            Style
+          </Link>
+          <Link href="/" target="_blank" className="admin-btn admin-btn-ghost admin-btn-sm">
+            View ↗
+          </Link>
+        </div>
       </div>
 
       <DesignPanel

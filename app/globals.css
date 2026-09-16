@@ -35,8 +35,8 @@ a {
 
 .display {
   font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  text-transform: var(--heading-case, uppercase);
+  letter-spacing: var(--heading-track, 0.02em);
   font-weight: 400;
 }
 
@@ -98,8 +98,8 @@ a {
 
 .prose h2 {
   font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  text-transform: var(--heading-case, uppercase);
+  letter-spacing: var(--heading-track, 0.02em);
   font-size: 1.5rem;
   font-weight: 400;
   color: var(--ink);

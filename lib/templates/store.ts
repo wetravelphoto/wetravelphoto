@@ -182,6 +182,7 @@ export async function liveManifest(pages = ['home']): Promise<TemplateManifest> 
 
   return extractManifest(live, {
     type_styles: (settings.type_styles ?? {}) as Record<string, Record<string, unknown>>,
+    tokens: (settings.global_styles ?? {}) as Record<string, unknown>,
   })
 }
 

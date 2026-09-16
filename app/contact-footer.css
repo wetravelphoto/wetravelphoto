@@ -195,7 +195,7 @@
 }
 
 .footer-grid {
-  max-width: 1240px;
+  max-width: var(--container, 1240px);
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 1fr);
@@ -305,7 +305,7 @@
 
 /* A small ruled box for the copyright line */
 .footer-base {
-  max-width: 1240px;
+  max-width: var(--container, 1240px);
   margin: clamp(2rem, 4vw, 3rem) auto 0;
   padding-top: 1.1rem;
   border-top: 0.5px solid rgba(250, 249, 246, 0.12);

@@ -109,8 +109,8 @@
 
 /* ---------------- INTRO / ABOUT ---------------- */
 
-.home-section { padding: clamp(3.5rem, 9vw, 7rem) clamp(1.25rem, 4vw, 3rem); }
-.home-inner { max-width: 1240px; margin: 0 auto; }
+.home-section { padding: calc(clamp(3.5rem, 9vw, 7rem) * var(--rhythm, 1)) clamp(1.25rem, 4vw, 3rem); }
+.home-inner { max-width: var(--container, 1240px); margin: 0 auto; }
 
 .intro-grid {
   display: grid;
@@ -159,11 +159,11 @@
 .carousel-section {
   background: #0f0d0c;
   color: var(--surface);
-  padding: clamp(3rem, 7vw, 5.5rem) 0 clamp(3.5rem, 8vw, 6rem);
+  padding: calc(clamp(3rem, 7vw, 5.5rem) * var(--rhythm, 1)) 0 calc(clamp(3.5rem, 8vw, 6rem) * var(--rhythm, 1));
 }
 
 .carousel-head {
-  max-width: 1240px;
+  max-width: var(--container, 1240px);
   margin: 0 auto clamp(1.5rem, 3vw, 2.5rem);
   padding: 0 clamp(1.25rem, 4vw, 3rem);
   display: flex;
@@ -271,7 +271,7 @@
 }
 
 .carousel-controls {
-  max-width: 1240px;
+  max-width: var(--container, 1240px);
   margin: clamp(1.25rem, 3vw, 2rem) auto 0;
   padding: 0 clamp(1.25rem, 4vw, 3rem);
   display: flex;
@@ -331,7 +331,7 @@
 }
 
 .footer-inner {
-  max-width: 1240px;
+  max-width: var(--container, 1240px);
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -361,7 +361,7 @@
 .footer-col a:hover { opacity: 1; color: var(--surface); }
 
 .footer-bottom {
-  max-width: 1240px;
+  max-width: var(--container, 1240px);
   margin: clamp(2rem, 5vw, 3rem) auto 0;
   padding-top: 1.25rem;
   border-top: 0.5px solid rgba(250, 249, 246, 0.12);
@@ -373,8 +373,8 @@
   opacity: 0.55;
 }
 
-.newsletter { background: var(--ink); color: var(--surface); padding: clamp(3rem, 7vw, 5rem) clamp(1.25rem, 4vw, 3rem); }
-.newsletter-inner { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: clamp(1.5rem, 4vw, 4rem); align-items: center; }
+.newsletter { background: var(--ink); color: var(--surface); padding: calc(clamp(3rem, 7vw, 5rem) * var(--rhythm, 1)) clamp(1.25rem, 4vw, 3rem); }
+.newsletter-inner { max-width: var(--container, 1240px); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: clamp(1.5rem, 4vw, 4rem); align-items: center; }
 .newsletter h2 { font-family: var(--font-display), sans-serif; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 400; font-size: clamp(1.4rem, 3vw, 2.1rem); line-height: 1.1; margin: 0 0 0.75rem; }
 .newsletter p { font-size: 0.92rem; line-height: 1.7; opacity: 0.75; margin: 0; max-width: 42ch; }
 .newsletter-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -483,7 +483,8 @@
 
 .section-cta a {
   font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
+  text-transform: var(--button-case, uppercase);
+  border-radius: var(--button-radius, 0px);
   letter-spacing: 0.14em;
   font-size: 0.75rem;
   padding: 0.9em 2.2em;

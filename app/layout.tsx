@@ -1,5 +1,8 @@
 import type { Metadata } from 'next'
 import { Oswald, Karla } from 'next/font/google'
+import { getSiteSettings } from '@/lib/site'
+import { cssVariables, fontsToLoad, resolveTokens } from '@/lib/styles/tokens'
+import { fontHref } from '@/lib/fonts'
 import './globals.css'
 import './home.css'
 import './contact-footer.css'
@@ -22,15 +25,31 @@ export const metadata: Metadata = {
   description: 'Travel photography and field notes from the road, the water, and the cold places.',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const settings = await getSiteSettings()
+  const tokens = resolveTokens(settings.global_styles, settings.global_styles_version)
+
+  // Set as an INLINE STYLE rather than a <style> block. Inline custom
+  // properties on the element beat any :root rule in a stylesheet whatever
+  // order those stylesheets load in, so the panel's values always win and the
+  // defaults in globals.css stay as the fallback. See lib/styles/tokens.ts.
+  const vars = cssVariables(tokens) as React.CSSProperties
+
+  // Oswald and Karla ride along with the build; anything else costs one
+  // stylesheet, the same trade the gallery covers already make.
+  const custom = fontsToLoad(tokens)
+
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
+    <html lang="en" className={`${display.variable} ${body.variable}`} style={vars}>
       <head>
         {/* Gallery covers pull their chosen typeface from Google at runtime.
             Opening those connections early saves a DNS + TLS round trip on
             the critical path. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {custom.map((name) => (
+          <link key={name} rel="stylesheet" href={fontHref(name)} />
+        ))}
       </head>
       <body>{children}</body>
     </html>

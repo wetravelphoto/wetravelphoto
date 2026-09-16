@@ -7,6 +7,7 @@ import { patchSiteSettings } from '@/lib/site-patch'
 import { mirrorPage, replaceSections } from '@/lib/sections/store'
 import { tierAllowed } from '@/lib/entitlements'
 import { applyManifest, type TemplateManifest } from '@/lib/templates/manifest'
+import { TOKENS_VERSION } from '@/lib/styles/tokens'
 import {
   currentLook,
   liveManifest,
@@ -14,9 +15,13 @@ import {
   manifestForVersion,
 } from '@/lib/templates/store'
 
-const PATHS = ['/', '/admin/design', '/admin/pages/home']
+const PATHS = ['/admin/design', '/admin/design/style', '/admin/pages/home']
 
 function done() {
+  // 'layout' because a look sets the global style tokens, which are emitted in
+  // the root layout — revalidating pages alone would leave every one of them
+  // wearing the old colours.
+  revalidatePath('/', 'layout')
   PATHS.forEach((p) => revalidatePath(p))
 }
 
@@ -54,7 +59,13 @@ async function recordHistory(input: {
     template_name: input.templateName,
     version: input.version,
     sections_before: before,
-    styles_before: settings.type_styles ?? {},
+    // Both halves, so an undo restores the colours as well as the order.
+    // A row written before 2026-09-16 holds a bare type_styles map; revertTo
+    // handles either shape.
+    styles_before: {
+      type_styles: settings.type_styles ?? {},
+      tokens: settings.global_styles ?? {},
+    },
     from_template_id: current.look?.id ?? null,
     from_version: current.version || null,
     note: input.note ?? null,
@@ -76,8 +87,13 @@ async function install(manifest: TemplateManifest, page = 'home') {
 
   await replaceSections(page, result.sections)
 
-  if (manifest.styles?.type_styles) {
-    await patchSiteSettings({ type_styles: manifest.styles.type_styles })
+  if (manifest.styles?.type_styles || manifest.styles?.tokens) {
+    await patchSiteSettings({
+      ...(manifest.styles.type_styles ? { type_styles: manifest.styles.type_styles } : {}),
+      ...(manifest.styles.tokens
+        ? { global_styles: manifest.styles.tokens, global_styles_version: TOKENS_VERSION }
+        : {}),
+    })
   }
 
   // Keep the old homepage form in step. Transition shim.
@@ -208,7 +224,22 @@ export async function revertTo(historyId: string) {
   }[]
 
   await replaceSections('home', sections)
-  await patchSiteSettings({ type_styles: data.styles_before ?? {} })
+
+  // Either shape: { type_styles, tokens } from 2026-09-16 on, or a bare
+  // type_styles map before that.
+  const before = (data.styles_before ?? {}) as Record<string, unknown>
+  const hasBothHalves = 'type_styles' in before || 'tokens' in before
+
+  await patchSiteSettings(
+    hasBothHalves
+      ? {
+          type_styles: before.type_styles ?? {},
+          global_styles: before.tokens ?? {},
+          global_styles_version: TOKENS_VERSION,
+        }
+      : { type_styles: before }
+  )
+
   await mirrorPage('home')
 
   if (data.from_template_id) {

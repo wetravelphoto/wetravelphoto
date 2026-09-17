@@ -52,7 +52,7 @@ export default function ContactSection({
 
       <div className="contact-panel">
         <div className="contact-panel-inner">
-          {settings.eyebrow && (
+          {(settings.eyebrow || editable) && (
             <p className="contact-eyebrow" {...field('eyebrow')}>
               {settings.eyebrow}
             </p>
@@ -60,7 +60,7 @@ export default function ContactSection({
           <h2 className="contact-heading" {...field('heading')}>
             {settings.heading || 'Let’s connect'}
           </h2>
-          {settings.intro && (
+          {(settings.intro || editable) && (
             <p className="contact-copy" {...field('intro')}>
               {settings.intro}
             </p>

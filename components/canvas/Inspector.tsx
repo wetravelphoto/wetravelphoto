@@ -35,7 +35,15 @@ import type { CanvasSection } from '@/components/canvas/Canvas'
  */
 const DEBOUNCE_MS = 450
 
+/**
+ * Shorter than the text debounce: these are gestures, not typing. Long enough
+ * to swallow a whole drag, short enough that letting go feels like the end of
+ * the action rather than the start of a wait.
+ */
+const VALUE_DEBOUNCE_MS = 250
+
 export default function Inspector({
+  resizer,
   page,
   section,
   def,
@@ -49,6 +57,8 @@ export default function Inspector({
   onSaved,
   onClose,
 }: {
+  /** The drag handle on this panel's left edge. */
+  resizer: React.ReactNode
   page: string
   section: CanvasSection | null
   def: SectionDef | null
@@ -92,6 +102,52 @@ export default function Inspector({
    * below has something real to send no matter what happened to the DOM.
    */
   const queued = useRef<{ id: string; data: FormData } | null>(null)
+
+  /**
+   * Custom editors save through here, coalesced.
+   *
+   * A focal picker fires on every mouse-move of a drag, and a story reorder
+   * fires on every click — and the first version of this sent each one straight
+   * to the server. Dragging a crop across an image queued sixty round trips
+   * that then arrived one after another, which is why the preview appeared to
+   * move frame by frame for ten seconds after the mouse stopped. The last value
+   * is the only one that matters; the rest are the drag.
+   */
+  const valueTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const valueQueue = useRef<{ id: string; values: Record<string, unknown> } | null>(null)
+
+  const sendValues = () => {
+    if (valueTimer.current) {
+      clearTimeout(valueTimer.current)
+      valueTimer.current = null
+    }
+    const batch = valueQueue.current
+    valueQueue.current = null
+    if (!batch) return
+
+    setError(null)
+    startTransition(async () => {
+      try {
+        await updateDraftSectionValues(page, batch.id, batch.values)
+        setSavedAt(Date.now())
+        onSaved()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not save that.')
+      }
+    })
+  }
+
+  const saveValues = (sectionId: string, values: Record<string, unknown>) => {
+    valueQueue.current = {
+      id: sectionId,
+      // Merged, so a drag that only moves the crop does not drop a title typed
+      // a moment earlier and still waiting in the same batch.
+      values: { ...(valueQueue.current?.id === sectionId ? valueQueue.current.values : {}), ...values },
+    }
+
+    if (valueTimer.current) clearTimeout(valueTimer.current)
+    valueTimer.current = setTimeout(sendValues, VALUE_DEBOUNCE_MS)
+  }
 
   const send = (target: { id: string; data: FormData }) => {
     setError(null)
@@ -162,6 +218,16 @@ export default function Inspector({
         clearTimeout(timer.current)
         timer.current = null
       }
+      if (valueTimer.current) {
+        clearTimeout(valueTimer.current)
+        valueTimer.current = null
+      }
+      const pendingValues = valueQueue.current
+      valueQueue.current = null
+      if (pendingValues) {
+        updateDraftSectionValues(page, pendingValues.id, pendingValues.values).catch(() => {})
+      }
+
       const pendingEdit = queued.current
       queued.current = null
       if (pendingEdit) {
@@ -180,6 +246,7 @@ export default function Inspector({
   if (!section || !def) {
     return (
       <aside className="cv-inspector cv-inspector-empty" aria-label="Section settings">
+        {resizer}
         <p className="cv-hint">
           Click a section — in the page or in the list — to edit it.
         </p>
@@ -191,6 +258,7 @@ export default function Inspector({
 
   return (
     <aside className="cv-inspector" aria-label={`${def.label} settings`}>
+      {resizer}
       <div className="cv-insp-head">
         <div>
           <p className="cv-insp-label">{def.label}</p>
@@ -219,6 +287,7 @@ export default function Inspector({
           def={def}
           settings={section.settings}
           publicUrl={publicUrl}
+          collapsible
           renderCustom={(field: Field, value: unknown) => {
             // A `custom` field names the editor it needs; this is where the
             // canvas supplies one. Anything without an editor yet falls back to
@@ -231,12 +300,7 @@ export default function Inspector({
                   value={value}
                   imagePath={(section.settings.image_path as string) ?? null}
                   publicUrl={publicUrl}
-                  onChange={(next) =>
-                    startTransition(async () => {
-                      await updateDraftSectionValues(page, section.id, { [field.key]: next })
-                      onSaved()
-                    })
-                  }
+                  onChange={(next) => saveValues(section.id, { [field.key]: next })}
                 />
               )
             }
@@ -256,12 +320,7 @@ export default function Inspector({
                   }
                   options={stories}
                   publicUrl={publicUrl}
-                  onChange={(values) =>
-                    startTransition(async () => {
-                      await updateDraftSectionValues(page, section.id, values)
-                      onSaved()
-                    })
-                  }
+                  onChange={(values) => saveValues(section.id, values)}
                 />
               )
             }

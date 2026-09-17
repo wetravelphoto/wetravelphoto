@@ -118,3 +118,51 @@ button[data-field]:hover {
     transition: none;
   }
 }
+
+/* ── An empty setting ────────────────────────────────────────────────────────
+   A heading with no text renders nothing, so there is nothing to hover and no
+   way to tell the slot exists — you have to type something before you can find
+   out where it would go. In the editor those elements are rendered anyway, and
+   an empty one shows as a dashed outline with its name.
+
+   :empty only matches an element with NO children at all, which is exactly the
+   case here: the renderer emits the element and puts nothing in it. */
+
+[data-field]:empty {
+  display: block;
+  min-height: 1.4em;
+  min-width: 7rem;
+  outline: 1px dashed color-mix(in srgb, var(--pv-accent) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 1px;
+  opacity: 0.75;
+}
+
+[data-field]:empty::after {
+  content: 'Empty — click to add';
+  display: block;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  line-height: 1.4;
+  color: var(--pv-accent);
+  white-space: nowrap;
+}
+
+[data-field]:empty:hover {
+  opacity: 1;
+  outline-style: solid;
+  background-color: color-mix(in srgb, var(--pv-accent) 9%, transparent);
+}
+
+/* Inline slots — a button's label — must not become a block and break the row. */
+a[data-field]:empty,
+button[data-field]:empty,
+span[data-field]:empty {
+  display: inline-block;
+  min-height: 1em;
+  min-width: 5rem;
+}

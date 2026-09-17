@@ -52,6 +52,18 @@ export default function HeroStories({
   const [adding, setAdding] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
 
+  /**
+   * The order, held locally so a reorder moves the row under the cursor now
+   * rather than after the round trip. Reconciled by VALUE whenever the server
+   * sends a different list — which is also how a Discard finds its way back in.
+   */
+  const [localIds, setLocalIds] = useState(ids)
+  const [lastIds, setLastIds] = useState(ids.join(','))
+  if (ids.join(',') !== lastIds) {
+    setLastIds(ids.join(','))
+    setLocalIds(ids)
+  }
+
   // Text is held locally and written behind a debounce, the same as the rest of
   // the inspector — otherwise every keystroke is a round trip.
   const [text, setText] = useState({ titles, subtitles })
@@ -76,29 +88,36 @@ export default function HeroStories({
     timer.current = setTimeout(() => onChange(next), DEBOUNCE_MS)
   }
 
-  const chosen = ids.map((id) => options.find((o) => o.id === id)).filter(Boolean) as StoryOption[]
-  const rest = options.filter((o) => !ids.includes(o.id))
+  const chosen = localIds
+    .map((id) => options.find((o) => o.id === id))
+    .filter(Boolean) as StoryOption[]
+  const rest = options.filter((o) => !localIds.includes(o.id))
+
+  const setOrder = (next: string[]) => {
+    setLocalIds(next)
+    onChange({ featured_post_ids: next })
+  }
 
   const move = (from: number, to: number) => {
-    if (to < 0 || to >= ids.length) return
-    const next = [...ids]
+    if (to < 0 || to >= localIds.length) return
+    const next = [...localIds]
     const [row] = next.splice(from, 1)
     next.splice(to, 0, row)
-    onChange({ featured_post_ids: next })
+    setOrder(next)
   }
 
   return (
     <div className="cv-stories">
       <span className="cv-focal-label">Featured stories</span>
 
-      {ids.length === 0 ? (
+      {localIds.length === 0 ? (
         <p className="admin-meta">
           Nothing chosen, so the hero shows your three most recent stories and follows along as you
           publish. Choose some to fix which ones appear.
         </p>
       ) : (
         <p className="admin-meta">
-          {ids.length === 3 ? 'Three stories' : `${ids.length} of 3`} — the hero shows them in this
+          {localIds.length === 3 ? 'Three stories' : `${localIds.length} of 3`} — the hero shows them in this
           order.
         </p>
       )}
@@ -144,7 +163,7 @@ export default function HeroStories({
                     type="button"
                     className="cv-ico"
                     onClick={() => move(i, i + 1)}
-                    disabled={i === ids.length - 1}
+                    disabled={i === localIds.length - 1}
                     aria-label="Move later"
                   >
                     ↓
@@ -152,7 +171,7 @@ export default function HeroStories({
                   <button
                     type="button"
                     className="cv-ico cv-ico-bad"
-                    onClick={() => onChange({ featured_post_ids: ids.filter((x) => x !== story.id) })}
+                    onClick={() => setOrder(localIds.filter((x) => x !== story.id))}
                     aria-label="Remove from the hero"
                   >
                     ×
@@ -224,7 +243,7 @@ export default function HeroStories({
         })}
       </ol>
 
-      {ids.length < 3 && rest.length > 0 && (
+      {localIds.length < 3 && rest.length > 0 && (
         <button type="button" className="cv-add" onClick={() => setAdding(!adding)}>
           {adding ? 'Never mind' : '+ Feature a story'}
         </button>
@@ -239,7 +258,7 @@ export default function HeroStories({
               className="cv-story-option"
               onClick={() => {
                 setAdding(false)
-                onChange({ featured_post_ids: [...ids, story.id] })
+                setOrder([...localIds, story.id])
               }}
             >
               {story.imagePath ? (

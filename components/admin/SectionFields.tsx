@@ -27,6 +27,7 @@ export default function SectionFields({
   settings,
   publicUrl,
   renderCustom,
+  collapsible = false,
 }: {
   def: SectionDef
   settings: SectionSettings
@@ -39,10 +40,16 @@ export default function SectionFields({
    * to a description rather than a blank.
    */
   renderCustom?: (field: Field, value: unknown) => React.ReactNode | null
+  /**
+   * Groups fold away. The canvas turns this on; the old admin forms are short
+   * enough not to need it and keep every group open.
+   */
+  collapsible?: boolean
 }) {
   // Kept in state so a `when` condition re-evaluates as you change the field
   // it depends on, instead of after a save.
   const [values, setValues] = useState<SectionSettings>(settings)
+  const [folded, setFolded] = useState<Set<string>>(new Set())
   const set = (key: string, value: unknown) => setValues((v) => ({ ...v, [key]: value }))
 
   const fields = visibleFields(def, values)
@@ -57,11 +64,39 @@ export default function SectionFields({
 
   return (
     <div className="sec-fields">
-      {groups.map((group, i) => (
-        <div key={group.name ?? `g${i}`} className="sec-group">
-          {group.name && <p className="sec-group-name">{group.name}</p>}
+      {groups.map((group, i) => {
+        const key = group.name ?? `g${i}`
+        const shut = collapsible && group.name ? folded.has(key) : false
 
-          {group.fields.map((field) => (
+        return (
+        <div key={key} className="sec-group">
+          {group.name &&
+            (collapsible ? (
+              <button
+                type="button"
+                className="cv-fold"
+                aria-expanded={!shut}
+                onClick={() =>
+                  setFolded((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(key)) next.delete(key)
+                    else next.add(key)
+                    return next
+                  })
+                }
+              >
+                <span className="cv-fold-arrow" aria-hidden="true">
+                  ▾
+                </span>
+                {group.name}
+                {shut && <span className="cv-fold-count">{group.fields.length}</span>}
+              </button>
+            ) : (
+              <p className="sec-group-name">{group.name}</p>
+            ))}
+
+          {!shut &&
+            group.fields.map((field) => (
             <div key={field.key} className="sec-field">
               <input type="hidden" name={`__present_${field.key}`} value="1" />
               {(field.kind === 'custom' && renderCustom?.(field, values[field.key])) ||
@@ -69,7 +104,8 @@ export default function SectionFields({
             </div>
           ))}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

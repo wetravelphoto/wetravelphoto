@@ -101,14 +101,14 @@ export default function HomeHero({
       )}
 
       {/* Copy that belongs to the site rather than to any one story */}
-      {(overlayTitle || overlaySubtitle || (ctaLabel && ctaHref)) && (
+      {(overlayTitle || overlaySubtitle || (ctaLabel && ctaHref) || editable) && (
         <div className="hero-overlay-copy">
-          {overlayTitle && (
+          {(overlayTitle || editable) && (
             <p className="hero-fixed-title" {...(editable ? { 'data-field': 'title' } : {})}>
               {overlayTitle}
             </p>
           )}
-          {overlaySubtitle && (
+          {(overlaySubtitle || editable) && (
             <p className="hero-fixed-sub" {...(editable ? { 'data-field': 'subtitle' } : {})}>
               {overlaySubtitle}
             </p>

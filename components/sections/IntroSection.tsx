@@ -17,7 +17,7 @@ export default function IntroSection({
   const image = str(settings, 'image_path')
   const paragraphs = (str(settings, 'body') ?? '').split('\n\n').filter(Boolean)
 
-  if (!heading && paragraphs.length === 0 && !image) return null
+  if (!heading && paragraphs.length === 0 && !image && !ctx.editable) return null
 
   return (
     <section className="home-section" style={styleVars(ctx.styles, 'intro')}>
@@ -37,12 +37,12 @@ export default function IntroSection({
         )}
 
         <div>
-          {kicker && (
+          {(kicker || ctx.editable) && (
             <p className="intro-kicker" {...editable(ctx, 'kicker')}>
               {kicker}
             </p>
           )}
-          {heading && (
+          {(heading || ctx.editable) && (
             <h2 className="intro-heading" {...editable(ctx, 'heading')}>
               {heading}
             </h2>

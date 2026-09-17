@@ -26,6 +26,7 @@ import Inspector from '@/components/canvas/Inspector'
 import AddSectionModal from '@/components/canvas/AddSectionModal'
 import PresetRail from '@/components/canvas/PresetRail'
 import StyleMode from '@/components/canvas/StyleMode'
+import PanelResizer from '@/components/canvas/PanelResizer'
 import type { StoryOption } from '@/components/canvas/editors/HeroStories'
 
 export type CanvasSection = {
@@ -379,6 +380,7 @@ export default function Canvas({
 
         {mode === 'style' ? (
           <StyleMode
+            resizer={<PanelResizer />}
             tokens={tokens}
             overriddenGroups={Object.keys(typeStyles).filter(
               (g) => Object.keys(typeStyles[g] ?? {}).length > 0
@@ -394,6 +396,7 @@ export default function Canvas({
           />
         ) : (
           <Inspector
+            resizer={<PanelResizer />}
             page={page}
             section={current}
             def={def}

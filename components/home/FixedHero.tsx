@@ -80,14 +80,14 @@ export default function FixedHero({
         </div>
       )}
 
-      {(title || subtitle || (ctaLabel && ctaHref)) && (
+      {(title || subtitle || (ctaLabel && ctaHref) || editable) && (
         <div className="hero-fixed-copy">
-          {title && (
+          {(title || editable) && (
             <h1 className="hero-fixed-title" {...field('title')}>
               {title}
             </h1>
           )}
-          {subtitle && (
+          {(subtitle || editable) && (
             <p className="hero-fixed-sub" {...field('subtitle')}>
               {subtitle}
             </p>

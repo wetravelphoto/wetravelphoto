@@ -15,6 +15,7 @@ import { FONT_NAMES, type StyleTokens } from '@/lib/styles/tokens'
 const DEBOUNCE_MS = 400
 
 export default function StyleMode({
+  resizer,
   tokens,
   overriddenGroups,
   onClearOverrides,
@@ -22,6 +23,8 @@ export default function StyleMode({
   onCommit,
   pending,
 }: {
+  /** The drag handle on this panel's left edge. */
+  resizer: React.ReactNode
   tokens: StyleTokens
   /** Section groups with their own typography, which wins over everything here. */
   overriddenGroups: string[]
@@ -88,6 +91,7 @@ export default function StyleMode({
 
   return (
     <aside className="cv-inspector" aria-label="Style">
+      {resizer}
       <div className="cv-insp-head">
         <div>
           <p className="cv-insp-label">Style</p>

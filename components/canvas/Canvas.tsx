@@ -130,6 +130,7 @@ export default function Canvas({
       value?: string
       vars?: Record<string, string>
       fonts?: string[]
+      index?: number
     }) => {
       frame.current?.contentWindow?.postMessage(
         { source: 'wtp-canvas', ...message },
@@ -413,6 +414,10 @@ export default function Canvas({
             onType={(group, changes) =>
               run(() => updateDraftSectionType(group as StyledSection, changes))
             }
+            // Cropping for the phone while looking at the desktop layout is
+            // guessing, so the preview follows the crop being edited.
+            onDevice={(d) => setDevice(d === 'mobile' ? 'phone' : 'desktop')}
+            onShowStory={(index) => tell({ type: 'hero-story', index: index ?? undefined })}
             onPatch={(field, value) => {
               if (selected) tell({ type: 'patch', id: selected, field, value })
             }}

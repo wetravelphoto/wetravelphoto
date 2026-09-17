@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { FONT_NAMES } from '@/lib/styles/tokens'
 import type { SectionStyle } from '@/lib/type-styles'
 
@@ -32,12 +33,27 @@ export default function SectionType({
   onChange: (changes: Record<string, unknown>) => void
 }) {
   const overridden = Object.keys(style).length > 0
+  // Folds like every other group, and starts folded: it is the thing you reach
+  // for least and the longest thing in the panel when it is open.
+  const [shut, setShut] = useState(true)
 
   return (
     <div className="sec-group cv-type-group">
-      <p className="sec-group-name">
-        Typography
-        {overridden && (
+      <div className="cv-type-head">
+        <button
+          type="button"
+          className="cv-fold"
+          aria-expanded={!shut}
+          onClick={() => setShut(!shut)}
+        >
+          <span className="cv-fold-arrow" aria-hidden="true">
+            ▾
+          </span>
+          Typography
+          {overridden && <span className="cv-type-dot" aria-label="Overridden" />}
+        </button>
+
+        {overridden && !shut && (
           <button
             type="button"
             className="cv-type-clear"
@@ -55,8 +71,10 @@ export default function SectionType({
             Follow the site
           </button>
         )}
-      </p>
+      </div>
 
+      {shut ? null : (
+        <>
       <p className="cv-type-note">
         Only what you change here stops following the site&apos;s style. Shared by every{' '}
         {group} section on the page.
@@ -85,6 +103,8 @@ export default function SectionType({
         onColour={(v) => onChange({ bodyColor: v })}
         onScale={(v) => onChange({ bodyScale: v })}
       />
+        </>
+      )}
     </div>
   )
 }

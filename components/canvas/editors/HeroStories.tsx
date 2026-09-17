@@ -34,6 +34,8 @@ export default function HeroStories({
   options,
   publicUrl,
   onChange,
+  onDevice,
+  onShowStory,
 }: {
   ids: string[]
   titles: Record<string, string>
@@ -48,6 +50,14 @@ export default function HeroStories({
     subtitles?: Record<string, string>
     story_focal?: Record<string, Focal>
   }) => void
+  /** Puts the preview into the width whose crop is being edited. */
+  onDevice?: (device: 'desktop' | 'mobile') => void
+  /**
+   * Which story the preview should be showing. The hero rotates, so editing
+   * the second story's crop against the first story's photograph is editing
+   * blind — this is what stops that.
+   */
+  onShowStory?: (index: number | null) => void
 }) {
   const [adding, setAdding] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
@@ -140,7 +150,13 @@ export default function HeroStories({
                 <button
                   type="button"
                   className="cv-item-name"
-                  onClick={() => setOpen(isOpen ? null : story.id)}
+                  onClick={() => {
+                    const next = isOpen ? null : story.id
+                    setOpen(next)
+                    // Opening a story brings it up in the preview, so the crop
+                    // and the titles are edited against the right photograph.
+                    onShowStory?.(next ? i : null)
+                  }}
                   aria-expanded={isOpen}
                 >
                   <span className="cv-item-label">{text.titles[story.id] || story.title}</span>
@@ -217,6 +233,7 @@ export default function HeroStories({
                     <div className="cv-focal">
                       <span className="cv-focal-label">Crop</span>
                       <FocalPicker
+                        onDevice={onDevice}
                         imageUrl={`${publicUrl}/${story.imagePath}`}
                         desktop={{ x: focal.x, y: focal.y }}
                         mobile={{ x: focal.mx, y: focal.my }}

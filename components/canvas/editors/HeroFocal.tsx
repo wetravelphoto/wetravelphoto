@@ -20,11 +20,14 @@ export default function HeroFocal({
   imagePath,
   publicUrl,
   onChange,
+  onDevice,
 }: {
   value: unknown
   imagePath: string | null
   publicUrl: string
   onChange: (next: Focal) => void
+  /** Puts the preview into the width whose crop is being edited. */
+  onDevice?: (device: 'desktop' | 'mobile') => void
 }) {
   const focal = (value ?? {}) as Focal
 
@@ -50,6 +53,7 @@ export default function HeroFocal({
         imageUrl={`${publicUrl}/${imagePath}`}
         desktop={{ x: focal.x ?? 0.5, y: focal.y ?? 0.5 }}
         mobile={{ x: focal.mx ?? 0.5, y: focal.my ?? 0.5 }}
+        onDevice={onDevice}
         onChange={({ desktop, mobile }) =>
           onChange({ x: desktop.x, y: desktop.y, mx: mobile.x, my: mobile.y })
         }

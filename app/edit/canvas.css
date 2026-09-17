@@ -1581,3 +1581,46 @@
     transition: none;
   }
 }
+
+/* Expand / collapse every group at once. */
+
+.cv-fold-all {
+  align-self: flex-end;
+  margin: -0.2rem 0 0.1rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cv-accent);
+  font: inherit;
+  font-size: 0.66rem;
+  cursor: pointer;
+}
+
+.cv-fold-all:hover {
+  text-decoration: underline;
+}
+
+.cv-type-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.cv-type-head .cv-fold {
+  width: auto;
+}
+
+/* A section whose typography no longer follows the site says so while folded,
+   or clearing an override you cannot see would be guesswork. */
+.cv-type-dot {
+  width: 5px;
+  height: 5px;
+  margin-left: 0.3rem;
+  border-radius: 50%;
+  background: var(--cv-accent);
+}
+
+.cv-type-head .cv-type-clear {
+  margin-left: auto;
+  white-space: nowrap;
+}

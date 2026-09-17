@@ -49,6 +49,8 @@ export default function HomeHero({
   styleVars?: React.CSSProperties
 }) {
   const [active, setActive] = useState(0)
+  // Held here so the rotation can be paused while a story is being edited.
+  const [pinned, setPinned] = useState<number | null>(null)
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -59,8 +61,38 @@ export default function HomeHero({
     return () => query.removeEventListener('change', update)
   }, [])
 
+  /**
+   * In the editor, the panel can ask for one story to be held on screen.
+   * Without it, editing the second story's crop happens against whichever
+   * photograph the rotation happens to be showing — which is editing blind.
+   *
+   * ABOVE the early return, because hooks have to run in the same order on
+   * every render and `items.length === 0` is a real case — a site with no
+   * published stories renders nothing here.
+   */
+  useEffect(() => {
+    if (!editable) return
+
+    const onPin = (e: Event) => {
+      const index = (e as CustomEvent<{ index: number | null }>).detail?.index ?? null
+      setPinned(index)
+      if (index !== null) setActive(index)
+    }
+
+    window.addEventListener('wtp:hero-story', onPin)
+    return () => window.removeEventListener('wtp:hero-story', onPin)
+  }, [editable])
+
   if (items.length === 0) return null
-  const current = items[active]
+
+  /**
+   * What is actually on screen. `active` is the rotation; `pinned` is the
+   * editor holding one story still. Everything below reads THIS — an earlier
+   * version pinned only the words, so hovering a story title slid the
+   * photograph out from under the crop being edited.
+   */
+  const shown = pinned ?? active
+  const current = items[shown]
 
   function step(direction: 1 | -1) {
     setActive((i) => (i + direction + items.length) % items.length)
@@ -72,7 +104,7 @@ export default function HomeHero({
         // Fall back to centre if no focal point has been set for this story
         const point = (isMobile ? item.focalMobile : item.focal) ?? { x: 0.5, y: 0.5 }
         return (
-          <div key={item.slug} className="hero-layer" data-active={i === active} aria-hidden={i !== active}>
+          <div key={item.slug} className="hero-layer" data-active={i === shown} aria-hidden={i !== shown}>
             {item.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -129,7 +161,7 @@ export default function HomeHero({
       <div className="hero-bar-mobile">
         <div className="hero-bar-progress">
           {items.map((_, i) => (
-            <span key={i} data-active={i === active} />
+            <span key={i} data-active={i === shown} />
           ))}
         </div>
 
@@ -162,7 +194,7 @@ export default function HomeHero({
             key={item.slug}
             href={`/journal/${item.slug}`}
             className="hero-picker-item"
-            data-active={i === active}
+            data-active={i === shown}
             onMouseEnter={() => setActive(i)}
             onFocus={() => setActive(i)}
           >

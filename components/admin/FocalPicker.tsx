@@ -14,11 +14,18 @@ export default function FocalPicker({
   desktop,
   mobile,
   onChange,
+  onDevice,
 }: {
   imageUrl: string
   desktop: FocalPoint
   mobile: FocalPoint
   onChange: (next: { desktop: FocalPoint; mobile: FocalPoint }) => void
+  /**
+   * Which crop is being looked at. The canvas uses it to put the preview into
+   * the matching width — cropping for the phone while looking at the desktop
+   * layout is guessing.
+   */
+  onDevice?: (device: 'desktop' | 'mobile') => void
 }) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [dragging, setDragging] = useState(false)
@@ -69,10 +76,24 @@ export default function FocalPicker({
   return (
     <div className="focal-picker">
       <div className="focal-tabs">
-        <button type="button" onClick={() => setDevice('desktop')} data-active={device === 'desktop'}>
+        <button
+          type="button"
+          onClick={() => {
+            setDevice('desktop')
+            onDevice?.('desktop')
+          }}
+          data-active={device === 'desktop'}
+        >
           Desktop
         </button>
-        <button type="button" onClick={() => setDevice('mobile')} data-active={device === 'mobile'}>
+        <button
+          type="button"
+          onClick={() => {
+            setDevice('mobile')
+            onDevice?.('mobile')
+          }}
+          data-active={device === 'mobile'}
+        >
           Mobile
         </button>
         <button type="button" onClick={reset} className="focal-reset">

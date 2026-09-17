@@ -54,24 +54,48 @@ export default function SectionFields({
 
   const fields = visibleFields(def, values)
 
-  const groups: { name: string | null; fields: Field[] }[] = []
+  /**
+   * Fields grouped by their `group`, with the ungrouped ones gathered under a
+   * name of their own.
+   *
+   * Most section types leave the main fields ungrouped — the hero's mode, title
+   * and sub-heading have no `group` — which meant they drew no heading, so in
+   * the canvas there was nothing to fold and the panel looked as though folding
+   * had never been built. An unnamed group is still a group; it just needed a
+   * name to be one.
+   */
+  const FIRST = 'Content'
+
+  const groups: { name: string; fields: Field[] }[] = []
   for (const field of fields) {
-    const name = field.group ?? null
+    const name = field.group ?? FIRST
     const last = groups[groups.length - 1]
     if (last && last.name === name) last.fields.push(field)
     else groups.push({ name, fields: [field] })
   }
 
+  const allKeys = groups.map((g, i) => `${g.name}-${i}`)
+  const allShut = collapsible && allKeys.every((k) => folded.has(k))
+
   return (
     <div className="sec-fields">
+      {collapsible && groups.length > 1 && (
+        <button
+          type="button"
+          className="cv-fold-all"
+          onClick={() => setFolded(allShut ? new Set() : new Set(allKeys))}
+        >
+          {allShut ? 'Expand all' : 'Collapse all'}
+        </button>
+      )}
+
       {groups.map((group, i) => {
-        const key = group.name ?? `g${i}`
-        const shut = collapsible && group.name ? folded.has(key) : false
+        const key = `${group.name}-${i}`
+        const shut = collapsible ? folded.has(key) : false
 
         return (
         <div key={key} className="sec-group">
-          {group.name &&
-            (collapsible ? (
+          {collapsible ? (
               <button
                 type="button"
                 className="cv-fold"
@@ -91,9 +115,9 @@ export default function SectionFields({
                 {group.name}
                 {shut && <span className="cv-fold-count">{group.fields.length}</span>}
               </button>
-            ) : (
-              <p className="sec-group-name">{group.name}</p>
-            ))}
+          ) : (
+            <p className="sec-group-name">{group.name}</p>
+          )}
 
           {!shut &&
             group.fields.map((field) => (

@@ -54,6 +54,8 @@ export default function Inspector({
   styleBase,
   onPatch,
   onType,
+  onDevice,
+  onShowStory,
   onSaved,
   onClose,
 }: {
@@ -78,6 +80,10 @@ export default function Inspector({
   onPatch: (field: string, value: string) => void
   /** A typography override for this section's style group. */
   onType: (group: string, changes: Record<string, unknown>) => void
+  /** Put the preview into the width whose crop is being edited. */
+  onDevice: (device: 'desktop' | 'mobile') => void
+  /** Bring one of the hero's stories up in the preview. */
+  onShowStory: (index: number | null) => void
   onSaved: () => void
   onClose: () => void
 }) {
@@ -300,6 +306,7 @@ export default function Inspector({
                   value={value}
                   imagePath={(section.settings.image_path as string) ?? null}
                   publicUrl={publicUrl}
+                  onDevice={onDevice}
                   onChange={(next) => saveValues(section.id, { [field.key]: next })}
                 />
               )
@@ -320,6 +327,8 @@ export default function Inspector({
                   }
                   options={stories}
                   publicUrl={publicUrl}
+                  onDevice={onDevice}
+                  onShowStory={onShowStory}
                   onChange={(values) => saveValues(section.id, values)}
                 />
               )

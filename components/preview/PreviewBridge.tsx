@@ -50,6 +50,7 @@ type Inbound = {
   value?: string
   vars?: Record<string, string>
   fonts?: string[]
+  index?: number
 }
 
 export default function PreviewBridge({ page }: { page: string }) {
@@ -156,6 +157,17 @@ export default function PreviewBridge({ page }: { page: string }) {
           link.href = href
           document.head.appendChild(link)
         }
+        return
+      }
+
+      if (data.type === 'hero-story') {
+        // The hero rotates on its own, so the editor has to be able to say
+        // which story to hold on. Sent as a DOM event rather than handed to the
+        // hero directly: this file has no business importing a section, and the
+        // hero has no business knowing an editor exists.
+        window.dispatchEvent(
+          new CustomEvent('wtp:hero-story', { detail: { index: data.index ?? null } })
+        )
         return
       }
 

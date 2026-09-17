@@ -4,6 +4,7 @@ import { loadDraftPage, draftStatus, draftStyleSettings } from '@/lib/drafts/sto
 import { resolveTokens } from '@/lib/styles/tokens'
 import type { TypeStyles } from '@/lib/type-styles'
 import Canvas, { type CanvasSection } from '@/components/canvas/Canvas'
+import type { StoryOption } from '@/components/canvas/editors/HeroStories'
 import '@/app/edit/canvas.css'
 
 /**
@@ -55,6 +56,21 @@ export default async function EditPage({
     draftStyleSettings(),
   ])
 
+  // Published stories, for the hero's story picker. Fetched here rather than in
+  // the editor because the editor is a client component and this is a table it
+  // has no business reaching into.
+  const { data: postRows } = await supabase
+    .from('blog_posts')
+    .select('id, title, featured_custom_path')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false })
+
+  const stories: StoryOption[] = (postRows ?? []).map((p) => ({
+    id: p.id as string,
+    title: (p.title as string) ?? 'Untitled',
+    imagePath: (p.featured_custom_path as string) ?? null,
+  }))
+
   const rows: CanvasSection[] = sections.map((s) => ({
     id: s.id,
     type: s.type,
@@ -77,6 +93,7 @@ export default async function EditPage({
       publicUrl={process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''}
       tokens={resolveTokens(style.global_styles, style.global_styles_version)}
       typeStyles={(style.type_styles ?? {}) as TypeStyles}
+      stories={stories}
       initialMode={mode === 'style' ? 'style' : 'content'}
     />
   )

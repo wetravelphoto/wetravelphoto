@@ -26,6 +26,7 @@ import Inspector from '@/components/canvas/Inspector'
 import AddSectionModal from '@/components/canvas/AddSectionModal'
 import PresetRail from '@/components/canvas/PresetRail'
 import StyleMode from '@/components/canvas/StyleMode'
+import type { StoryOption } from '@/components/canvas/editors/HeroStories'
 
 export type CanvasSection = {
   id: string
@@ -64,6 +65,7 @@ export default function Canvas({
   publicUrl,
   tokens,
   typeStyles,
+  stories,
   initialMode = 'content',
 }: {
   page: string
@@ -78,6 +80,8 @@ export default function Canvas({
   tokens: StyleTokens
   /** Per-section overrides, from the draft if there is one. */
   typeStyles: TypeStyles
+  /** Published stories the hero can feature. */
+  stories: StoryOption[]
   initialMode?: Mode
 }) {
   const router = useRouter()
@@ -394,6 +398,7 @@ export default function Canvas({
             section={current}
             def={def}
             publicUrl={publicUrl}
+            stories={stories}
             focusField={focusField}
             sectionStyle={def?.styled ? styleFor(typeStyles, def.styled) : {}}
             styleBase={{

@@ -1366,3 +1366,106 @@
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.4);
   pointer-events: none;
 }
+
+/* ── The hero's stories ──────────────────────────────────────────────────── */
+
+.cv-stories {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cv-story-list {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cv-story {
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+
+.cv-story[data-open='true'] {
+  border-color: var(--cv-line);
+  background: var(--cv-bg);
+}
+
+.cv-story-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.3rem;
+}
+
+.cv-story-head:hover {
+  background: var(--cv-panel-2);
+  border-radius: 4px;
+}
+
+.cv-story-thumb {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 26px;
+  object-fit: cover;
+  border-radius: 3px;
+  background: var(--cv-panel-2);
+}
+
+.cv-story-thumb-empty {
+  display: block;
+  border: 1px dashed var(--cv-line);
+}
+
+.cv-story-head .cv-item-tools {
+  opacity: 0;
+}
+
+.cv-story-head:hover .cv-item-tools,
+.cv-story[data-open='true'] .cv-item-tools,
+.cv-story-head:focus-within .cv-item-tools {
+  opacity: 1;
+}
+
+.cv-story-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.3rem 0.5rem 0.7rem;
+}
+
+/* Choosing one to add */
+
+.cv-story-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 0.35rem;
+  padding: 0.3rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 4px;
+  background: var(--cv-bg);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.cv-story-option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cv-story-option:hover {
+  background: var(--cv-panel-2);
+}

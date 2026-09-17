@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import SectionFields from '@/components/admin/SectionFields'
-import { updateDraftSection, updateDraftSectionValue } from '@/app/actions/canvas'
+import { updateDraftSection, updateDraftSectionValues } from '@/app/actions/canvas'
 import { contentKeys, type Field, type SectionDef } from '@/lib/sections/registry'
 import HeroFocal from '@/components/canvas/editors/HeroFocal'
+import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
 import SectionType from '@/components/canvas/SectionType'
 import type { SectionStyle } from '@/lib/type-styles'
 import type { CanvasSection } from '@/components/canvas/Canvas'
@@ -39,6 +40,7 @@ export default function Inspector({
   section,
   def,
   publicUrl,
+  stories,
   focusField,
   sectionStyle,
   styleBase,
@@ -51,6 +53,8 @@ export default function Inspector({
   section: CanvasSection | null
   def: SectionDef | null
   publicUrl: string
+  /** Published stories the hero can feature. */
+  stories: StoryOption[]
   /**
    * A setting clicked in the page itself — scroll to it and put the cursor in
    * it. The nonce is what makes clicking the same one twice work.
@@ -229,7 +233,32 @@ export default function Inspector({
                   publicUrl={publicUrl}
                   onChange={(next) =>
                     startTransition(async () => {
-                      await updateDraftSectionValue(page, section.id, field.key, next)
+                      await updateDraftSectionValues(page, section.id, { [field.key]: next })
+                      onSaved()
+                    })
+                  }
+                />
+              )
+            }
+
+            if (field.editor === 'hero-stories') {
+              const settings = section.settings as Record<string, unknown>
+              return (
+                <HeroStories
+                  ids={(settings.featured_post_ids as string[]) ?? []}
+                  titles={(settings.titles as Record<string, string>) ?? {}}
+                  subtitles={(settings.subtitles as Record<string, string>) ?? {}}
+                  focals={
+                    (settings.story_focal as Record<
+                      string,
+                      { x: number; y: number; mx: number; my: number }
+                    >) ?? {}
+                  }
+                  options={stories}
+                  publicUrl={publicUrl}
+                  onChange={(values) =>
+                    startTransition(async () => {
+                      await updateDraftSectionValues(page, section.id, values)
                       onSaved()
                     })
                   }

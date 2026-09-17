@@ -225,18 +225,21 @@ async function saveTokens(changes: Partial<StyleTokens>) {
 }
 
 /**
- * Writes ONE setting on one section.
+ * Writes settings on one section, by key.
  *
  * The generic panel saves a whole form at once and deliberately skips `custom`
  * fields — a focal point or a story chooser has no input for FormData to carry.
- * This is how those editors save: the key must exist in the section type's
- * defaults, so an action reached directly cannot invent settings.
+ * This is how those editors save. Several keys at once because one gesture in
+ * the story picker changes four of them (which stories, their titles, their
+ * subtitles, their crops) and four round trips for one drag is three too many.
+ *
+ * Every key must exist in the section type's defaults, so an action reached
+ * directly cannot invent settings.
  */
-export async function updateDraftSectionValue(
+export async function updateDraftSectionValues(
   page: string,
   id: string,
-  key: string,
-  value: unknown
+  values: Record<string, unknown>
 ) {
   await requireEditor()
   const draft = await ensureDraft(page)
@@ -247,15 +250,18 @@ export async function updateDraftSectionValue(
 
   const def = sectionDef(row.type)
   if (!def) throw new Error(`Unknown section type: ${row.type}`)
-  if (!(key in def.defaults)) {
-    throw new Error(`${def.label} has no setting called "${key}".`)
+
+  for (const key of Object.keys(values)) {
+    if (!(key in def.defaults)) {
+      throw new Error(`${def.label} has no setting called "${key}".`)
+    }
   }
 
   await writeDraftPage(
     page,
     rows.map((r) =>
       r.id === id
-        ? { ...r, settings: { ...(r.settings ?? {}), [key]: value }, version: def.version }
+        ? { ...r, settings: { ...(r.settings ?? {}), ...values }, version: def.version }
         : r
     ),
     draft

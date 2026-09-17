@@ -69,7 +69,20 @@ export async function loadPageSections(page = 'home'): Promise<PageSections> {
   const legacy = stored.length === 0
   const rows = legacy ? legacyHomeSections(settings) : stored
 
-  const sections = rows
+  return { sections: resolveRows(rows, legacy), settings, legacy }
+}
+
+/**
+ * Stored rows → drawable sections: type looked up in the registry, settings
+ * filled from that type's defaults, unknown types dropped.
+ *
+ * Exported because the draft layer resolves its own rows the same way. If the
+ * preview resolved settings by any other route it could show something the
+ * live page would not draw, and a preview that can disagree with the page is
+ * worse than no preview.
+ */
+export function resolveRows(rows: StoredSection[], legacy = false): LoadedSection[] {
+  return rows
     .map((row) => {
       const def = sectionDef(row.type)
       const resolved = resolveSettings(row.type, row.settings, row.version ?? 1)
@@ -86,8 +99,6 @@ export async function loadPageSections(page = 'home'): Promise<PageSections> {
       } satisfies LoadedSection
     })
     .filter((s): s is LoadedSection => s !== null)
-
-  return { sections, settings, legacy }
 }
 
 /**

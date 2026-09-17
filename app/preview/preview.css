@@ -1,0 +1,88 @@
+/* The preview frame: the real site, plus the thinnest possible indication of
+   what is selected.
+
+   Everything here is additive and drawn with outlines and absolutely
+   positioned overlays rather than border, padding or background, because any
+   of those would change the layout and the preview would stop being a preview.
+   .pv-section itself gets no box properties beyond position: relative. */
+
+.pv-root {
+  position: relative;
+
+  /* Not a site token. The selection chrome must stay legible whatever colours
+     the draft is wearing, so it deliberately does not follow the palette. */
+  --pv-accent: #4c8dff;
+}
+
+.pv-section {
+  position: relative;
+}
+
+/* The hit target sits above the section so a click always lands on the
+   section, never on a link or a lightbox trigger underneath it. Invisible,
+   and it changes no layout. */
+.pv-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  cursor: pointer;
+}
+
+/* The outline. Separate from the hit target so neither has to compromise. */
+.pv-section::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 41;
+  pointer-events: none;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  transition: outline-color 0.12s ease, background-color 0.12s ease;
+}
+
+.pv-section:hover::after {
+  outline-color: color-mix(in srgb, var(--pv-accent) 55%, transparent);
+}
+
+.pv-section.is-selected::after {
+  outline: 2px solid var(--pv-accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--pv-accent) 6%, transparent);
+}
+
+/* The section's name. Hidden until the section is hovered or selected, so an
+   untouched preview looks exactly like the site. */
+.pv-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 42;
+  padding: 0.28rem 0.6rem;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--pv-accent);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.pv-section:hover > .pv-tag,
+.pv-section.is-selected > .pv-tag {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-section::after,
+  .pv-tag {
+    transition: none;
+  }
+}

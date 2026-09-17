@@ -2,8 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { getSiteSettings } from '@/lib/site'
 import { patchSiteSettings } from '@/lib/site-patch'
+import { recordHistory } from '@/lib/templates/history'
 import { mirrorPage, replaceSections } from '@/lib/sections/store'
 import { tierAllowed } from '@/lib/entitlements'
 import { applyManifest, type TemplateManifest } from '@/lib/templates/manifest'
@@ -34,51 +34,15 @@ function done() {
  * habit, it is the feature: it is what lets the Design page offer "undo" on
  * every row, including on an undo.
  *
+ * recordHistory now lives in lib/templates/history.ts, because publishing from
+ * the canvas needs the same undo point and two copies of it would eventually
+ * disagree.
+ *
  * Nothing here deletes a photograph, a story, a price or a word anyone wrote.
  * The manifest has no way to express those — see lib/templates/manifest.ts —
  * and a section the new look has no slot for is parked and switched off
  * rather than removed.
  */
-async function recordHistory(input: {
-  action: 'apply' | 'update' | 'revert'
-  templateId: string | null
-  templateSlug: string | null
-  templateName: string | null
-  version: number | null
-  note?: string
-}) {
-  const supabase = await createClient()
-  const settings = await getSiteSettings()
-  const before = await liveSections('home')
-  const current = await currentLook()
-
-  const { error } = await supabase.from('site_template_history').insert({
-    action: input.action,
-    template_id: input.templateId,
-    template_slug: input.templateSlug,
-    template_name: input.templateName,
-    version: input.version,
-    sections_before: before,
-    // Both halves, so an undo restores the colours as well as the order.
-    // A row written before 2026-09-16 holds a bare type_styles map; revertTo
-    // handles either shape.
-    styles_before: {
-      type_styles: settings.type_styles ?? {},
-      tokens: settings.global_styles ?? {},
-    },
-    from_template_id: current.look?.id ?? null,
-    from_version: current.version || null,
-    note: input.note ?? null,
-  })
-
-  if (error) {
-    // No history means no way back, and no way back is the one thing this
-    // whole design exists to prevent. Refuse rather than proceed.
-    throw new Error(
-      `Could not save an undo point, so nothing was changed. (${error.message})`
-    )
-  }
-}
 
 /** Writes the manifest into the live site. Assumes history is already saved. */
 async function install(manifest: TemplateManifest, page = 'home') {

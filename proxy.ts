@@ -25,7 +25,16 @@ export default async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user && request.nextUrl.pathname.startsWith('/admin') && request.nextUrl.pathname !== '/admin/login') {
+  const { pathname } = request.nextUrl
+
+  // /preview is the editor's iframe. It renders unpublished work, so it is
+  // gated exactly like /admin — and the route checks the session itself as
+  // well, because a page that shows a draft should not be the one place in the
+  // system that trusts somebody else to have checked.
+  const guarded =
+    (pathname.startsWith('/admin') && pathname !== '/admin/login') || pathname.startsWith('/preview')
+
+  if (!user && guarded) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin/login'
     return NextResponse.redirect(url)
@@ -35,5 +44,5 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/admin/:path*', '/preview/:path*'],
 }

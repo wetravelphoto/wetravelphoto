@@ -232,6 +232,16 @@ end $$;
 
 grant usage on schema public, auth to anon, authenticated;
 
+-- Supabase sets default privileges on the public schema, so a table created by
+-- a later migration is reachable by anon and authenticated without the
+-- migration saying so — which is why none of the migrations grant anything.
+-- Without this line the rehearsal room is stricter than production and a
+-- migration that is perfectly fine fails here with "permission denied",
+-- sending you off to add grants the real database does not need. Found while
+-- rehearsing the site_draft migration.
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to anon, authenticated;
+
 -- the copy-pasted owner check, twenty-two times over
 create policy "Owners and editors manage album shares" on album_clients for all
   using (exists (select 1 from profiles p where p.id = auth.uid()))

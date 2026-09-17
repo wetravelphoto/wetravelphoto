@@ -7,12 +7,21 @@ import {
   discardDraft,
   ensureDraft,
   publishDraft,
+  readDraft,
   writeDraftPage,
   writeDraftStyles,
   type DraftSection,
 } from '@/lib/drafts/store'
+import { getSiteSettings } from '@/lib/site'
 import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
+import { sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
+import {
+  PAIRINGS,
+  PALETTES,
+  resolveTokens,
+  type StyleTokens,
+} from '@/lib/styles/tokens'
 
 /**
  * THE CANVAS'S ACTIONS
@@ -178,9 +187,77 @@ export async function updateDraftSection(page: string, id: string, formData: For
   done(page)
 }
 
-export async function updateDraftStyles(tokens: Record<string, unknown>) {
+// ── Style ────────────────────────────────────────────────────────────────────
+//
+// Style used to write straight to site_settings, which meant changing a colour
+// changed the live site with no draft and no way back. It goes through the
+// draft now like everything else, so colour and type are published with the
+// content they were chosen for.
+
+/** The draft's tokens if it has any, otherwise the live ones. */
+async function currentTokens(): Promise<StyleTokens> {
+  const { draft } = await readDraft()
+  const settings = await getSiteSettings()
+
+  return resolveTokens(
+    draft?.global_styles ?? settings.global_styles,
+    settings.global_styles_version
+  )
+}
+
+/**
+ * Merges changes over what is already there rather than replacing it, so
+ * applying a palette does not silently reset the typography — each control
+ * sends only itself and should mean only itself.
+ */
+async function saveTokens(changes: Partial<StyleTokens>) {
+  const next = { ...(await currentTokens()), ...changes }
+  await writeDraftStyles({ global_styles: trimToDefaults(next) })
+
+  revalidatePath('/edit/home')
+  revalidatePath('/preview/home')
+}
+
+export async function updateDraftStyles(changes: unknown) {
   await requireEditor()
-  await writeDraftStyles({ global_styles: tokens })
+  await saveTokens(sanitizeTokens(changes))
+}
+
+export async function applyDraftPairing(id: string) {
+  await requireEditor()
+
+  const pairing = PAIRINGS.find((p) => p.id === id)
+  if (!pairing) throw new Error(`No pairing called "${id}".`)
+
+  await saveTokens({
+    display_font: pairing.display,
+    body_font: pairing.body,
+    heading_case: pairing.heading_case,
+    heading_tracking: pairing.heading_tracking,
+  })
+}
+
+export async function applyDraftPalette(id: string) {
+  await requireEditor()
+
+  const palette = PALETTES.find((p) => p.id === id)
+  if (!palette) throw new Error(`No palette called "${id}".`)
+
+  await saveTokens({
+    surface: palette.surface,
+    surface_alt: palette.surface_alt,
+    ink: palette.ink,
+    ink_soft: palette.ink_soft,
+    ink_mute: palette.ink_mute,
+    accent: palette.accent,
+  })
+}
+
+/** Back to the values the site shipped with — in the draft, so it is undoable. */
+export async function resetDraftStyles() {
+  await requireEditor()
+  await writeDraftStyles({ global_styles: {} })
+
   revalidatePath('/edit/home')
   revalidatePath('/preview/home')
 }

@@ -931,3 +931,260 @@
     transition: none;
   }
 }
+
+/* ── Style mode ──────────────────────────────────────────────────────────────
+   Presets on the left, individual values on the right, the page in between.
+   Style is a MODE rather than a panel because changing a typeface affects
+   every page — so you want to be looking at a page while you do it. */
+
+.cv-modes {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--cv-bg);
+  border: 1px solid var(--cv-line);
+  border-radius: 5px;
+}
+
+.cv-mode {
+  padding: 0.22rem 0.7rem;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--cv-mute);
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.cv-mode:hover {
+  color: var(--cv-ink);
+}
+
+.cv-mode[data-on='true'] {
+  background: var(--cv-panel-2);
+  color: var(--cv-ink);
+}
+
+/* FOUR children now, not three: title, mode switch, device widths, actions.
+   The original 1fr auto 1fr grid silently wrapped the actions onto a second
+   row the moment the mode switch was added — the kind of thing a green build
+   says nothing about. The two centre groups each take their own auto column
+   and the 1fr edges keep them centred between the title and the buttons. */
+.cv-top {
+  grid-template-columns: 1fr auto auto 1fr;
+  gap: 0.5rem;
+}
+
+/* ── Palettes ────────────────────────────────────────────────────────────── */
+
+.cv-swatches {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cv-swatch {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+
+.cv-swatch:hover {
+  background: var(--cv-panel-2);
+}
+
+.cv-swatch[data-on='true'] {
+  background: rgba(76, 141, 255, 0.14);
+  border-color: rgba(76, 141, 255, 0.4);
+}
+
+/* Each palette drawn in its own colours. A list of names tells you nothing. */
+.cv-swatch-chips {
+  flex: 0 0 auto;
+  display: flex;
+  border: 1px solid var(--cv-line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cv-swatch-chips span {
+  width: 13px;
+  height: 20px;
+}
+
+.cv-swatch-name {
+  font-size: 0.76rem;
+}
+
+/* ── Type pairings ───────────────────────────────────────────────────────── */
+
+.cv-pairings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cv-pairing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+
+.cv-pairing:hover {
+  background: var(--cv-panel-2);
+}
+
+.cv-pairing[data-on='true'] {
+  background: rgba(76, 141, 255, 0.14);
+  border-color: rgba(76, 141, 255, 0.4);
+}
+
+.cv-pairing-display {
+  font-size: 0.92rem;
+  line-height: 1.2;
+  color: var(--cv-ink);
+}
+
+.cv-pairing-body {
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--cv-mute);
+}
+
+.cv-reset {
+  margin-top: auto;
+}
+
+/* ── Colour rows ─────────────────────────────────────────────────────────── */
+
+.cv-colour-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+}
+
+.cv-colour-row input[type='color'] {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--cv-line);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Chrome and Safari draw their own inset swatch; strip it so the colour meets
+   the border. */
+.cv-colour-row input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.cv-colour-row input[type='color']::-webkit-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+.cv-colour-row input[type='color']::-moz-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+
+.cv-colour-name {
+  flex: 1 1 auto;
+  font-size: 0.74rem;
+  color: var(--cv-soft);
+}
+
+.cv-colour-hex {
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cv-mute);
+}
+
+/* ── Sliders ─────────────────────────────────────────────────────────────── */
+
+.cv-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.cv-slider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.72rem;
+  color: var(--cv-soft);
+}
+
+.cv-slider-value {
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cv-mute);
+}
+
+.cv-slider input[type='range'] {
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.cv-slider input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 2px;
+  background: var(--cv-line);
+}
+
+.cv-slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cv-accent);
+}
+
+.cv-slider input[type='range']::-moz-range-track {
+  height: 2px;
+  border-radius: 2px;
+  background: var(--cv-line);
+}
+
+.cv-slider input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cv-accent);
+}
+
+.cv-slider input[type='range']:focus-visible {
+  outline: 2px solid var(--cv-accent);
+  outline-offset: 3px;
+}

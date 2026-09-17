@@ -93,7 +93,7 @@ export default async function DesignPage() {
           <Link href="/edit/home" className="admin-btn admin-btn-sm">
             Open the editor
           </Link>
-          <Link href="/admin/design/style" className="admin-btn admin-btn-ghost admin-btn-sm">
+          <Link href="/edit/home?mode=style" className="admin-btn admin-btn-ghost admin-btn-sm">
             Style
           </Link>
           <Link href="/" target="_blank" className="admin-btn admin-btn-ghost admin-btn-sm">

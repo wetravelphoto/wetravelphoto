@@ -6,15 +6,23 @@ import { useRouter } from 'next/navigation'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import {
   addDraftSection,
+  applyDraftPairing,
+  applyDraftPalette,
   discard,
   publish,
   removeDraftSection,
   reorderDraft,
+  resetDraftStyles,
   setDraftVisible,
+  updateDraftStyles,
 } from '@/app/actions/canvas'
+import { cssVariables, fontsToLoad, type StyleTokens } from '@/lib/styles/tokens'
+import { fontHref } from '@/lib/fonts'
 import SectionRail from '@/components/canvas/SectionRail'
 import Inspector from '@/components/canvas/Inspector'
 import AddSectionModal from '@/components/canvas/AddSectionModal'
+import PresetRail from '@/components/canvas/PresetRail'
+import StyleMode from '@/components/canvas/StyleMode'
 
 export type CanvasSection = {
   id: string
@@ -27,6 +35,7 @@ export type CanvasSection = {
 }
 
 type Device = 'desktop' | 'tablet' | 'phone'
+type Mode = 'content' | 'style'
 
 const WIDTHS: Record<Device, number | null> = { desktop: null, tablet: 820, phone: 390 }
 
@@ -50,6 +59,8 @@ export default function Canvas({
   hasDraft,
   draftUpdatedAt,
   publicUrl,
+  tokens,
+  initialMode = 'content',
 }: {
   page: string
   title: string
@@ -59,12 +70,16 @@ export default function Canvas({
   hasDraft: boolean
   draftUpdatedAt: string | null
   publicUrl: string
+  /** The draft's style if it has any, otherwise the live site's. */
+  tokens: StyleTokens
+  initialMode?: Mode
 }) {
   const router = useRouter()
   const frame = useRef<HTMLIFrameElement>(null)
   const [pending, startTransition] = useTransition()
 
   const [selected, setSelected] = useState<string | null>(null)
+  const [mode, setMode] = useState<Mode>(initialMode)
   const [device, setDevice] = useState<Device>('desktop')
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -97,7 +112,14 @@ export default function Canvas({
   const nonce = useRef(0)
 
   const tell = useCallback(
-    (message: { type: string; id?: string; field?: string; value?: string }) => {
+    (message: {
+      type: string
+      id?: string
+      field?: string
+      value?: string
+      vars?: Record<string, string>
+      fonts?: string[]
+    }) => {
       frame.current?.contentWindow?.postMessage(
         { source: 'wtp-canvas', ...message },
         window.location.origin
@@ -153,6 +175,27 @@ export default function Canvas({
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
+  /**
+   * Style, painted onto the page on the spot.
+   *
+   * The same narrow exception as the text patch, and for the same reason: these
+   * tokens ARE the CSS custom properties the page is drawn from, so writing
+   * them onto the preview is the identity rather than a second renderer. Any
+   * chosen typeface is sent along as a stylesheet href, because a font the
+   * preview has not loaded would otherwise show as a fallback until the next
+   * refresh — which looks exactly like a broken font picker.
+   */
+  const paintStyle = useCallback(
+    (next: StyleTokens) => {
+      tell({
+        type: 'styles',
+        vars: cssVariables(next),
+        fonts: fontsToLoad(next).map(fontHref),
+      })
+    },
+    [tell]
+  )
+
   // Selecting in the rail scrolls the preview to it.
   const choose = (id: string | null) => {
     setSelected(id)
@@ -201,6 +244,27 @@ export default function Canvas({
           {legacy && !hasDraft && (
             <span className="cv-flag cv-flag-quiet">Not yet edited here</span>
           )}
+        </div>
+
+        <div className="cv-modes" role="group" aria-label="What you are editing">
+          {(['content', 'style'] as Mode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              className="cv-mode"
+              data-on={mode === m}
+              aria-pressed={mode === m}
+              onClick={() => {
+                setMode(m)
+                // Selection is a content idea. Leaving a section outlined while
+                // you change the palette draws the eye to one band of a page
+                // you are trying to judge as a whole.
+                if (m === 'style') choose(null)
+              }}
+            >
+              {m === 'content' ? 'Content' : 'Style'}
+            </button>
+          ))}
         </div>
 
         <div className="cv-devices" role="group" aria-label="Preview width">
@@ -263,20 +327,33 @@ export default function Canvas({
         </div>
       )}
 
-      <div className="cv-body">
-        <SectionRail
-          sections={order}
-          selected={selected}
-          onSelect={choose}
-          onReorder={reorder}
-          onToggle={(id, visible) => run(() => setDraftVisible(page, id, visible))}
-          onRemove={(id, label) => {
-            if (confirm(`Remove the ${label} section from this page?`)) {
-              run(() => removeDraftSection(page, id), () => setSelected(null))
-            }
-          }}
-          onAdd={() => setPicking(true)}
-        />
+      <div className="cv-body" data-mode={mode}>
+        {mode === 'style' ? (
+          <PresetRail
+            tokens={tokens}
+            onPairing={(id) => run(() => applyDraftPairing(id))}
+            onPalette={(id) => run(() => applyDraftPalette(id))}
+            onReset={() => {
+              if (confirm('Put the colours and type back to the original?')) {
+                run(() => resetDraftStyles())
+              }
+            }}
+          />
+        ) : (
+          <SectionRail
+            sections={order}
+            selected={selected}
+            onSelect={choose}
+            onReorder={reorder}
+            onToggle={(id, visible) => run(() => setDraftVisible(page, id, visible))}
+            onRemove={(id, label) => {
+              if (confirm(`Remove the ${label} section from this page?`)) {
+                run(() => removeDraftSection(page, id), () => setSelected(null))
+              }
+            }}
+            onAdd={() => setPicking(true)}
+          />
+        )}
 
         <main className="cv-stage">
           <div className="cv-frame-wrap" data-device={device}>
@@ -290,21 +367,30 @@ export default function Canvas({
           </div>
         </main>
 
-        <Inspector
-          page={page}
-          section={current}
-          def={def}
-          publicUrl={publicUrl}
-          focusField={focusField}
-          onPatch={(field, value) => {
-            if (selected) tell({ type: 'patch', id: selected, field, value })
-          }}
-          onSaved={() => {
-            tell({ type: 'refresh' })
-            router.refresh()
-          }}
-          onClose={() => choose(null)}
-        />
+        {mode === 'style' ? (
+          <StyleMode
+            tokens={tokens}
+            pending={pending}
+            onPreview={paintStyle}
+            onCommit={(changes) => run(() => updateDraftStyles(changes))}
+          />
+        ) : (
+          <Inspector
+            page={page}
+            section={current}
+            def={def}
+            publicUrl={publicUrl}
+            focusField={focusField}
+            onPatch={(field, value) => {
+              if (selected) tell({ type: 'patch', id: selected, field, value })
+            }}
+            onSaved={() => {
+              tell({ type: 'refresh' })
+              router.refresh()
+            }}
+            onClose={() => choose(null)}
+          />
+        )}
       </div>
 
       {picking && (

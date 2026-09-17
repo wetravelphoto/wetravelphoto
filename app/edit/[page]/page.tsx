@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { loadDraftPage, draftStatus } from '@/lib/drafts/store'
+import { loadDraftPage, draftStatus, draftStyleSettings } from '@/lib/drafts/store'
+import { resolveTokens } from '@/lib/styles/tokens'
 import Canvas, { type CanvasSection } from '@/components/canvas/Canvas'
 import '@/app/edit/canvas.css'
 
@@ -27,8 +28,15 @@ export const metadata = {
 
 const PAGES: Record<string, string> = { home: 'Homepage' }
 
-export default async function EditPage({ params }: { params: Promise<{ page: string }> }) {
+export default async function EditPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ page: string }>
+  searchParams: Promise<{ mode?: string }>
+}) {
   const { page } = await params
+  const { mode } = await searchParams
   if (!PAGES[page]) notFound()
 
   const supabase = await createClient()
@@ -38,7 +46,13 @@ export default async function EditPage({ params }: { params: Promise<{ page: str
 
   if (!user) redirect('/admin/login')
 
-  const [{ sections, legacy }, status] = await Promise.all([loadDraftPage(page), draftStatus()])
+  const [{ sections, legacy }, status, style] = await Promise.all([
+    loadDraftPage(page),
+    draftStatus(),
+    // The draft's tokens if it has any, otherwise the live site's — so opening
+    // Style shows what is actually on screen rather than the saved defaults.
+    draftStyleSettings(),
+  ])
 
   const rows: CanvasSection[] = sections.map((s) => ({
     id: s.id,
@@ -60,6 +74,8 @@ export default async function EditPage({ params }: { params: Promise<{ page: str
       hasDraft={status.hasDraft}
       draftUpdatedAt={status.updatedAt}
       publicUrl={process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''}
+      tokens={resolveTokens(style.global_styles, style.global_styles_version)}
+      initialMode={mode === 'style' ? 'style' : 'content'}
     />
   )
 }

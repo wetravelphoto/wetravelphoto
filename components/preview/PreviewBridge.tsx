@@ -48,6 +48,8 @@ type Inbound = {
   id?: string
   field?: string
   value?: string
+  vars?: Record<string, string>
+  fonts?: string[]
 }
 
 export default function PreviewBridge({ page }: { page: string }) {
@@ -129,6 +131,31 @@ export default function PreviewBridge({ page }: { page: string }) {
         // renderer splits into paragraphs — this is not a case a patch can
         // express, and the refresh handles it instead.
         if (node && node.childElementCount === 0) node.textContent = data.value ?? ''
+        return
+      }
+
+      if (data.type === 'styles' && data.vars) {
+        // The same narrow exception as the text patch: these ARE the custom
+        // properties the page is drawn from, so setting them is the identity
+        // rather than a second renderer. They go on .pv-root, which is where
+        // the preview route writes them on the server too — so the refresh
+        // that follows lands on the same element and nothing flickers back.
+        const root = document.querySelector<HTMLElement>('.pv-root')
+        if (root) {
+          for (const [name, value] of Object.entries(data.vars)) {
+            root.style.setProperty(name, value)
+          }
+        }
+
+        // A typeface the preview has not loaded would fall back silently, which
+        // looks exactly like a broken font picker.
+        for (const href of data.fonts ?? []) {
+          if (document.querySelector(`link[href="${CSS.escape(href)}"]`)) continue
+          const link = document.createElement('link')
+          link.rel = 'stylesheet'
+          link.href = href
+          document.head.appendChild(link)
+        }
         return
       }
 

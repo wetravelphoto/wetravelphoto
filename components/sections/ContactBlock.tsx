@@ -15,6 +15,7 @@ export default function ContactBlock({
 
   return (
     <ContactSection
+      editable={ctx.editable}
       styleVars={styleVars(ctx.styles, 'contact')}
       settings={{
         eyebrow: str(settings, 'eyebrow'),

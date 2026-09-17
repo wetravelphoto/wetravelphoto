@@ -9,10 +9,14 @@ export default function InstagramFeed({
   posts,
   heading,
   handle,
+  editable = false,
 }: {
   posts: InstagramPost[]
   heading: string | null
   handle: string | null
+  /** True only in the editor's preview. The handle comes from Settings, so it
+   *  is not tagged — only the heading belongs to this section. */
+  editable?: boolean
 }) {
   if (posts.length === 0) return null
 
@@ -25,7 +29,9 @@ export default function InstagramFeed({
   return (
     <section className="ig-section">
       <div className="ig-head">
-        <h2 className="ig-heading">{heading || 'Instagram'}</h2>
+        <h2 className="ig-heading" {...(editable ? { 'data-field': 'heading' } : {})}>
+          {heading || 'Instagram'}
+        </h2>
         {profileUrl && (
           <a href={profileUrl} target="_blank" rel="noopener" className="ig-handle">
             @{handle?.replace('@', '')}

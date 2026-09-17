@@ -3,7 +3,14 @@
 import { useState } from 'react'
 import { sendMessage } from '@/app/actions/contact'
 
-export default function ContactForm({ note }: { note?: string | null }) {
+export default function ContactForm({
+  note,
+  editable = false,
+}: {
+  note?: string | null
+  /** True only in the editor's preview, so the note can be selected on its own. */
+  editable?: boolean
+}) {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [error, setError] = useState<string | null>(null)
 
@@ -64,7 +71,11 @@ export default function ContactForm({ note }: { note?: string | null }) {
           </svg>
         </button>
 
-        {note && <span className="contact-note">{note}</span>}
+        {note && (
+          <span className="contact-note" {...(editable ? { 'data-field': 'note' } : {})}>
+            {note}
+          </span>
+        )}
       </div>
     </form>
   )

@@ -18,6 +18,7 @@ export default function InstagramSection({
       posts={ctx.instagram.slice(0, num(settings, 'count', 9))}
       heading={str(settings, 'heading')}
       handle={ctx.settings.instagram_handle}
+      editable={ctx.editable}
     />
   )
 }

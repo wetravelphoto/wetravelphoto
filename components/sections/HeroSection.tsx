@@ -67,6 +67,7 @@ export default function HeroSection({
           logoUrl={ctx.settings.logo_header_path ? photoUrl(ctx.settings.logo_header_path) : null}
           siteTitle={ctx.settings.site_title}
           styleVars={vars}
+          editable={ctx.editable}
         />
       ) : (
         <HomeHero

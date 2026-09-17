@@ -17,6 +17,12 @@ export type FixedHeroProps = {
   logoUrl: string | null
   siteTitle: string
   styleVars?: React.CSSProperties
+  /**
+   * True only inside the editor's preview: tags the title, subtitle and button
+   * so each can be hovered and selected on its own. This component takes props
+   * rather than a settings object, so the flag comes in the same way.
+   */
+  editable?: boolean
 }
 
 /**
@@ -36,7 +42,9 @@ export default function FixedHero({
   logoUrl,
   siteTitle,
   styleVars,
+  editable = false,
 }: FixedHeroProps) {
+  const field = (key: string) => (editable ? { 'data-field': key } : {})
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -74,10 +82,18 @@ export default function FixedHero({
 
       {(title || subtitle || (ctaLabel && ctaHref)) && (
         <div className="hero-fixed-copy">
-          {title && <h1 className="hero-fixed-title">{title}</h1>}
-          {subtitle && <p className="hero-fixed-sub">{subtitle}</p>}
+          {title && (
+            <h1 className="hero-fixed-title" {...field('title')}>
+              {title}
+            </h1>
+          )}
+          {subtitle && (
+            <p className="hero-fixed-sub" {...field('subtitle')}>
+              {subtitle}
+            </p>
+          )}
           {ctaLabel && ctaHref && (
-            <Link href={ctaHref} className="hero-fixed-cta">
+            <Link href={ctaHref} className="hero-fixed-cta" {...field('cta_label')}>
               {ctaLabel}
             </Link>
           )}

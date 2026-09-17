@@ -7,18 +7,23 @@ import { useRouter } from 'next/navigation'
  * THE WIRE BETWEEN THE CANVAS AND THE PAGE
  * ════════════════════════════════════════
  *
- * Runs inside the preview iframe. Two jobs:
+ * Runs inside the preview iframe. Three jobs:
  *
- *   · a click anywhere in the page tells the editor which section was hit
- *   · the editor can ask for a re-render, or ask for a section to be
- *     highlighted and scrolled to
+ *   · a click tells the editor what was hit — the section, and the individual
+ *     setting if the click landed on one
+ *   · the editor can ask for a re-render, or for a section to be highlighted
+ *     and scrolled to
+ *   · the editor can patch a single piece of text straight into the page while
+ *     it is being typed
  *
- * "Changes appear instantly" is done with router.refresh() rather than by
- * patching the DOM from the editor's copy of the settings. Refresh re-runs the
- * server components, so what appears is what the real renderer produces from
- * what is really in the draft. Optimistic DOM patching would be faster by a
- * few hundred milliseconds and would drift from the page it claims to be
- * showing — which is the one thing a preview must never do.
+ * ON THE PATCH, which is the one thing here that could become a lie. The rule
+ * is in lib/sections/editable.ts and it is narrow on purpose: a patch only ever
+ * writes a string into an element that has NO element children, so it can only
+ * express the case where the server's output is that same string. Anything
+ * else — a heading that changes the layout, a number, an image, a paragraph
+ * that splits — is left to the refresh that follows a moment later. The patch
+ * buys the feel of typing directly onto the page; the refresh is what keeps it
+ * honest.
  *
  * Both windows are same-origin, and every message is checked against that
  * before it is read or sent. A preview frame is not a place to accept
@@ -27,8 +32,23 @@ import { useRouter } from 'next/navigation'
 
 type Outbound =
   | { source: 'wtp-preview'; type: 'ready'; page: string }
-  | { source: 'wtp-preview'; type: 'select'; id: string; sectionType: string }
+  | {
+      source: 'wtp-preview'
+      type: 'select'
+      id: string
+      sectionType: string
+      /** The setting that was clicked, when the click landed on one. */
+      field?: string
+    }
   | { source: 'wtp-preview'; type: 'clear' }
+
+type Inbound = {
+  source?: string
+  type?: string
+  id?: string
+  field?: string
+  value?: string
+}
 
 export default function PreviewBridge({ page }: { page: string }) {
   const router = useRouter()
@@ -51,9 +71,9 @@ export default function PreviewBridge({ page }: { page: string }) {
       const target = event.target as HTMLElement | null
       const node = target?.closest<HTMLElement>('.pv-section')
 
-      // Nothing in the preview navigates. A click here means "select this",
-      // and following the link would take the editor's iframe somewhere the
-      // editor has no way to come back from.
+      // Nothing in the preview navigates. A click here means "select this", and
+      // following the link would take the editor's iframe somewhere the editor
+      // has no way to come back from.
       const link = target?.closest('a, button')
       if (link) {
         event.preventDefault()
@@ -69,6 +89,13 @@ export default function PreviewBridge({ page }: { page: string }) {
       const id = node.getAttribute('data-section-id') ?? ''
       paint(id)
 
+      // The nearest tagged setting, if the click landed inside one. Searched
+      // from the click outwards and stopped at the section, so a click on the
+      // section's background selects the section and nothing more.
+      const marked = target?.closest<HTMLElement>('[data-field]')
+      const field =
+        marked && node.contains(marked) ? (marked.getAttribute('data-field') ?? undefined) : undefined
+
       // The type, not the label: the editor has the registry and can name it
       // itself, and sending a display string over the wire would mean two
       // places deciding what a section is called.
@@ -77,16 +104,31 @@ export default function PreviewBridge({ page }: { page: string }) {
         type: 'select',
         id,
         sectionType: node.getAttribute('data-section-type') ?? '',
+        field,
       })
     }
 
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== origin) return
-      const data = event.data as { source?: string; type?: string; id?: string } | null
+      const data = event.data as Inbound | null
       if (!data || data.source !== 'wtp-canvas') return
 
       if (data.type === 'refresh') {
         router.refresh()
+        return
+      }
+
+      if (data.type === 'patch' && data.id && data.field) {
+        const node = document.querySelector<HTMLElement>(
+          `.pv-section[data-section-id="${CSS.escape(data.id)}"] [data-field="${CSS.escape(data.field)}"]`
+        )
+
+        // No element children means the element's whole content is this
+        // setting's text, so writing the string in is exactly what the server
+        // would have rendered. If it has children — the intro's body, which the
+        // renderer splits into paragraphs — this is not a case a patch can
+        // express, and the refresh handles it instead.
+        if (node && node.childElementCount === 0) node.textContent = data.value ?? ''
         return
       }
 
@@ -108,10 +150,10 @@ export default function PreviewBridge({ page }: { page: string }) {
     window.addEventListener('message', onMessage)
 
     // router.refresh() replaces the rendered sections with fresh elements,
-    // which drops the outline — and the selection has not changed, so losing
-    // it on every keystroke would be wrong. Watching the DOM rather than
-    // guessing at refresh timing is what makes this reliable: whenever the
-    // sections are rebuilt, the outline goes back where it was.
+    // which drops the outline — and the selection has not changed, so losing it
+    // on every keystroke would be wrong. Watching the DOM rather than guessing
+    // at refresh timing is what makes this reliable: whenever the sections are
+    // rebuilt, the outline goes back where it was.
     let queued = 0
     const observer = new MutationObserver(() => {
       if (!selected.current || queued) return

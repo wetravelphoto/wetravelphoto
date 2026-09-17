@@ -14,22 +14,19 @@
   --pv-accent: #4c8dff;
 }
 
+/* THERE IS NO BLANKET OVERLAY OVER THE SECTION.
+   The first version had one — a transparent ::before across the whole section,
+   so a click could never land on a link underneath. It worked, and it also
+   meant nothing inside a section could ever be hovered, which is exactly what
+   field-level selection needs. Links are neutralised in the click handler
+   instead (capture phase, preventDefault), which leaves hover working all the
+   way down to the individual heading. */
 .pv-section {
   position: relative;
-}
-
-/* The hit target sits above the section so a click always lands on the
-   section, never on a link or a lightbox trigger underneath it. Invisible,
-   and it changes no layout. */
-.pv-section::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 40;
   cursor: pointer;
 }
 
-/* The outline. Separate from the hit target so neither has to compromise. */
+/* The outline. */
 .pv-section::after {
   content: '';
   position: absolute;
@@ -41,7 +38,10 @@
   transition: outline-color 0.12s ease, background-color 0.12s ease;
 }
 
-.pv-section:hover::after {
+/* The section outlines on hover — unless the cursor is over one of its own
+   settings, in which case that setting outlines instead and the section stays
+   quiet. Two outlines at once reads as a bug. */
+.pv-section:hover:not(:has([data-field]:hover))::after {
   outline-color: color-mix(in srgb, var(--pv-accent) 55%, transparent);
 }
 
@@ -83,6 +83,38 @@
 @media (prefers-reduced-motion: reduce) {
   .pv-section::after,
   .pv-tag {
+    transition: none;
+  }
+}
+
+
+/* ── A single setting ────────────────────────────────────────────────────────
+   Hovering the heading itself, rather than the section around it. Drawn with
+   outline and outline-offset so nothing reflows: an editor that nudges the
+   page every time the cursor crosses it is unusable. */
+
+[data-field] {
+  cursor: text;
+  transition: outline-color 0.1s ease, background-color 0.1s ease;
+  outline: 1.5px solid transparent;
+  outline-offset: 3px;
+  border-radius: 1px;
+}
+
+[data-field]:hover {
+  outline-color: var(--pv-accent);
+  background-color: color-mix(in srgb, var(--pv-accent) 9%, transparent);
+}
+
+/* A link that is also a setting — the hero's button — keeps its own cursor so
+   it does not pretend to be a text field. */
+a[data-field]:hover,
+button[data-field]:hover {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-field] {
     transition: none;
   }
 }

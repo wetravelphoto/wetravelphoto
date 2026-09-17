@@ -34,7 +34,7 @@ export default async function PageBody({
   selectable?: boolean
 }) {
   const visible = sections.filter((s) => s.visible)
-  const ctx = await buildContext(visible, settings)
+  const ctx = await buildContext(visible, settings, { editable: selectable })
 
   // The header goes transparent only when something full-bleed is actually
   // drawn underneath it.

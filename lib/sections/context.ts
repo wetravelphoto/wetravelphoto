@@ -45,6 +45,14 @@ export type AlbumRow = {
 type AlbumWithCover = AlbumRow & { coverUrl: string | null; coverSrcSet?: string }
 
 export type SectionContext = {
+  /**
+   * True only inside the editor's preview. Renderers use it to tag their
+   * editable text with data-field, which is what lets you hover a heading in
+   * the page and have the right panel jump to that field.
+   *
+   * Off everywhere else, so the public HTML carries none of it.
+   */
+  editable: boolean
   settings: SiteSettings
   styles: TypeStyles
   posts: PostRow[]
@@ -62,7 +70,8 @@ export type SectionContext = {
  */
 export async function buildContext(
   sections: LoadedSection[],
-  settings: SiteSettings
+  settings: SiteSettings,
+  options: { editable?: boolean } = {}
 ): Promise<SectionContext> {
   const needs = neededData(sections)
   const supabase = await createClient()
@@ -105,6 +114,7 @@ export async function buildContext(
     : []
 
   return {
+    editable: options.editable ?? false,
     settings,
     styles: (settings.type_styles ?? {}) as TypeStyles,
     posts: (postResult.data ?? []) as PostRow[],

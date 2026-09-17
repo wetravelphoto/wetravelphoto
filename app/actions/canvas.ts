@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { randomUUID } from 'crypto'
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 import {
   discardDraft,
   ensureDraft,
@@ -31,14 +31,11 @@ import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
  * directly has no page in front of it.
  */
 
-async function requireEditor(): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) throw new Error('You are signed out. Sign in again and your draft will still be here.')
-}
+/**
+ * Request-cached, so calling it here and again inside the draft write costs one
+ * round trip to the auth server rather than two. See lib/auth.ts.
+ */
+const requireEditor = requireUser
 
 /**
  * The editor and its preview. Not '/' — the live page has not changed, and
@@ -79,7 +76,7 @@ export async function reorderDraft(page: string, orderedIds: string[]) {
   // never be able to lose a section because two tabs disagreed about the list.
   for (const row of rows) if (!orderedIds.includes(row.id)) next.push(row)
 
-  await writeDraftPage(page, next)
+  await writeDraftPage(page, next, draft)
   done(page)
 }
 
@@ -90,7 +87,8 @@ export async function setDraftVisible(page: string, id: string, visible: boolean
 
   await writeDraftPage(
     page,
-    rows.map((r) => (r.id === id ? { ...r, visible } : r))
+    rows.map((r) => (r.id === id ? { ...r, visible } : r)),
+    draft
   )
   done(page)
 }
@@ -123,7 +121,7 @@ export async function addDraftSection(page: string, type: string, afterId?: stri
   const next = [...rows]
   next.splice(at, 0, row)
 
-  await writeDraftPage(page, next)
+  await writeDraftPage(page, next, draft)
   done(page)
 
   // So the editor can select what it just added.
@@ -141,7 +139,8 @@ export async function removeDraftSection(page: string, id: string) {
 
   await writeDraftPage(
     page,
-    rows.filter((r) => r.id !== id)
+    rows.filter((r) => r.id !== id),
+    draft
   )
   done(page)
 }
@@ -172,7 +171,8 @@ export async function updateDraftSection(page: string, id: string, formData: For
             version: def.version,
           }
         : r
-    )
+    ),
+    draft
   )
 
   done(page)

@@ -86,12 +86,25 @@ export default function Canvas({
         .filter((s): s is CanvasSection => s !== undefined))
     : sections
 
-  const tell = useCallback((message: { type: string; id?: string }) => {
-    frame.current?.contentWindow?.postMessage(
-      { source: 'wtp-canvas', ...message },
-      window.location.origin
-    )
-  }, [])
+  /**
+   * A setting clicked in the page, so the inspector can jump straight to it.
+   *
+   * Carries a nonce because the interesting case is clicking the SAME heading
+   * twice — after tabbing away, say. On a bare string the second click would
+   * change nothing and the effect that focuses the input would never re-run.
+   */
+  const [focusField, setFocusField] = useState<{ field: string; nonce: number } | null>(null)
+  const nonce = useRef(0)
+
+  const tell = useCallback(
+    (message: { type: string; id?: string; field?: string; value?: string }) => {
+      frame.current?.contentWindow?.postMessage(
+        { source: 'wtp-canvas', ...message },
+        window.location.origin
+      )
+    },
+    []
+  )
 
   /** Run an action, then re-render the preview and this rail. */
   const run = useCallback(
@@ -117,11 +130,23 @@ export default function Canvas({
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return
-      const data = event.data as { source?: string; type?: string; id?: string } | null
+      const data = event.data as {
+        source?: string
+        type?: string
+        id?: string
+        field?: string
+      } | null
       if (!data || data.source !== 'wtp-preview') return
 
-      if (data.type === 'select' && data.id) setSelected(data.id)
-      if (data.type === 'clear') setSelected(null)
+      if (data.type === 'select' && data.id) {
+        setSelected(data.id)
+        setFocusField(data.field ? { field: data.field, nonce: ++nonce.current } : null)
+      }
+
+      if (data.type === 'clear') {
+        setSelected(null)
+        setFocusField(null)
+      }
     }
 
     window.addEventListener('message', onMessage)
@@ -131,6 +156,7 @@ export default function Canvas({
   // Selecting in the rail scrolls the preview to it.
   const choose = (id: string | null) => {
     setSelected(id)
+    setFocusField(null)
     tell({ type: 'select', id: id ?? undefined })
   }
 
@@ -269,6 +295,10 @@ export default function Canvas({
           section={current}
           def={def}
           publicUrl={publicUrl}
+          focusField={focusField}
+          onPatch={(field, value) => {
+            if (selected) tell({ type: 'patch', id: selected, field, value })
+          }}
           onSaved={() => {
             tell({ type: 'refresh' })
             router.refresh()

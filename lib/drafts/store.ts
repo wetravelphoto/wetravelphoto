@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { currentUser } from '@/lib/auth'
 import { getSiteSettings, type SiteSettings } from '@/lib/site'
 import { patchSiteSettings } from '@/lib/site-patch'
 import { loadPageSections, resolveRows, type PageSections, type StoredSection } from '@/lib/sections/load'
@@ -199,14 +200,16 @@ export async function ensureDraft(page = 'home'): Promise<SiteDraft> {
 
 async function upsertDraft(draft: SiteDraft): Promise<void> {
   const supabase = await createClient()
-  const { data: auth } = await supabase.auth.getUser()
+  // currentUser() is request-cached, so this rides on the check the action has
+  // already done rather than making a second round trip to the auth server.
+  const user = await currentUser()
 
   const { error } = await supabase.from('site_draft').upsert(
     {
       pages: draft.pages,
       global_styles: draft.global_styles,
       type_styles: draft.type_styles,
-      updated_by: auth.user?.id ?? null,
+      updated_by: user?.id ?? null,
     },
     { onConflict: 'tenant_id' }
   )
@@ -214,9 +217,20 @@ async function upsertDraft(draft: SiteDraft): Promise<void> {
   if (error) throw new Error(`Could not save the draft. (${error.message})`)
 }
 
-/** Replaces one page's section list in the draft. */
-export async function writeDraftPage(page: string, sections: DraftSection[]): Promise<void> {
-  const draft = await ensureDraft(page)
+/**
+ * Replaces one page's section list in the draft.
+ *
+ * `known` is the draft the caller has already read. Every action needs the
+ * current sections before it can change them, so without this the pair of calls
+ * read the same row twice — which on a keystroke-by-keystroke autosave is half
+ * the round trips for nothing.
+ */
+export async function writeDraftPage(
+  page: string,
+  sections: DraftSection[],
+  known?: SiteDraft
+): Promise<void> {
+  const draft = known ?? (await ensureDraft(page))
 
   await upsertDraft({
     ...draft,

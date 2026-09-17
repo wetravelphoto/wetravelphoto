@@ -20,13 +20,24 @@ import type { CanvasSection } from '@/components/canvas/Canvas'
  * commit step guarding nothing — it would only train people to think their
  * unsaved work was safe.
  */
-const DEBOUNCE_MS = 500
+/**
+ * How long after the last keystroke the draft is written.
+ *
+ * The number used to matter for how the editor FELT, because nothing moved in
+ * the page until the write and the refresh had both come back. Now a text edit
+ * shows in the page on the keystroke itself (onPatch, below), so this only
+ * governs how soon the draft is durable — and a slightly longer wait means
+ * fewer writes for a sentence typed straight through.
+ */
+const DEBOUNCE_MS = 450
 
 export default function Inspector({
   page,
   section,
   def,
   publicUrl,
+  focusField,
+  onPatch,
   onSaved,
   onClose,
 }: {
@@ -34,6 +45,13 @@ export default function Inspector({
   section: CanvasSection | null
   def: SectionDef | null
   publicUrl: string
+  /**
+   * A setting clicked in the page itself — scroll to it and put the cursor in
+   * it. The nonce is what makes clicking the same one twice work.
+   */
+  focusField: { field: string; nonce: number } | null
+  /** Text as it is typed, for the page to show immediately. */
+  onPatch: (field: string, value: string) => void
   onSaved: () => void
   onClose: () => void
 }) {
@@ -82,13 +100,43 @@ export default function Inspector({
     if (pendingEdit) send(pendingEdit)
   }
 
-  const queue = () => {
+  const queue = (event: React.FormEvent<HTMLFormElement>) => {
     if (!form.current || !id) return
+
+    // Straight to the page, before anything touches the network. Only plain
+    // text: the preview decides what it can honestly apply, and everything else
+    // arrives with the refresh after the save.
+    const target = event.target as HTMLInputElement | HTMLTextAreaElement | null
+    if (
+      target?.name &&
+      !target.name.startsWith('__present_') &&
+      (target.type === 'text' || target.tagName === 'TEXTAREA')
+    ) {
+      onPatch(target.name, target.value)
+    }
+
     queued.current = { id, data: new FormData(form.current) }
 
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(flush, DEBOUNCE_MS)
   }
+
+  // A setting clicked in the page: bring its input into view and put the cursor
+  // in it, so clicking a heading on the page is the same gesture as clicking
+  // into the heading box.
+  useEffect(() => {
+    if (!focusField || !form.current) return
+
+    const input = form.current.querySelector<HTMLElement>(
+      `[name="${CSS.escape(focusField.field)}"]`
+    )
+    if (!input) return
+
+    input.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    // A frame later, so the scroll is not fought by the focus.
+    const id = requestAnimationFrame(() => input.focus())
+    return () => cancelAnimationFrame(id)
+  }, [focusField, section?.id])
 
   // The selection moved or the panel closed with a keystroke still in flight.
   // Send it rather than dropping it.

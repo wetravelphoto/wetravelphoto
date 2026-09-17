@@ -2,6 +2,7 @@ import { photoUrl } from '@/lib/images'
 import { srcSetFromPath, SIZES_ATTR } from '@/lib/srcset'
 import { styleVars } from '@/lib/type-styles'
 import { str, type SectionSettings } from '@/lib/sections/registry'
+import { editable } from '@/lib/sections/editable'
 import type { SectionContext } from '@/lib/sections/context'
 
 export default function IntroSection({
@@ -36,9 +37,17 @@ export default function IntroSection({
         )}
 
         <div>
-          {kicker && <p className="intro-kicker">{kicker}</p>}
-          {heading && <h2 className="intro-heading">{heading}</h2>}
-          <div className="intro-body">
+          {kicker && (
+            <p className="intro-kicker" {...editable(ctx, 'kicker')}>
+              {kicker}
+            </p>
+          )}
+          {heading && (
+            <h2 className="intro-heading" {...editable(ctx, 'heading')}>
+              {heading}
+            </h2>
+          )}
+          <div className="intro-body" {...editable(ctx, 'body')}>
             {paragraphs.map((para, i) => (
               <p key={i}>{para}</p>
             ))}

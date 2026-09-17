@@ -16,11 +16,16 @@ const DEBOUNCE_MS = 400
 
 export default function StyleMode({
   tokens,
+  overriddenGroups,
+  onClearOverrides,
   onPreview,
   onCommit,
   pending,
 }: {
   tokens: StyleTokens
+  /** Section groups with their own typography, which wins over everything here. */
+  overriddenGroups: string[]
+  onClearOverrides: () => void
   /** Every change, immediately — for painting the page. Never hits the network. */
   onPreview: (tokens: StyleTokens) => void
   /** The settled value, for writing to the draft. */
@@ -91,6 +96,21 @@ export default function StyleMode({
           </p>
         </div>
       </div>
+
+      {overriddenGroups.length > 0 && (
+        <div className="cv-override-warn">
+          <p>
+            {overriddenGroups.length === 1
+              ? 'One section has'
+              : `${overriddenGroups.length} sections have`}{' '}
+            typography of their own — {overriddenGroups.join(', ')} — which wins over the
+            typeface and colour set here.
+          </p>
+          <button type="button" className="cv-type-clear" onClick={onClearOverrides}>
+            Make them all follow the site
+          </button>
+        </div>
+      )}
 
       <div className="cv-insp-form" onBlur={flush}>
         <div className="sec-fields">

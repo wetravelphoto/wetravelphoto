@@ -14,6 +14,7 @@ import {
   reorderDraft,
   resetDraftStyles,
   setDraftVisible,
+  clearDraftSectionTypes,
   updateDraftSectionType,
   updateDraftStyles,
 } from '@/app/actions/canvas'
@@ -375,6 +376,14 @@ export default function Canvas({
         {mode === 'style' ? (
           <StyleMode
             tokens={tokens}
+            overriddenGroups={Object.keys(typeStyles).filter(
+              (g) => Object.keys(typeStyles[g] ?? {}).length > 0
+            )}
+            onClearOverrides={() => {
+              if (confirm('Let every section follow the site style again?')) {
+                run(() => clearDraftSectionTypes())
+              }
+            }}
             pending={pending}
             onPreview={paintStyle}
             onCommit={(changes) => run(() => updateDraftStyles(changes))}

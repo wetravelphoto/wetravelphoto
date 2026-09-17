@@ -301,6 +301,22 @@ export async function updateDraftSectionType(
   revalidatePath('/preview/home')
 }
 
+/**
+ * Clears every per-section typography override at once.
+ *
+ * Worth its own action because the overrides are invisible until you go looking
+ * for them: a site can have a typeface set on all four section groups, and then
+ * the global picker appears to do nothing at all. It moves, and the headings do
+ * not, and there is no way to tell from the Style panel why.
+ */
+export async function clearDraftSectionTypes() {
+  await requireEditor()
+  await writeDraftStyles({ type_styles: {} })
+
+  revalidatePath('/edit/home')
+  revalidatePath('/preview/home')
+}
+
 /** Back to the values the site shipped with — in the draft, so it is undoable. */
 export async function resetDraftStyles() {
   await requireEditor()

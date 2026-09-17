@@ -1249,3 +1249,26 @@
   font-weight: 500;
   color: var(--cv-soft);
 }
+
+/* A site can have typography set on every section group, and then the global
+   typeface picker appears to do nothing at all — it moves, the headings do
+   not, and the panel gives no clue why. This says so, and offers the way out. */
+
+.cv-override-warn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  background: rgba(255, 184, 82, 0.1);
+  border-bottom: 1px solid var(--cv-line);
+}
+
+.cv-override-warn p {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: #ffd79a;
+}

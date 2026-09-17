@@ -80,6 +80,7 @@ export default function HeroSection({
           ctaLabel={str(settings, 'cta_label')}
           ctaHref={str(settings, 'cta_href')}
           styleVars={vars}
+          editable={ctx.editable}
         />
       )}
 

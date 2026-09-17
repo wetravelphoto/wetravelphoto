@@ -29,6 +29,7 @@ export default function HomeHero({
   ctaLabel,
   ctaHref,
   styleVars,
+  editable = false,
 }: {
   items: HeroItem[]
   titlePosition?: string
@@ -38,6 +39,13 @@ export default function HomeHero({
   overlaySubtitle?: string | null
   ctaLabel?: string | null
   ctaHref?: string | null
+  /**
+   * True only inside the editor's preview: tags the overlay title, subtitle and
+   * button so each can be hovered and selected on its own. The story titles
+   * along the bottom are NOT tagged — they come from the posts themselves and
+   * are overridden through a custom editor, not a plain text field.
+   */
+  editable?: boolean
   styleVars?: React.CSSProperties
 }) {
   const [active, setActive] = useState(0)
@@ -95,10 +103,22 @@ export default function HomeHero({
       {/* Copy that belongs to the site rather than to any one story */}
       {(overlayTitle || overlaySubtitle || (ctaLabel && ctaHref)) && (
         <div className="hero-overlay-copy">
-          {overlayTitle && <p className="hero-fixed-title">{overlayTitle}</p>}
-          {overlaySubtitle && <p className="hero-fixed-sub">{overlaySubtitle}</p>}
+          {overlayTitle && (
+            <p className="hero-fixed-title" {...(editable ? { 'data-field': 'title' } : {})}>
+              {overlayTitle}
+            </p>
+          )}
+          {overlaySubtitle && (
+            <p className="hero-fixed-sub" {...(editable ? { 'data-field': 'subtitle' } : {})}>
+              {overlaySubtitle}
+            </p>
+          )}
           {ctaLabel && ctaHref && (
-            <Link href={ctaHref} className="hero-fixed-cta">
+            <Link
+              href={ctaHref}
+              className="hero-fixed-cta"
+              {...(editable ? { 'data-field': 'cta_label' } : {})}
+            >
               {ctaLabel}
             </Link>
           )}

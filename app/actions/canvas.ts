@@ -1,0 +1,210 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { randomUUID } from 'crypto'
+import { createClient } from '@/lib/supabase/server'
+import {
+  discardDraft,
+  ensureDraft,
+  publishDraft,
+  writeDraftPage,
+  writeDraftStyles,
+  type DraftSection,
+} from '@/lib/drafts/store'
+import { readSettingsFromForm } from '@/lib/sections/form'
+import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
+
+/**
+ * THE CANVAS'S ACTIONS
+ * ════════════════════
+ *
+ * Every one of these writes to the draft and NOTHING ELSE. There is no path
+ * through this file that touches page_sections or site_settings — only
+ * publish() does that, and it does it by handing over to lib/drafts/store.ts.
+ *
+ * That is the rule worth keeping as this file grows: if a new action here ever
+ * needs to write to a live table, it belongs somewhere else.
+ *
+ * These are server actions, which means they are public endpoints. Each one
+ * therefore checks the session itself rather than assuming the editor page did
+ * it — the middleware protects the PAGE, not the action, and an action reached
+ * directly has no page in front of it.
+ */
+
+async function requireEditor(): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) throw new Error('You are signed out. Sign in again and your draft will still be here.')
+}
+
+/**
+ * The editor and its preview. Not '/' — the live page has not changed, and
+ * revalidating it on every keystroke would throw away the cache that keeps the
+ * homepage quick for visitors.
+ */
+function done(page: string) {
+  revalidatePath(`/edit/${page}`)
+  revalidatePath(`/preview/${page}`)
+}
+
+// ── Reading the draft into the editor ────────────────────────────────────────
+
+/** Starts a draft if there is not one, and returns the page's sections. */
+export async function beginEditing(page: string): Promise<DraftSection[]> {
+  await requireEditor()
+  const draft = await ensureDraft(page)
+  return draft.pages[page] ?? []
+}
+
+// ── Order, visibility, membership ────────────────────────────────────────────
+
+/**
+ * Takes the whole order every time and rewrites positions 0..n. Cheaper to
+ * reason about than move-up/move-down, and it is what a drag gives you.
+ */
+export async function reorderDraft(page: string, orderedIds: string[]) {
+  await requireEditor()
+  const draft = await ensureDraft(page)
+  const rows = draft.pages[page] ?? []
+  const byId = new Map(rows.map((r) => [r.id, r]))
+
+  const next = orderedIds
+    .map((id) => byId.get(id))
+    .filter((r): r is DraftSection => r !== undefined)
+
+  // Anything the client did not mention is kept, at the end. A reorder should
+  // never be able to lose a section because two tabs disagreed about the list.
+  for (const row of rows) if (!orderedIds.includes(row.id)) next.push(row)
+
+  await writeDraftPage(page, next)
+  done(page)
+}
+
+export async function setDraftVisible(page: string, id: string, visible: boolean) {
+  await requireEditor()
+  const draft = await ensureDraft(page)
+  const rows = draft.pages[page] ?? []
+
+  await writeDraftPage(
+    page,
+    rows.map((r) => (r.id === id ? { ...r, visible } : r))
+  )
+  done(page)
+}
+
+export async function addDraftSection(page: string, type: string, afterId?: string) {
+  await requireEditor()
+
+  const def = sectionDef(type)
+  if (!def) throw new Error(`Unknown section type: ${type}`)
+
+  const draft = await ensureDraft(page)
+  const rows = draft.pages[page] ?? []
+
+  if (def.singleton && rows.some((r) => r.type === type)) {
+    throw new Error(`${def.label} can only appear once on a page.`)
+  }
+
+  const row: DraftSection = {
+    id: randomUUID(),
+    type,
+    position: 0,
+    visible: true,
+    version: def.version,
+    // Empty, not a copy of the defaults: defaults are merged in at read time,
+    // so a row stores only what has actually been changed from them.
+    settings: {},
+  }
+
+  const at = afterId ? rows.findIndex((r) => r.id === afterId) + 1 : rows.length
+  const next = [...rows]
+  next.splice(at, 0, row)
+
+  await writeDraftPage(page, next)
+  done(page)
+
+  // So the editor can select what it just added.
+  return row.id
+}
+
+export async function removeDraftSection(page: string, id: string) {
+  await requireEditor()
+  const draft = await ensureDraft(page)
+  const rows = draft.pages[page] ?? []
+
+  const row = rows.find((r) => r.id === id)
+  const def = row ? sectionDef(row.type) : null
+  if (def?.permanent) throw new Error(`${def.label} can be hidden but not removed.`)
+
+  await writeDraftPage(
+    page,
+    rows.filter((r) => r.id !== id)
+  )
+  done(page)
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+export async function updateDraftSection(page: string, id: string, formData: FormData) {
+  await requireEditor()
+  const draft = await ensureDraft(page)
+  const rows = draft.pages[page] ?? []
+
+  const row = rows.find((r) => r.id === id)
+  if (!row) throw new Error('That section is no longer on the page.')
+
+  const def = sectionDef(row.type)
+  if (!def) throw new Error(`Unknown section type: ${row.type}`)
+
+  const current = (row.settings ?? {}) as SectionSettings
+
+  await writeDraftPage(
+    page,
+    rows.map((r) =>
+      r.id === id
+        ? {
+            ...r,
+            settings: readSettingsFromForm(def, formData, current),
+            // Saving through this release stamps this release's schema version.
+            version: def.version,
+          }
+        : r
+    )
+  )
+
+  done(page)
+}
+
+export async function updateDraftStyles(tokens: Record<string, unknown>) {
+  await requireEditor()
+  await writeDraftStyles({ global_styles: tokens })
+  revalidatePath('/edit/home')
+  revalidatePath('/preview/home')
+}
+
+// ── Going live, and not ──────────────────────────────────────────────────────
+
+export async function publish() {
+  await requireEditor()
+  const result = await publishDraft()
+
+  // NOW the live site changes, so now the live paths are revalidated —
+  // 'layout' because a published style change is emitted in the root layout
+  // and page-level revalidation would leave every page wearing the old colours.
+  revalidatePath('/', 'layout')
+  revalidatePath('/admin/design')
+  revalidatePath('/admin/pages/home')
+  for (const page of result.pages) done(page)
+
+  return result
+}
+
+export async function discard() {
+  await requireEditor()
+  await discardDraft()
+  revalidatePath('/edit/home')
+  revalidatePath('/preview/home')
+}

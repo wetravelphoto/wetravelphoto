@@ -1,0 +1,933 @@
+/* THE CANVAS
+   ══════════
+
+   Dark, because you cannot judge a photograph against white — every serious
+   photo tool is dark for this reason, and this one is looking at photographs
+   all day.
+
+   The chrome deliberately does NOT use the site's own tokens. The root layout
+   writes those onto <html>, so --ink and --surface are in scope here and would
+   have been convenient; using them would mean the editor changed colour every
+   time the photographer changed their palette, and a dark editor would turn
+   white the moment someone chose a pale one. Everything below is its own
+   closed set of cv- variables.
+
+   The middle is the product. The two rails are quiet, narrow, and never
+   compete with what is between them. */
+
+.cv-shell {
+  --cv-bg: #131416;
+  --cv-panel: #1a1c1f;
+  --cv-panel-2: #212429;
+  --cv-line: #2b2f35;
+  --cv-ink: #e8eaed;
+  --cv-soft: #9aa1aa;
+  --cv-mute: #6b727b;
+  --cv-accent: #4c8dff;
+  --cv-go: #2f9e63;
+  --cv-bad: #e0575b;
+  --cv-rail: 268px;
+  --cv-insp: 320px;
+  --cv-top: 52px;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cv-bg);
+  color: var(--cv-ink);
+  font-family: var(--font-body), system-ui, -apple-system, sans-serif;
+  font-size: 0.82rem;
+  overflow: hidden;
+}
+
+.cv-shell[data-busy='true'] .cv-rail,
+.cv-shell[data-busy='true'] .cv-inspector {
+  opacity: 0.6;
+}
+
+.cv-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+
+.cv-top {
+  flex: 0 0 var(--cv-top);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 0.85rem;
+  background: var(--cv-panel);
+  border-bottom: 1px solid var(--cv-line);
+}
+
+.cv-top-left,
+.cv-top-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.cv-top-right {
+  justify-content: flex-end;
+}
+
+.cv-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  color: var(--cv-soft);
+  text-decoration: none;
+  font-size: 1rem;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.cv-back:hover {
+  background: var(--cv-panel-2);
+  color: var(--cv-ink);
+}
+
+.cv-title {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.cv-flag {
+  padding: 0.16rem 0.45rem;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffd79a;
+  background: rgba(255, 184, 82, 0.13);
+  border: 1px solid rgba(255, 184, 82, 0.3);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.cv-flag-quiet {
+  color: var(--cv-mute);
+  background: transparent;
+  border-color: var(--cv-line);
+}
+
+/* Device widths */
+
+.cv-devices {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--cv-bg);
+  border: 1px solid var(--cv-line);
+  border-radius: 5px;
+}
+
+.cv-device {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 24px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--cv-mute);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.cv-device:hover {
+  color: var(--cv-ink);
+}
+
+.cv-device[data-on='true'] {
+  background: var(--cv-panel-2);
+  color: var(--cv-ink);
+}
+
+/* Buttons */
+
+.cv-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 4px;
+  background: var(--cv-panel-2);
+  color: var(--cv-ink);
+  font: inherit;
+  font-size: 0.76rem;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+
+.cv-btn:hover:not(:disabled) {
+  background: #2a2e34;
+}
+
+.cv-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cv-btn-ghost {
+  background: transparent;
+  color: var(--cv-soft);
+}
+
+.cv-btn-ghost:hover:not(:disabled) {
+  color: var(--cv-ink);
+  background: var(--cv-panel-2);
+}
+
+.cv-btn-go {
+  background: var(--cv-go);
+  border-color: var(--cv-go);
+  color: #fff;
+  font-weight: 500;
+}
+
+.cv-btn-go:hover:not(:disabled) {
+  background: #35b070;
+  border-color: #35b070;
+}
+
+/* ── The message bar ─────────────────────────────────────────────────────── */
+
+.cv-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.85rem;
+  background: rgba(76, 141, 255, 0.12);
+  border-bottom: 1px solid var(--cv-line);
+  color: #cfe0ff;
+  font-size: 0.76rem;
+}
+
+.cv-bar-bad {
+  background: rgba(224, 87, 91, 0.13);
+  color: #ffc9cb;
+}
+
+.cv-bar-x {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.cv-bar-x:hover {
+  opacity: 1;
+}
+
+/* ── Three columns ───────────────────────────────────────────────────────── */
+
+.cv-body {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: var(--cv-rail) minmax(0, 1fr) var(--cv-insp);
+  min-height: 0;
+}
+
+/* ── Left rail ───────────────────────────────────────────────────────────── */
+
+.cv-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.7rem 0.55rem 0.55rem;
+  background: var(--cv-panel);
+  border-right: 1px solid var(--cv-line);
+  overflow-y: auto;
+  transition: opacity 0.12s ease;
+}
+
+.cv-rail-head {
+  margin: 0 0 0.5rem 0.35rem;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cv-mute);
+}
+
+.cv-sections {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cv-item {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0.3rem 0.4rem 0.15rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: grab;
+  transition: background 0.1s ease, border-color 0.1s ease, opacity 0.1s ease;
+}
+
+.cv-item:hover {
+  background: var(--cv-panel-2);
+}
+
+.cv-item[data-on='true'] {
+  background: rgba(76, 141, 255, 0.14);
+  border-color: rgba(76, 141, 255, 0.4);
+}
+
+.cv-item[data-hidden='true'] .cv-item-label,
+.cv-item[data-hidden='true'] .cv-item-sub {
+  opacity: 0.42;
+}
+
+.cv-item[data-dragging='true'] {
+  opacity: 0.4;
+}
+
+.cv-item[data-over='true'] {
+  border-top-color: var(--cv-accent);
+}
+
+.cv-grip {
+  flex: 0 0 auto;
+  width: 14px;
+  text-align: center;
+  color: var(--cv-mute);
+  font-size: 0.72rem;
+  cursor: grab;
+}
+
+.cv-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cv-item-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--cv-ink);
+}
+
+.cv-item-sub {
+  font-size: 0.68rem;
+  color: var(--cv-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-item-tools {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.cv-item:hover .cv-item-tools,
+.cv-item[data-on='true'] .cv-item-tools,
+.cv-item:focus-within .cv-item-tools {
+  opacity: 1;
+}
+
+.cv-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--cv-soft);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.cv-ico:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--cv-ink);
+}
+
+.cv-ico:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.cv-ico-bad:hover:not(:disabled) {
+  color: var(--cv-bad);
+}
+
+.cv-add {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border: 1px dashed var(--cv-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cv-soft);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.cv-add:hover {
+  border-color: var(--cv-accent);
+  color: var(--cv-ink);
+}
+
+/* ── The stage ───────────────────────────────────────────────────────────── */
+
+.cv-stage {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--cv-bg);
+  overflow: auto;
+}
+
+.cv-frame-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  transition: padding 0.18s ease;
+}
+
+.cv-frame-wrap[data-device='tablet'],
+.cv-frame-wrap[data-device='phone'] {
+  padding: 1.4rem 0;
+}
+
+.cv-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+  transition: width 0.18s ease;
+}
+
+.cv-frame-wrap[data-device='tablet'] .cv-frame,
+.cv-frame-wrap[data-device='phone'] .cv-frame {
+  height: calc(100% - 2.8rem);
+  border-radius: 6px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Right rail ──────────────────────────────────────────────────────────── */
+
+.cv-inspector {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--cv-panel);
+  border-left: 1px solid var(--cv-line);
+  overflow: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.cv-inspector-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.cv-hint {
+  margin: 0;
+  max-width: 24ch;
+  text-align: center;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--cv-mute);
+}
+
+.cv-insp-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 0.7rem 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--cv-line);
+}
+
+.cv-insp-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.cv-insp-blurb {
+  margin: 0.15rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--cv-mute);
+}
+
+.cv-insp-error {
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #ffc9cb;
+  background: rgba(224, 87, 91, 0.13);
+}
+
+.cv-insp-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0.85rem;
+  overflow-y: auto;
+}
+
+.cv-insp-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 0.85rem;
+  border-top: 1px solid var(--cv-line);
+}
+
+.cv-insp-state {
+  font-size: 0.7rem;
+  color: var(--cv-soft);
+}
+
+.cv-insp-note {
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--cv-mute);
+}
+
+/* ── The field controls, in the dark ─────────────────────────────────────────
+   SectionFields is shared with the light admin forms and brings its own class
+   names. Restyled here rather than importing the admin stylesheet, which would
+   drag the whole admin shell in and fight this one the entire way. */
+
+.cv-inspector .sec-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cv-inspector .sec-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.cv-inspector .sec-group-name {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cv-mute);
+}
+
+.cv-inspector .sec-field {
+  display: block;
+}
+
+.cv-inspector .admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--cv-soft);
+}
+
+.cv-inspector .admin-field input[type='text'],
+.cv-inspector .admin-field input[type='number'],
+.cv-inspector .admin-field textarea,
+.cv-inspector .admin-field select {
+  width: 100%;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 4px;
+  background: var(--cv-bg);
+  color: var(--cv-ink);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.cv-inspector .admin-field textarea {
+  resize: vertical;
+  min-height: 3.5rem;
+}
+
+.cv-inspector .admin-field input:focus,
+.cv-inspector .admin-field textarea:focus,
+.cv-inspector .admin-field select:focus {
+  outline: none;
+  border-color: var(--cv-accent);
+}
+
+.cv-inspector .admin-field input::placeholder,
+.cv-inspector .admin-field textarea::placeholder {
+  color: var(--cv-mute);
+}
+
+.cv-inspector .admin-meta {
+  font-size: 0.66rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--cv-mute);
+}
+
+.cv-inspector .toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+/* Toggle renders a hidden checkbox inside a label with a bare <span> as the
+   track. Without this the browser's own blue checkbox turns up in the middle
+   of the dark panel — which is exactly what it did the first time this screen
+   was rendered. */
+.cv-inspector .toggle-switch {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 30px;
+  height: 17px;
+  margin-top: 1px;
+  cursor: pointer;
+}
+
+.cv-inspector .toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cv-inspector .toggle-switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #33383f;
+  border: 1px solid var(--cv-line);
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.cv-inspector .toggle-switch span::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--cv-soft);
+  transition: transform 0.14s ease, background 0.14s ease;
+}
+
+.cv-inspector .toggle-switch input:checked + span {
+  background: var(--cv-accent);
+  border-color: var(--cv-accent);
+}
+
+.cv-inspector .toggle-switch input:checked + span::after {
+  transform: translateX(13px);
+  background: #fff;
+}
+
+.cv-inspector .toggle-switch input:focus-visible + span {
+  outline: 2px solid var(--cv-accent);
+  outline-offset: 2px;
+}
+
+.cv-inspector .toggle-label {
+  font-size: 0.74rem;
+  color: var(--cv-ink);
+}
+
+.cv-inspector .toggle-note {
+  display: block;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--cv-mute);
+}
+
+.cv-inspector .admin-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 4px;
+  background: var(--cv-panel-2);
+  color: var(--cv-ink);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.cv-inspector .admin-btn:hover {
+  background: #2a2e34;
+}
+
+.cv-inspector .admin-btn-danger:hover {
+  border-color: var(--cv-bad);
+  color: var(--cv-bad);
+}
+
+.cv-inspector .sec-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 2px solid var(--cv-line);
+  background: var(--cv-bg);
+}
+
+.cv-inspector .sec-custom-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--cv-soft);
+}
+
+/* ── Add a section ───────────────────────────────────────────────────────── */
+
+.cv-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.cv-modal-box {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: 100%;
+  background: var(--cv-panel);
+  border: 1px solid var(--cv-line);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.cv-modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--cv-line);
+}
+
+.cv-modal-head h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.cv-modal-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: var(--cv-mute);
+}
+
+.cv-modal-body {
+  padding: 1.1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+
+.cv-family-name {
+  margin: 0 0 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cv-mute);
+}
+
+.cv-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.5rem;
+}
+
+.cv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 5px;
+  background: var(--cv-bg);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.cv-card:hover:not(:disabled) {
+  border-color: var(--cv-accent);
+  background: var(--cv-panel-2);
+}
+
+.cv-card:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cv-card-name {
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.cv-card-blurb {
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--cv-mute);
+}
+
+.cv-card-note {
+  margin-top: 0.15rem;
+  font-size: 0.64rem;
+  color: var(--cv-accent);
+}
+
+/* ── Migration not run yet ───────────────────────────────────────────────── */
+
+.cv-missing {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  padding: 2rem;
+  text-align: center;
+  background: #131416;
+  color: #e8eaed;
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+.cv-missing h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.cv-missing p {
+  margin: 0;
+  max-width: 54ch;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: #9aa1aa;
+}
+
+.cv-missing code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  background: #212429;
+  color: #cfe0ff;
+  font-size: 0.78rem;
+}
+
+.cv-missing .cv-btn {
+  margin-top: 0.4rem;
+  text-decoration: none;
+}
+
+/* ── Narrow screens ──────────────────────────────────────────────────────────
+   The canvas wants width. Below roughly a laptop the rails stack out of the
+   way rather than squeezing the page into a letterbox — an editor you cannot
+   see the page in is not an editor. */
+
+@media (max-width: 1100px) {
+  .cv-shell {
+    --cv-rail: 220px;
+    --cv-insp: 270px;
+  }
+}
+
+@media (max-width: 900px) {
+  .cv-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .cv-rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--cv-line);
+    max-height: 40vh;
+  }
+
+  .cv-inspector {
+    border-left: 0;
+    border-top: 1px solid var(--cv-line);
+    max-height: 55vh;
+  }
+
+  .cv-stage {
+    min-height: 60vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cv-frame,
+  .cv-frame-wrap,
+  .cv-item,
+  .cv-btn,
+  .cv-ico {
+    transition: none;
+  }
+}

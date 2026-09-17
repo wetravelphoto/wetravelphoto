@@ -9,7 +9,8 @@ import {
   mirrorSection,
   mirrorSectionById,
 } from '@/lib/sections/store'
-import { resolveSettings, sectionDef, type Field, type SectionSettings } from '@/lib/sections/registry'
+import { resolveSettings, sectionDef, type SectionSettings } from '@/lib/sections/registry'
+import { readSettingsFromForm } from '@/lib/sections/form'
 
 const PATHS = ['/', '/admin/pages/home', '/admin/design']
 
@@ -141,42 +142,10 @@ export async function removeSection(page: string, id: string) {
   done()
 }
 
-// ── Settings ─────────────────────────────────────────────────────────────────
-
-/**
- * Reads one field back out of a submitted form, using the kind declared in the
- * registry. This is why the field schema exists: a new setting needs no new
- * parsing code, and no section can quietly save a string into a number.
- *
- * A field the panel did not draw — hidden by its `when`, or a custom editor —
- * is left exactly as it was. The panel marks what it drew with a hidden
- * `__present_<key>` input, because an unchecked checkbox is indistinguishable
- * from a field that was never on the page.
- */
-function readField(field: Field, formData: FormData, current: SectionSettings): unknown {
-  if (!formData.has(`__present_${field.key}`)) return current[field.key]
-
-  switch (field.kind) {
-    case 'toggle':
-      return formData.get(field.key) === 'on'
-
-    case 'number': {
-      const raw = Number((formData.get(field.key) as string) ?? '')
-      if (!Number.isFinite(raw)) return current[field.key]
-      const min = field.min ?? -Infinity
-      const max = field.max ?? Infinity
-      return Math.min(max, Math.max(min, raw))
-    }
-
-    case 'custom':
-      return current[field.key]
-
-    default: {
-      const raw = ((formData.get(field.key) as string) ?? '').trim()
-      return raw === '' ? null : raw
-    }
-  }
-}
+// ── Settings ────────────────────────────────────────────────────────────────
+//
+// The form-reading itself lives in lib/sections/form.ts, so this action and the
+// canvas read a submitted panel the same way.
 
 export async function updateSectionSettings(page: string, id: string, formData: FormData) {
   const ids = await materializeSections(page)
@@ -196,14 +165,7 @@ export async function updateSectionSettings(page: string, id: string, formData: 
   if (!def) throw new Error(`Unknown section type: ${row.type}`)
 
   const current = (row.settings ?? {}) as SectionSettings
-  const next: SectionSettings = { ...current }
-
-  for (const field of def.fields) {
-    // A custom field is edited elsewhere; the generic panel never draws it and
-    // this must not blank it.
-    if (field.kind === 'custom') continue
-    next[field.key] = readField(field, formData, current)
-  }
+  const next = readSettingsFromForm(def, formData, current)
 
   const { error } = await supabase
     .from('page_sections')

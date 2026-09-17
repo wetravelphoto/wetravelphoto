@@ -1,0 +1,169 @@
+'use client'
+
+import { useEffect, useRef, useState, useTransition } from 'react'
+import SectionFields from '@/components/admin/SectionFields'
+import { updateDraftSection } from '@/app/actions/canvas'
+import { contentKeys, type SectionDef } from '@/lib/sections/registry'
+import type { CanvasSection } from '@/components/canvas/Canvas'
+
+/**
+ * Whatever is selected, and nothing else.
+ *
+ * The fields are drawn by the same SectionFields the old admin forms use, from
+ * the same registry declarations — so a new section type gets a working
+ * inspector for free, and a new setting is one line in lib/sections/registry.ts
+ * rather than a change here.
+ *
+ * SAVING IS AUTOMATIC, because the draft is not the site. There is nothing to
+ * protect the photographer from: the live page does not move until Publish, and
+ * Discard throws the lot away. A Save button on top of that would be a second
+ * commit step guarding nothing — it would only train people to think their
+ * unsaved work was safe.
+ */
+const DEBOUNCE_MS = 500
+
+export default function Inspector({
+  page,
+  section,
+  def,
+  publicUrl,
+  onSaved,
+  onClose,
+}: {
+  page: string
+  section: CanvasSection | null
+  def: SectionDef | null
+  publicUrl: string
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const form = useRef<HTMLFormElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+
+  const id = section?.id ?? null
+
+  /**
+   * The pending edit, snapshotted at the moment of the keystroke rather than
+   * read off the form when the timer fires.
+   *
+   * This matters at exactly one moment, and it is a moment that happens all
+   * day: type into a field and click straight onto another section. The panel
+   * is keyed by section id, so React tears the old form out of the DOM — and a
+   * debounced save that reads `form.current` when it fires would find either
+   * nothing or, worse, the NEW section's form, and write one section's text
+   * onto another. Holding the data instead of the element means the flush
+   * below has something real to send no matter what happened to the DOM.
+   */
+  const queued = useRef<{ id: string; data: FormData } | null>(null)
+
+  const send = (target: { id: string; data: FormData }) => {
+    setError(null)
+    startTransition(async () => {
+      try {
+        await updateDraftSection(page, target.id, target.data)
+        setSavedAt(Date.now())
+        onSaved()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not save that.')
+      }
+    })
+  }
+
+  const flush = () => {
+    if (timer.current) {
+      clearTimeout(timer.current)
+      timer.current = null
+    }
+    const pendingEdit = queued.current
+    queued.current = null
+    if (pendingEdit) send(pendingEdit)
+  }
+
+  const queue = () => {
+    if (!form.current || !id) return
+    queued.current = { id, data: new FormData(form.current) }
+
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(flush, DEBOUNCE_MS)
+  }
+
+  // The selection moved or the panel closed with a keystroke still in flight.
+  // Send it rather than dropping it.
+  useEffect(() => {
+    return () => {
+      if (timer.current) {
+        clearTimeout(timer.current)
+        timer.current = null
+      }
+      const pendingEdit = queued.current
+      queued.current = null
+      if (pendingEdit) {
+        updateDraftSection(page, pendingEdit.id, pendingEdit.data).catch(() => {
+          // Nothing is left to show it on — this panel is going away. The edit
+          // is lost either way if the request fails; not throwing at least
+          // leaves the rest of the editor working.
+        })
+      }
+    }
+    // Deliberately keyed on the section, so the flush happens when the
+    // selection changes and not on every render.
+
+  }, [id, page])
+
+  if (!section || !def) {
+    return (
+      <aside className="cv-inspector cv-inspector-empty" aria-label="Section settings">
+        <p className="cv-hint">
+          Click a section — in the page or in the list — to edit it.
+        </p>
+      </aside>
+    )
+  }
+
+  const preserved = contentKeys(def)
+
+  return (
+    <aside className="cv-inspector" aria-label={`${def.label} settings`}>
+      <div className="cv-insp-head">
+        <div>
+          <p className="cv-insp-label">{def.label}</p>
+          <p className="cv-insp-blurb">{def.blurb}</p>
+        </div>
+        <button type="button" className="cv-ico" onClick={onClose} aria-label="Close settings">
+          ×
+        </button>
+      </div>
+
+      {error && <p className="cv-insp-error">{error}</p>}
+
+      <form
+        key={section.id}
+        ref={form}
+        className="cv-insp-form"
+        autoComplete="off"
+        onChange={queue}
+        onBlur={flush}
+        onSubmit={(e) => {
+          e.preventDefault()
+          flush()
+        }}
+      >
+        <SectionFields def={def} settings={section.settings} publicUrl={publicUrl} />
+      </form>
+
+      <div className="cv-insp-foot">
+        <span className="cv-insp-state" aria-live="polite">
+          {pending ? 'Saving…' : savedAt ? 'Saved to draft' : 'Changes save as you type'}
+        </span>
+        {preserved.length > 0 && (
+          <span className="cv-insp-note">
+            Your writing and photographs here are yours — switching look never replaces them.
+          </span>
+        )}
+      </div>
+    </aside>
+  )
+}

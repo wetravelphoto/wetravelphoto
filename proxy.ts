@@ -27,12 +27,15 @@ export default async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // /preview is the editor's iframe. It renders unpublished work, so it is
-  // gated exactly like /admin — and the route checks the session itself as
-  // well, because a page that shows a draft should not be the one place in the
-  // system that trusts somebody else to have checked.
+  // /edit is the canvas and /preview is the iframe inside it. Both render
+  // unpublished work, so both are gated exactly like /admin — and both routes
+  // check the session themselves as well, because a page that shows a draft
+  // should not be the one place in the system that trusts somebody else to
+  // have checked.
   const guarded =
-    (pathname.startsWith('/admin') && pathname !== '/admin/login') || pathname.startsWith('/preview')
+    (pathname.startsWith('/admin') && pathname !== '/admin/login') ||
+    pathname.startsWith('/preview') ||
+    pathname.startsWith('/edit')
 
   if (!user && guarded) {
     const url = request.nextUrl.clone()
@@ -44,5 +47,5 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/preview/:path*'],
+  matcher: ['/admin/:path*', '/preview/:path*', '/edit/:path*'],
 }

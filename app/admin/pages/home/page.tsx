@@ -29,6 +29,9 @@ export default async function HomeSectionsPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link href="/edit/home" className="admin-btn admin-btn-sm">
+            Open the editor
+          </Link>
           <Link
             href="/admin/pages/home/details"
             className="admin-btn admin-btn-ghost admin-btn-sm"

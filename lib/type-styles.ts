@@ -14,52 +14,120 @@ export type TypeStyles = Record<string, SectionStyle>
 export const STYLED_SECTIONS = ['hero', 'intro', 'journal', 'contact'] as const
 export type StyledSection = (typeof STYLED_SECTIONS)[number]
 
-const DEFAULT_HEADING: Record<string, string> = {
+/**
+ * The hero is the one section whose colour is not a palette decision.
+ *
+ * Its words sit on a photograph rather than on the page, so they need to be
+ * light whatever the palette is doing — a dark palette would otherwise put dark
+ * text over a dark picture. Every other section falls through to the global
+ * tokens when nothing is set here.
+ */
+const OVER_IMAGE: Record<string, string> = {
   hero: '#FAF9F6',
-  intro: '#14100E',
-  journal: '#14100E',
-  contact: '#14100E',
 }
 
-const DEFAULT_BODY: Record<string, string> = {
-  hero: '#FAF9F6',
-  intro: '#4A4642',
-  journal: '#4A4642',
-  contact: '#4A4642',
-}
-
-export function styleFor(styles: TypeStyles | null, section: StyledSection): Required<SectionStyle> {
+/**
+ * SECTION TYPOGRAPHY IS AN OVERRIDE, NOT A DEFAULT
+ * ════════════════════════════════════════════════
+ *
+ * Only what has actually been chosen is returned. Everything else comes back
+ * undefined, and styleVars leaves that variable unset so the CSS fallback —
+ * `var(--sec-font, var(--font-display))` — reaches the global token.
+ *
+ * This used to return a value for every key, defaulting font to 'Oswald' and
+ * colour to a hard-coded hex per section. Those defaults were copies of the
+ * global defaults, so nothing looked wrong: but because they were always SET,
+ * `--sec-font` always won, and the global typeface and colour in Style mode
+ * could not reach the intro, journal, contact or hero headings — the largest
+ * type on the page. The picker moved and the headings did not.
+ *
+ * Two controls over one number is only safe when one of them is genuinely
+ * silent until used. This is the silence.
+ */
+export function styleFor(styles: TypeStyles | null, section: StyledSection): SectionStyle {
   const s = styles?.[section] ?? {}
+
   return {
-    font: s.font || 'Oswald',
-    color: s.color || DEFAULT_HEADING[section] || '#14100E',
-    scale: s.scale ?? 1,
-    bodyFont: s.bodyFont || 'Karla',
-    bodyColor: s.bodyColor || DEFAULT_BODY[section] || '#4A4642',
-    bodyScale: s.bodyScale ?? 1,
+    font: s.font || undefined,
+    color: s.color || OVER_IMAGE[section] || undefined,
+    scale: s.scale,
+    bodyFont: s.bodyFont || undefined,
+    bodyColor: s.bodyColor || OVER_IMAGE[section] || undefined,
+    bodyScale: s.bodyScale,
   }
 }
 
 /**
  * Section typography is applied as CSS variables, so one wrapper restyles
  * every heading and paragraph inside it without threading props through.
+ *
+ * A variable that is not set is OMITTED rather than written as empty: CSS
+ * treats an empty custom property as a value, and `var(--sec-font, fallback)`
+ * would then resolve to nothing instead of the fallback.
  */
 export function styleVars(styles: TypeStyles | null, section: StyledSection): React.CSSProperties {
   const { font, color, scale, bodyFont, bodyColor, bodyScale } = styleFor(styles, section)
-  const heading = getFont(font)
-  const body = getFont(bodyFont)
+  const vars: Record<string, string> = {}
+
+  if (font) {
+    const heading = getFont(font)
+    vars['--sec-font'] = heading.stack
+    vars['--sec-weight'] = heading.weight
+    vars['--sec-case'] = heading.uppercase ? 'uppercase' : 'none'
+    vars['--sec-track'] = heading.tracking
+  }
+
+  if (color) vars['--sec-color'] = color
+  if (scale !== undefined) vars['--sec-scale'] = String(scale)
+
+  if (bodyFont) {
+    const body = getFont(bodyFont)
+    vars['--sec-body-font'] = body.stack
+    vars['--sec-body-weight'] = body.weight
+  }
+
+  if (bodyColor) vars['--sec-body-color'] = bodyColor
+  if (bodyScale !== undefined) vars['--sec-body-scale'] = String(bodyScale)
+
+  return vars as React.CSSProperties
+}
+
+
+/**
+ * The EFFECTIVE values, for an editor to display.
+ *
+ * A renderer must not fill these in — that was the bug above — but a panel has
+ * to show something in its font and colour inputs, and showing blank when the
+ * heading on screen is plainly Oswald in near-black is its own kind of lie.
+ *
+ * `base` is what the section would fall back to, which the caller knows and
+ * this file deliberately does not: the canvas passes the site's global tokens,
+ * so the panel shows what is really on the page rather than a guess.
+ */
+export function effectiveStyle(
+  styles: TypeStyles | null,
+  section: StyledSection,
+  base: { font: string; color: string; bodyFont: string; bodyColor: string }
+): Required<SectionStyle> {
+  const s = styleFor(styles, section)
 
   return {
-    ['--sec-font' as string]: heading.stack,
-    ['--sec-weight' as string]: heading.weight,
-    ['--sec-case' as string]: heading.uppercase ? 'uppercase' : 'none',
-    ['--sec-track' as string]: heading.tracking,
-    ['--sec-color' as string]: color,
-    ['--sec-scale' as string]: String(scale),
-
-    ['--sec-body-font' as string]: body.stack,
-    ['--sec-body-weight' as string]: body.weight,
-    ['--sec-body-color' as string]: bodyColor,
-    ['--sec-body-scale' as string]: String(bodyScale),
+    font: s.font ?? base.font,
+    color: s.color ?? base.color,
+    scale: s.scale ?? 1,
+    bodyFont: s.bodyFont ?? base.bodyFont,
+    bodyColor: s.bodyColor ?? base.bodyColor,
+    bodyScale: s.bodyScale ?? 1,
   }
+}
+
+/**
+ * Transitional: the old homepage form has no access to the global tokens, so it
+ * gets the values those tokens ship with. Goes away with that form.
+ */
+export const LEGACY_BASE = {
+  font: 'Oswald',
+  color: '#14100E',
+  bodyFont: 'Karla',
+  bodyColor: '#4A4642',
 }

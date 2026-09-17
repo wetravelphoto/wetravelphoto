@@ -14,9 +14,11 @@ import {
   reorderDraft,
   resetDraftStyles,
   setDraftVisible,
+  updateDraftSectionType,
   updateDraftStyles,
 } from '@/app/actions/canvas'
 import { cssVariables, fontsToLoad, type StyleTokens } from '@/lib/styles/tokens'
+import { styleFor, type StyledSection, type TypeStyles } from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
 import SectionRail from '@/components/canvas/SectionRail'
 import Inspector from '@/components/canvas/Inspector'
@@ -60,6 +62,7 @@ export default function Canvas({
   draftUpdatedAt,
   publicUrl,
   tokens,
+  typeStyles,
   initialMode = 'content',
 }: {
   page: string
@@ -72,6 +75,8 @@ export default function Canvas({
   publicUrl: string
   /** The draft's style if it has any, otherwise the live site's. */
   tokens: StyleTokens
+  /** Per-section overrides, from the draft if there is one. */
+  typeStyles: TypeStyles
   initialMode?: Mode
 }) {
   const router = useRouter()
@@ -381,6 +386,16 @@ export default function Canvas({
             def={def}
             publicUrl={publicUrl}
             focusField={focusField}
+            sectionStyle={def?.styled ? styleFor(typeStyles, def.styled) : {}}
+            styleBase={{
+              font: tokens.display_font,
+              color: tokens.ink,
+              bodyFont: tokens.body_font,
+              bodyColor: tokens.ink_soft,
+            }}
+            onType={(group, changes) =>
+              run(() => updateDraftSectionType(group as StyledSection, changes))
+            }
             onPatch={(field, value) => {
               if (selected) tell({ type: 'patch', id: selected, field, value })
             }}

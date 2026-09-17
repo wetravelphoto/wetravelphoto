@@ -86,3 +86,44 @@ export function trimToDefaults(tokens: StyleTokens): Record<string, unknown> {
 
   return trimmed
 }
+
+/**
+ * One section's typography override.
+ *
+ * Same rules as the global tokens, with one addition that matters: a key whose
+ * value is explicitly `undefined` is KEPT as undefined rather than dropped,
+ * because that is how the panel says "stop overriding this and follow the site
+ * again". Dropping it would make clearing an override impossible.
+ */
+export function sanitizeSectionStyle(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object') return {}
+
+  const raw = input as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+
+  for (const key of ['font', 'bodyFont'] as const) {
+    if (!(key in raw)) continue
+    const value = raw[key]
+    if (value === undefined || value === null || value === '') out[key] = undefined
+    else if (typeof value === 'string' && FONT_NAMES.includes(value)) out[key] = value
+  }
+
+  for (const key of ['color', 'bodyColor'] as const) {
+    if (!(key in raw)) continue
+    const value = raw[key]
+    if (value === undefined || value === null || value === '') out[key] = undefined
+    else if (typeof value === 'string' && HEX.test(value.trim())) out[key] = value.trim()
+  }
+
+  for (const key of ['scale', 'bodyScale'] as const) {
+    if (!(key in raw)) continue
+    const value = raw[key]
+    if (value === undefined || value === null) out[key] = undefined
+    else {
+      const n = Number(value)
+      if (Number.isFinite(n)) out[key] = Math.min(2, Math.max(0.6, n))
+    }
+  }
+
+  return out
+}

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import SectionFields from '@/components/admin/SectionFields'
 import { updateDraftSection } from '@/app/actions/canvas'
 import { contentKeys, type SectionDef } from '@/lib/sections/registry'
+import SectionType from '@/components/canvas/SectionType'
+import type { SectionStyle } from '@/lib/type-styles'
 import type { CanvasSection } from '@/components/canvas/Canvas'
 
 /**
@@ -37,7 +39,10 @@ export default function Inspector({
   def,
   publicUrl,
   focusField,
+  sectionStyle,
+  styleBase,
   onPatch,
+  onType,
   onSaved,
   onClose,
 }: {
@@ -50,8 +55,14 @@ export default function Inspector({
    * it. The nonce is what makes clicking the same one twice work.
    */
   focusField: { field: string; nonce: number } | null
+  /** What this section's style group actually overrides. */
+  sectionStyle: SectionStyle
+  /** What it falls back to — the site's tokens. */
+  styleBase: { font: string; color: string; bodyFont: string; bodyColor: string }
   /** Text as it is typed, for the page to show immediately. */
   onPatch: (field: string, value: string) => void
+  /** A typography override for this section's style group. */
+  onType: (group: string, changes: Record<string, unknown>) => void
   onSaved: () => void
   onClose: () => void
 }) {
@@ -201,6 +212,20 @@ export default function Inspector({
       >
         <SectionFields def={def} settings={section.settings} publicUrl={publicUrl} />
       </form>
+
+      {/* Typography sits outside the settings form on purpose: it is stored in
+          the site's style, not in this section's settings, and putting it in
+          the same <form> would sweep it into the same FormData. */}
+      {def.styled && (
+        <div className="cv-insp-form cv-insp-type">
+          <SectionType
+            group={def.styled}
+            style={sectionStyle}
+            base={styleBase}
+            onChange={(changes) => onType(def.styled!, changes)}
+          />
+        </div>
+      )}
 
       <div className="cv-insp-foot">
         <span className="cv-insp-state" aria-live="polite">

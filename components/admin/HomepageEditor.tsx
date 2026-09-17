@@ -10,7 +10,7 @@ import Toggle from '@/components/admin/Toggle'
 import DeviceSwitch from '@/components/admin/DeviceSwitch'
 import LogoUploader from '@/components/admin/LogoUploader'
 import SaveBar from '@/components/admin/SaveBar'
-import { styleFor, type TypeStyles } from '@/lib/type-styles'
+import { effectiveStyle, LEGACY_BASE, type TypeStyles } from '@/lib/type-styles'
 import type { BlockImage } from '@/lib/blocks'
 
 type Settings = {
@@ -351,7 +351,7 @@ export default function HomepageEditor({
           <div className="type-block">
             <p className="type-block-label">Typography</p>
             <TypographyControls
-              value={styleFor(typeStyles, 'hero')}
+              value={effectiveStyle(typeStyles, 'hero', LEGACY_BASE)}
               onChange={(next) => setStyle('hero', next)}
             />
           </div>
@@ -558,7 +558,7 @@ export default function HomepageEditor({
             <p className="admin-meta" style={{ margin: '0 0 0.6rem' }}>
               Also styles the galleries heading below.
             </p>
-            <TypographyControls value={styleFor(typeStyles, 'intro')} onChange={(next) => setStyle('intro', next)} />
+            <TypographyControls value={effectiveStyle(typeStyles, 'intro', LEGACY_BASE)} onChange={(next) => setStyle('intro', next)} />
           </div>
         </Section>
 
@@ -632,7 +632,7 @@ export default function HomepageEditor({
 
           <div className="type-block">
             <p className="type-block-label">Typography</p>
-            <TypographyControls value={styleFor(typeStyles, 'journal')} onChange={(next) => setStyle('journal', next)} />
+            <TypographyControls value={effectiveStyle(typeStyles, 'journal', LEGACY_BASE)} onChange={(next) => setStyle('journal', next)} />
           </div>
         </Section>
 

@@ -1188,3 +1188,64 @@
   outline: 2px solid var(--cv-accent);
   outline-offset: 3px;
 }
+
+/* ── Per-section typography ──────────────────────────────────────────────────
+   Sits below the section's own settings, visually separated, because it is
+   stored in the SITE's style rather than in this section — and because it
+   overrides the global Style mode, which is worth being obvious about. */
+
+.cv-insp-type {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--cv-line);
+  padding-top: 0.85rem;
+  overflow: visible;
+}
+
+.cv-type-group .sec-group-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cv-type-clear {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--cv-accent);
+  font: inherit;
+  font-size: 0.64rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.cv-type-clear:hover {
+  text-decoration: underline;
+}
+
+.cv-type-note {
+  margin: -0.35rem 0 0;
+  font-size: 0.64rem;
+  line-height: 1.5;
+  color: var(--cv-mute);
+}
+
+.cv-type-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.6rem 0 0;
+}
+
+.cv-type-row + .cv-type-row {
+  border-top: 1px dashed var(--cv-line);
+}
+
+.cv-type-row-label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--cv-soft);
+}

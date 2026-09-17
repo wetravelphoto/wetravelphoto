@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadDraftPage, draftStatus, draftStyleSettings } from '@/lib/drafts/store'
 import { resolveTokens } from '@/lib/styles/tokens'
+import type { TypeStyles } from '@/lib/type-styles'
 import Canvas, { type CanvasSection } from '@/components/canvas/Canvas'
 import '@/app/edit/canvas.css'
 
@@ -75,6 +76,7 @@ export default async function EditPage({
       draftUpdatedAt={status.updatedAt}
       publicUrl={process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''}
       tokens={resolveTokens(style.global_styles, style.global_styles_version)}
+      typeStyles={(style.type_styles ?? {}) as TypeStyles}
       initialMode={mode === 'style' ? 'style' : 'content'}
     />
   )

@@ -15,7 +15,13 @@ import {
 import { getSiteSettings } from '@/lib/site'
 import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
-import { sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
+import { sanitizeSectionStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
+import {
+  STYLED_SECTIONS,
+  type SectionStyle,
+  type StyledSection,
+  type TypeStyles,
+} from '@/lib/type-styles'
 import {
   PAIRINGS,
   PALETTES,
@@ -251,6 +257,48 @@ export async function applyDraftPalette(id: string) {
     ink_mute: palette.ink_mute,
     accent: palette.accent,
   })
+}
+
+/**
+ * One section group's typography override.
+ *
+ * Keyed by the STYLE GROUP ('hero', 'intro', 'journal', 'contact'), not by
+ * section id, because that is how lib/type-styles.ts stores it — two intro
+ * sections on a page deliberately share one setting. Undefined clears the
+ * override so the section goes back to following the site.
+ */
+export async function updateDraftSectionType(
+  group: string,
+  changes: Record<string, unknown>
+) {
+  await requireEditor()
+
+  if (!STYLED_SECTIONS.includes(group as StyledSection)) {
+    throw new Error(`"${group}" is not a section group that carries its own typography.`)
+  }
+
+  const { draft } = await readDraft()
+  const settings = await getSiteSettings()
+  const current = (draft?.type_styles ?? settings.type_styles ?? {}) as TypeStyles
+
+  const next: SectionStyle = { ...(current[group] ?? {}) }
+
+  for (const [key, value] of Object.entries(sanitizeSectionStyle(changes))) {
+    if (value === undefined) delete next[key as keyof SectionStyle]
+    else Object.assign(next, { [key]: value })
+  }
+
+  // An override with nothing left in it is removed rather than stored empty,
+  // so "follows the site" is the absence of a record rather than a record that
+  // happens to say nothing.
+  const merged: TypeStyles = { ...current }
+  if (Object.keys(next).length === 0) delete merged[group]
+  else merged[group] = next
+
+  await writeDraftStyles({ type_styles: merged })
+
+  revalidatePath('/edit/home')
+  revalidatePath('/preview/home')
 }
 
 /** Back to the values the site shipped with — in the draft, so it is undoable. */

@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import SectionFields from '@/components/admin/SectionFields'
-import { updateDraftSection } from '@/app/actions/canvas'
-import { contentKeys, type SectionDef } from '@/lib/sections/registry'
+import { updateDraftSection, updateDraftSectionValue } from '@/app/actions/canvas'
+import { contentKeys, type Field, type SectionDef } from '@/lib/sections/registry'
+import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import SectionType from '@/components/canvas/SectionType'
 import type { SectionStyle } from '@/lib/type-styles'
 import type { CanvasSection } from '@/components/canvas/Canvas'
@@ -210,7 +211,35 @@ export default function Inspector({
           flush()
         }}
       >
-        <SectionFields def={def} settings={section.settings} publicUrl={publicUrl} />
+        <SectionFields
+          def={def}
+          settings={section.settings}
+          publicUrl={publicUrl}
+          renderCustom={(field: Field, value: unknown) => {
+            // A `custom` field names the editor it needs; this is where the
+            // canvas supplies one. Anything without an editor yet falls back to
+            // the field's own note rather than a blank space.
+            if (field.kind !== 'custom') return null
+
+            if (field.editor === 'hero-focal') {
+              return (
+                <HeroFocal
+                  value={value}
+                  imagePath={(section.settings.image_path as string) ?? null}
+                  publicUrl={publicUrl}
+                  onChange={(next) =>
+                    startTransition(async () => {
+                      await updateDraftSectionValue(page, section.id, field.key, next)
+                      onSaved()
+                    })
+                  }
+                />
+              )
+            }
+
+            return null
+          }}
+        />
       </form>
 
       {/* Typography sits outside the settings form on purpose: it is stored in

@@ -1272,3 +1272,97 @@
   line-height: 1.55;
   color: #ffd79a;
 }
+
+/* ── Custom field editors ────────────────────────────────────────────────────
+   A focal-point picker or a story chooser has no input for FormData to carry,
+   so these save on their own the moment they change. */
+
+.cv-focal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cv-focal-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--cv-soft);
+}
+
+/* FocalPicker's own styles live in app/hero.css, which the canvas does not
+   load — and they are written against --admin-* variables that do not exist
+   here. So the whole thing is restated, GEOMETRY INCLUDED: the aspect ratios
+   are what make the picker mean anything (16/9 against 9/16 is the entire
+   point of having two), and without them it would collapse to nothing.
+   Written from the real markup — `.focal-tabs button`, `data-active` — rather
+   than from memory of it. */
+
+.cv-focal .focal-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.cv-focal .focal-tabs button {
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 3px;
+  background: var(--cv-panel-2);
+  color: var(--cv-soft);
+  font: inherit;
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.cv-focal .focal-tabs button[data-active='true'] {
+  background: var(--cv-accent);
+  border-color: var(--cv-accent);
+  color: #fff;
+}
+
+.cv-focal .focal-tabs .focal-reset {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.cv-focal .focal-frame {
+  position: relative;
+  overflow: hidden;
+  cursor: crosshair;
+  background: #0d0e10;
+  border: 1px solid var(--cv-line);
+  border-radius: 4px;
+}
+
+/* Mirrors the hero's shape on each device. Without these the frame has no
+   height at all. */
+.cv-focal .focal-frame[data-device='desktop'] {
+  aspect-ratio: 16 / 9;
+}
+
+.cv-focal .focal-frame[data-device='mobile'] {
+  aspect-ratio: 9 / 16;
+  max-width: 150px;
+  margin: 0 auto;
+}
+
+.cv-focal .focal-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cv-focal .focal-dot {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}

@@ -26,10 +26,19 @@ export default function SectionFields({
   def,
   settings,
   publicUrl,
+  renderCustom,
 }: {
   def: SectionDef
   settings: SectionSettings
   publicUrl: string
+  /**
+   * Draws a `custom` field for real, where a caller has an editor for it.
+   * The old admin forms pass nothing and keep showing the field's note, which
+   * is what they have always done; the canvas passes a renderer. Returning
+   * null falls back to the note, so an editor that does not exist yet degrades
+   * to a description rather than a blank.
+   */
+  renderCustom?: (field: Field, value: unknown) => React.ReactNode | null
 }) {
   // Kept in state so a `when` condition re-evaluates as you change the field
   // it depends on, instead of after a save.
@@ -55,7 +64,8 @@ export default function SectionFields({
           {group.fields.map((field) => (
             <div key={field.key} className="sec-field">
               <input type="hidden" name={`__present_${field.key}`} value="1" />
-              {renderField(field, values, set, publicUrl)}
+              {(field.kind === 'custom' && renderCustom?.(field, values[field.key])) ||
+                renderField(field, values, set, publicUrl)}
             </div>
           ))}
         </div>

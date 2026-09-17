@@ -224,6 +224,46 @@ async function saveTokens(changes: Partial<StyleTokens>) {
   revalidatePath('/preview/home')
 }
 
+/**
+ * Writes ONE setting on one section.
+ *
+ * The generic panel saves a whole form at once and deliberately skips `custom`
+ * fields — a focal point or a story chooser has no input for FormData to carry.
+ * This is how those editors save: the key must exist in the section type's
+ * defaults, so an action reached directly cannot invent settings.
+ */
+export async function updateDraftSectionValue(
+  page: string,
+  id: string,
+  key: string,
+  value: unknown
+) {
+  await requireEditor()
+  const draft = await ensureDraft(page)
+  const rows = draft.pages[page] ?? []
+
+  const row = rows.find((r) => r.id === id)
+  if (!row) throw new Error('That section is no longer on the page.')
+
+  const def = sectionDef(row.type)
+  if (!def) throw new Error(`Unknown section type: ${row.type}`)
+  if (!(key in def.defaults)) {
+    throw new Error(`${def.label} has no setting called "${key}".`)
+  }
+
+  await writeDraftPage(
+    page,
+    rows.map((r) =>
+      r.id === id
+        ? { ...r, settings: { ...(r.settings ?? {}), [key]: value }, version: def.version }
+        : r
+    ),
+    draft
+  )
+
+  done(page)
+}
+
 export async function updateDraftStyles(changes: unknown) {
   await requireEditor()
   await saveTokens(sanitizeTokens(changes))

@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { patchSiteSettings } from '@/lib/site-patch'
-import { syncContactSection } from '@/lib/sections/sync'
 import { requireUser } from '@/lib/auth'
 
 /**
@@ -45,43 +44,29 @@ export async function updateIdentity(formData: FormData) {
   )
 }
 
-export async function updateAboutPage(formData: FormData) {
+/**
+ * The site's menu: what each link is called, and whether the About page
+ * exists at all.
+ *
+ * These used to be scattered one per page form, which meant the header was
+ * configured from six places. Navigation belongs to the site, not to any one
+ * page, so it is set in one panel in Settings.
+ */
+export async function updateMenu(formData: FormData) {
   await patch(
     {
       show_about: on(formData, 'show_about'),
-      about_eyebrow: text(formData, 'about_eyebrow'),
-      about_heading: text(formData, 'about_heading'),
-      about_body: text(formData, 'about_body'),
-      about_image_path: text(formData, 'about_image_path'),
-      about_image_side: text(formData, 'about_image_side') ?? 'left',
-      about_cta_label: text(formData, 'about_cta_label'),
-      about_cta_href: text(formData, 'about_cta_href'),
+      nav_galleries_label: text(formData, 'nav_galleries_label'),
+      nav_journal_label: text(formData, 'nav_journal_label'),
       nav_about_label: text(formData, 'nav_about_label'),
-    },
-    ['/about', '/admin/pages/about', '/']
-  )
-}
-
-export async function updateContactPage(formData: FormData) {
-  await patch(
-    {
-      show_contact_section: on(formData, 'show_contact_section'),
-      contact_eyebrow: text(formData, 'contact_eyebrow'),
-      contact_heading: text(formData, 'contact_heading'),
-      contact_intro: text(formData, 'contact_intro'),
-      contact_note: text(formData, 'contact_note'),
-      contact_tagline: text(formData, 'contact_tagline'),
-      contact_image_path: text(formData, 'contact_image_path'),
-      contact_image_side: text(formData, 'contact_image_side') ?? 'left',
-      email_public: text(formData, 'email_public'),
       nav_contact_label: text(formData, 'nav_contact_label'),
+      nav_shop_label: text(formData, 'nav_shop_label'),
     },
-    ['/contact', '/', '/admin/pages/contact']
+    []
   )
 
-  // The same copy drives the homepage's contact section — live, and in the
-  // canvas's draft if one is open.
-  await syncContactSection('home')
+  // The header and footer are drawn in the root layout, so every page.
+  revalidatePath('/', 'layout')
 }
 
 export async function updateNewsletter(formData: FormData) {
@@ -106,7 +91,6 @@ export async function updateJournalPage(formData: FormData) {
       journal_show_date: on(formData, 'journal_show_date'),
       journal_show_byline: on(formData, 'journal_show_byline'),
       journal_title_scale: decimalFrom(formData, 'journal_title_scale', 1),
-      nav_journal_label: text(formData, 'nav_journal_label'),
     },
     ['/journal', '/admin/pages/journal']
   )
@@ -117,7 +101,6 @@ export async function updateGalleriesPage(formData: FormData) {
     {
       galleries_eyebrow: text(formData, 'galleries_eyebrow'),
       galleries_heading: text(formData, 'galleries_heading'),
-      nav_galleries_label: text(formData, 'nav_galleries_label'),
     },
     ['/trips', '/admin/pages/galleries']
   )
@@ -143,7 +126,6 @@ export async function updateShopPage(formData: FormData) {
       shop_heading: text(formData, 'shop_heading'),
       shop_intro: text(formData, 'shop_intro'),
       shop_order_note: text(formData, 'shop_order_note'),
-      nav_shop_label: text(formData, 'nav_shop_label'),
       // Typed in dollars, stored in cents
       shop_shipping_flat_cents:
         Number.isFinite(shipping) && shipping >= 0 ? Math.round(shipping * 100) : 0,

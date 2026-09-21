@@ -1,12 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { getSiteSettings } from '@/lib/site'
 import { photoUrl } from '@/lib/images'
-import { updateIdentity, updateNewsletter } from '@/app/actions/site'
+import { updateIdentity, updateMenu, updateNewsletter } from '@/app/actions/site'
 import { updateBranding } from '@/app/actions/branding'
 import { saveInstagramToken } from '@/app/actions/instagram'
 import InstagramPanel from '@/components/admin/InstagramPanel'
 import ChromeEditor from '@/components/admin/ChromeEditor'
 import SaveBar from '@/components/admin/SaveBar'
+import Toggle from '@/components/admin/Toggle'
 import BackfillPanel from '@/components/admin/BackfillPanel'
 import { countUnprocessed } from '@/app/actions/backfill'
 
@@ -136,6 +137,91 @@ export default async function SettingsPage() {
           </label>
 
           <SaveBar label="Save contact details" />
+        </div>
+      </form>
+
+      {/* The site's navigation, in one place. Each link used to be named on its
+          own page's form; the header belongs to the site, not to a page. */}
+      <form action={updateMenu} autoComplete="off">
+        <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+          <h2 className="admin-h2">Menu</h2>
+          <p className="admin-meta" style={{ margin: '0 0 0.85rem', lineHeight: 1.6 }}>
+            What each link in the header and footer is called. Leave one blank to use the name
+            shown in grey.
+          </p>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+              gap: '0.75rem',
+              marginBottom: '1rem',
+            }}
+          >
+            <label className="admin-field" style={{ margin: 0 }}>
+              Galleries
+              <input
+                type="text"
+                name="nav_galleries_label"
+                defaultValue={settings.nav_galleries_label ?? ''}
+                placeholder="Galleries"
+                className="admin-input"
+              />
+            </label>
+
+            <label className="admin-field" style={{ margin: 0 }}>
+              Journal
+              <input
+                type="text"
+                name="nav_journal_label"
+                defaultValue={settings.nav_journal_label ?? ''}
+                placeholder="Journal"
+                className="admin-input"
+              />
+            </label>
+
+            <label className="admin-field" style={{ margin: 0 }}>
+              About
+              <input
+                type="text"
+                name="nav_about_label"
+                defaultValue={settings.nav_about_label ?? ''}
+                placeholder="About"
+                className="admin-input"
+              />
+            </label>
+
+            <label className="admin-field" style={{ margin: 0 }}>
+              Contact
+              <input
+                type="text"
+                name="nav_contact_label"
+                defaultValue={settings.nav_contact_label ?? ''}
+                placeholder="Contact"
+                className="admin-input"
+              />
+            </label>
+
+            <label className="admin-field" style={{ margin: 0 }}>
+              Prints
+              <input
+                type="text"
+                name="nav_shop_label"
+                defaultValue={settings.nav_shop_label ?? ''}
+                placeholder="Prints"
+                className="admin-input"
+              />
+            </label>
+          </div>
+
+          <Toggle
+            name="show_about"
+            label="Show the About page"
+            note="Off removes it from the menu and makes the page itself unavailable."
+            defaultChecked={settings.show_about !== false}
+          />
+
+          <SaveBar label="Save menu" />
         </div>
       </form>
 

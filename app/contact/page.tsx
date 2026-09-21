@@ -1,38 +1,22 @@
-import { getSiteSettings } from '@/lib/site'
-import SiteHeader from '@/components/SiteHeader'
-import SiteFooter from '@/components/SiteFooter'
-import ContactForm from '@/components/ContactForm'
 import type { Metadata } from 'next'
+import { loadPageSections } from '@/lib/sections/load'
+import { PAGES } from '@/lib/sections/pages'
+import PageBody from '@/components/PageBody'
 
 export const revalidate = 300
 
+/**
+ * The Contact page is a list of sections, edited in the canvas at
+ * /edit/contact. Until its first Publish it is drawn by lib/sections/legacy.ts
+ * as it always was: a heading, the intro line, and the form.
+ */
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getSiteSettings()
+  const { settings } = await loadPageSections('contact')
   return { title: `Contact — ${settings.site_title}` }
 }
 
 export default async function ContactPage() {
-  const settings = await getSiteSettings()
+  const { sections, settings } = await loadPageSections('contact')
 
-  return (
-    <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <SiteHeader />
-
-      <div style={{ flex: 1, padding: '7rem clamp(1.25rem, 4vw, 3rem) 4rem', maxWidth: 560 }}>
-        <h1 className="display" style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', margin: '0 0 1.25rem', lineHeight: 1 }}>
-          Contact
-        </h1>
-
-        {settings.contact_intro && (
-          <p style={{ color: 'var(--ink-soft)', lineHeight: 1.8, margin: '0 0 2rem', maxWidth: '46ch' }}>
-            {settings.contact_intro}
-          </p>
-        )}
-
-        <ContactForm />
-      </div>
-
-      <SiteFooter />
-    </main>
-  )
+  return <PageBody sections={sections} settings={settings} fill={PAGES.contact.fill} />
 }

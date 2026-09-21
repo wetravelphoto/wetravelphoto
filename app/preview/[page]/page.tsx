@@ -5,6 +5,7 @@ import { cssVariables, fontsToLoad, resolveTokens } from '@/lib/styles/tokens'
 import { fontHref } from '@/lib/fonts'
 import PageBody from '@/components/PageBody'
 import PreviewBridge from '@/components/preview/PreviewBridge'
+import { PAGES, isPage } from '@/lib/sections/pages'
 import '@/app/home.css'
 import '@/app/home-polish.css'
 import '@/app/hero.css'
@@ -42,11 +43,9 @@ export const metadata = {
   robots: { index: false, follow: false, nocache: true },
 }
 
-const PAGES = new Set(['home'])
-
 export default async function PreviewPage({ params }: { params: Promise<{ page: string }> }) {
   const { page } = await params
-  if (!PAGES.has(page)) notFound()
+  if (!isPage(page)) notFound()
 
   const supabase = await createClient()
   const {
@@ -74,7 +73,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ page: 
 
       <PreviewBridge page={page} />
 
-      <PageBody sections={sections} settings={settings} selectable />
+      <PageBody sections={sections} settings={settings} selectable fill={PAGES[page].fill} />
     </div>
   )
 }

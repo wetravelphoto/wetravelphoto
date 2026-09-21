@@ -9,6 +9,8 @@ import JournalSection from '@/components/sections/JournalSection'
 import InstagramSection from '@/components/sections/InstagramSection'
 import ContactBlock from '@/components/sections/ContactBlock'
 import MarkSection from '@/components/sections/MarkSection'
+import AboutSection from '@/components/sections/AboutSection'
+import ContactFormSection from '@/components/sections/ContactFormSection'
 
 type SectionProps = { settings: SectionSettings; ctx: SectionContext }
 
@@ -30,6 +32,8 @@ const RENDERERS: Record<string, (props: SectionProps) => React.ReactNode> = {
   journal: JournalSection,
   instagram: InstagramSection,
   contact: ContactBlock,
+  about: AboutSection,
+  'contact-form': ContactFormSection,
 }
 
 export function renderSection(section: LoadedSection, ctx: SectionContext): React.ReactNode {

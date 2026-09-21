@@ -5,6 +5,14 @@ import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import type { LoadedSection } from '@/lib/sections/load'
 import type { SiteSettings } from '@/lib/site'
+// Every section's stylesheet, loaded wherever sections are drawn — so a hero
+// added to the About page brings its styles with it. app/page.tsx and the
+// preview route import the same files; Next includes each once.
+import '@/app/home.css'
+import '@/app/home-polish.css'
+import '@/app/hero.css'
+import '@/app/instagram.css'
+import '@/app/contact-footer.css'
 
 /**
  * THE PAGE, DRAWN ONCE
@@ -24,14 +32,26 @@ import type { SiteSettings } from '@/lib/site'
  * remove the wrapper and tag the section elements themselves — not to let the
  * preview drift.
  */
+const FILL: React.CSSProperties = { minHeight: '100vh', display: 'flex', flexDirection: 'column' }
+
+/** The preview wrapper of a section that grows: passes the spare height on. */
+const GROW: React.CSSProperties = { flex: 1, display: 'flex', flexDirection: 'column' }
+
 export default async function PageBody({
   sections,
   settings,
   selectable = false,
+  fill = false,
 }: {
   sections: LoadedSection[]
   settings: SiteSettings
   selectable?: boolean
+  /**
+   * Lay the page out as a full-height column so a short page keeps its footer
+   * at the bottom of the window. Set per page in lib/sections/pages.ts; the
+   * About and Contact pages always did this by hand.
+   */
+  fill?: boolean
 }) {
   const visible = sections.filter((s) => s.visible)
   const ctx = await buildContext(visible, settings, { editable: selectable })
@@ -42,7 +62,7 @@ export default async function PageBody({
   const overHero = !!hero && !heroIsEmpty(hero.settings, ctx)
 
   return (
-    <main>
+    <main style={fill ? FILL : undefined}>
       <SiteHeader overHero={overHero} />
 
       {visible.map((section) =>
@@ -52,6 +72,7 @@ export default async function PageBody({
             className="pv-section"
             data-section-id={section.id}
             data-section-type={section.type}
+            style={fill && section.def.grows ? GROW : undefined}
           >
             {/* A real element rather than a ::before, because the wrapper's
                 two pseudo-elements are already spoken for: one is the click

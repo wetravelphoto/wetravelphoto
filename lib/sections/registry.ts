@@ -136,6 +136,14 @@ export type SectionDef = {
   styled?: 'hero' | 'intro' | 'journal' | 'contact'
   /** Only one allowed per page. */
   singleton?: boolean
+  /**
+   * On a full-height page (`fill` in lib/sections/pages.ts), this section
+   * takes up the spare height — its renderer's root has `flex: 1`. Declared so
+   * the preview's per-section wrapper can pass the growth through; without it
+   * the wrapper would sit between the page column and the section and the
+   * preview would lay out shorter than the live page.
+   */
+  grows?: boolean
   /** Can be hidden and moved, but not deleted. */
   permanent?: boolean
   needs?: SectionNeed[]
@@ -331,6 +339,55 @@ export const SECTIONS: Record<string, SectionDef> = {
     ],
   },
 
+  about: {
+    type: 'about',
+    label: 'About',
+    blurb: 'A photograph beside your story, full height — the heart of an About page.',
+    family: 'Words',
+    version: 1,
+    styled: 'intro',
+    grows: true,
+    defaults: {
+      eyebrow: null,
+      heading: null,
+      body: null,
+      image_path: null,
+      image_side: 'left',
+      cta_label: null,
+      cta_href: null,
+    },
+    fields: [
+      { key: 'eyebrow', label: 'Over-line', kind: 'text', content: true, help: 'The small line above the heading.' },
+      { key: 'heading', label: 'Heading', kind: 'text', content: true },
+      {
+        key: 'body',
+        label: 'Text',
+        kind: 'textarea',
+        rows: 8,
+        content: true,
+        help: 'Leave a blank line between paragraphs.',
+      },
+      { key: 'image_path', label: 'Photograph', kind: 'image', content: true },
+      { key: 'image_side', label: 'Layout', kind: 'select', options: SIDE, live: { attr: 'data-side' } },
+      {
+        key: 'cta_label',
+        label: 'Button',
+        kind: 'text',
+        group: 'Button',
+        content: true,
+        help: 'Leave empty for no button.',
+      },
+      {
+        key: 'cta_href',
+        label: 'Button link',
+        kind: 'text',
+        group: 'Button',
+        content: true,
+        placeholder: '/trips',
+      },
+    ],
+  },
+
   galleries: {
     type: 'galleries',
     label: 'Gallery carousel',
@@ -394,6 +451,24 @@ export const SECTIONS: Record<string, SectionDef> = {
     fields: [
       { key: 'heading', label: 'Heading', kind: 'text', content: true },
       { key: 'count', label: 'How many posts', kind: 'number', min: 3, max: 24, step: 3 },
+    ],
+  },
+
+  'contact-form': {
+    type: 'contact-form',
+    label: 'Contact form',
+    blurb: 'A heading, a few lines, and the message form — simple and direct.',
+    family: 'Connect',
+    version: 1,
+    singleton: true,
+    grows: true,
+    defaults: {
+      heading: 'Contact',
+      intro: null,
+    },
+    fields: [
+      { key: 'heading', label: 'Heading', kind: 'text', content: true },
+      { key: 'intro', label: 'Text', kind: 'textarea', rows: 4, content: true },
     ],
   },
 

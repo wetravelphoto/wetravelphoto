@@ -23,17 +23,6 @@ export default async function JournalPageEditor() {
           <h2 className="admin-h2">Heading</h2>
 
           <label className="admin-field">
-            Menu label
-            <input
-              type="text"
-              name="nav_journal_label"
-              defaultValue={settings.nav_journal_label ?? ''}
-              placeholder="Journal"
-              className="admin-input"
-            />
-          </label>
-
-          <label className="admin-field">
             Eyebrow
             <input
               type="text"

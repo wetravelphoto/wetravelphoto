@@ -1,4 +1,5 @@
 import { PLATFORM } from '@/lib/platform'
+import { PAGES, isPage } from '@/lib/sections/pages'
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadDraftPage, draftStatus, draftStyleSettings } from '@/lib/drafts/store'
@@ -31,7 +32,6 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-const PAGES: Record<string, string> = { home: 'Homepage' }
 
 export default async function EditPage({
   params,
@@ -42,7 +42,7 @@ export default async function EditPage({
 }) {
   const { page } = await params
   const { mode } = await searchParams
-  if (!PAGES[page]) notFound()
+  if (!isPage(page)) notFound()
 
   const supabase = await createClient()
   const {
@@ -92,7 +92,7 @@ export default async function EditPage({
 
       <Canvas
       page={page}
-      title={PAGES[page]}
+      title={PAGES[page].label}
       sections={rows}
       legacy={legacy}
       missing={status.missing}

@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getSiteSettings } from '@/lib/site'
 import { patchSiteSettings } from '@/lib/site-patch'
-import { legacyColumns, legacyHomeSections } from '@/lib/sections/legacy'
+import { legacyColumns, legacyPageSections } from '@/lib/sections/legacy'
 import { resolveSettings, type SectionSettings } from '@/lib/sections/registry'
 import type { StoredSection } from '@/lib/sections/load'
 
@@ -40,7 +40,7 @@ export async function materializeSections(page = 'home'): Promise<Map<string, st
   if (rows.length === 0) {
     const settings = await getSiteSettings()
 
-    const seeded = legacyHomeSections(settings).map((row) => ({
+    const seeded = legacyPageSections(page, settings).map((row) => ({
       page,
       type: row.type,
       position: row.position,

@@ -38,7 +38,7 @@ export default async function ShopPageEditor() {
         </div>
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">What's for sale</h2>
+          <h2 className="admin-h2">What&rsquo;s for sale</h2>
           <p className="admin-meta" style={{ margin: '0 0 0.85rem', lineHeight: 1.6 }}>
             {forSale} photograph{forSale === 1 ? ' is' : 's are'} currently marked for sale.
           </p>
@@ -62,17 +62,6 @@ export default async function ShopPageEditor() {
 
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
           <h2 className="admin-h2">Shop page <span className="admin-where">the three lines at the top</span></h2>
-
-          <label className="admin-field">
-            Menu label
-            <input
-              type="text"
-              name="nav_shop_label"
-              defaultValue={settings.nav_shop_label ?? ''}
-              placeholder="Prints"
-              className="admin-input"
-            />
-          </label>
 
           <p className="admin-meta" style={{ margin: '0 0 0.85rem', lineHeight: 1.6 }}>
             Three lines, centred, with a short rule beneath. Leave any of them blank and it

@@ -120,6 +120,67 @@ export function legacyHomeSections(s: SiteSettings): StoredSection[] {
 }
 
 /**
+ * The About page, from the about_* columns app/about/page.tsx used to read.
+ * The old page showed "About" when no heading was set, so that is carried in
+ * as the heading rather than kept as a hidden fallback in the renderer.
+ */
+export function legacyAboutSections(s: SiteSettings): StoredSection[] {
+  return [
+    {
+      id: 'legacy-about',
+      type: 'about',
+      position: 0,
+      visible: true,
+      version: 1,
+      settings: {
+        eyebrow: s.about_eyebrow,
+        heading: s.about_heading || 'About',
+        body: s.about_body,
+        image_path: s.about_image_path,
+        image_side: s.about_image_side ?? 'left',
+        cta_label: s.about_cta_label,
+        cta_href: s.about_cta_href,
+      },
+    },
+  ]
+}
+
+/**
+ * The Contact page, as app/contact/page.tsx drew it: a heading, the contact
+ * intro line, and the form. From its first Publish its words are its own.
+ */
+export function legacyContactSections(s: SiteSettings): StoredSection[] {
+  return [
+    {
+      id: 'legacy-contact-form',
+      type: 'contact-form',
+      position: 0,
+      visible: true,
+      version: 1,
+      settings: {
+        heading: 'Contact',
+        intro: s.contact_intro,
+      },
+    },
+  ]
+}
+
+/** Any editable page, before anything has been published for it. */
+export function legacyPageSections(page: string, s: SiteSettings): StoredSection[] {
+  switch (page) {
+    case 'home':
+      return legacyHomeSections(s)
+    case 'about':
+      return legacyAboutSections(s)
+    case 'contact':
+      return legacyContactSections(s)
+    default:
+      // A page with no history starts empty — never borrow another page's.
+      return []
+  }
+}
+
+/**
  * The same mapping backwards: a section's settings as site_settings columns.
  *
  * The old homepage form that wrote these columns is gone (2026-09-21). The
@@ -189,6 +250,21 @@ export function legacyColumns(
         contact_image_path: s.image_path,
         contact_image_side: s.image_side,
       }
+
+    case 'about':
+      return {
+        about_eyebrow: s.eyebrow,
+        about_heading: s.heading,
+        about_body: s.body,
+        about_image_path: s.image_path,
+        about_image_side: s.image_side,
+        about_cta_label: s.cta_label,
+        about_cta_href: s.cta_href,
+      }
+
+    // 'contact-form' is deliberately not mirrored. Its only column would be
+    // contact_intro, which the homepage contact section mirrors too — and two
+    // sections writing one column means whichever published last wins.
 
     case 'mark':
       // Mirrored so that rolling the code back past the mark section still

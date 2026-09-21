@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
+import { PAGES, PAGE_SLUGS } from '@/lib/sections/pages'
 import {
   addDraftSection,
   applyDraftPairing,
@@ -329,7 +330,25 @@ export default function Canvas({
           <Link href="/admin/design" className="cv-back" aria-label="Back to admin">
             ←
           </Link>
-          <span className="cv-title">{title}</span>
+          {/* Which page is open. The draft is one for the whole site, so moving
+              between pages keeps every unpublished change, and Publish sends
+              them all live together. */}
+          <label className="cv-page">
+            <span className="cv-sr">Page</span>
+            <select
+              className="cv-page-select"
+              value={page}
+              onChange={(e) =>
+                router.push(`/edit/${e.target.value}${mode === 'style' ? '?mode=style' : ''}`)
+              }
+            >
+              {PAGE_SLUGS.map((slug) => (
+                <option key={slug} value={slug}>
+                  {PAGES[slug].label}
+                </option>
+              ))}
+            </select>
+          </label>
           {hasDraft && (
             <span className="cv-flag" title={draftUpdatedAt ?? undefined}>
               Unpublished changes

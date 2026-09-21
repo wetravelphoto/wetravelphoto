@@ -1732,3 +1732,30 @@
   display: flex;
   gap: 0.4rem;
 }
+
+/* ── Page switcher ─────────────────────────────────────────────────────────
+   Replaces the static page title: the title IS the switcher. Styled to read as
+   a title with a caret, not as a form control. */
+
+.cv-page { display: inline-flex; align-items: center; }
+
+.cv-page-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0.3rem 1.6rem 0.3rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--cv-soft) 50%) calc(100% - 0.75rem) 55% / 5px 5px no-repeat,
+    linear-gradient(135deg, var(--cv-soft) 50%, transparent 50%) calc(100% - 0.45rem) 55% / 5px 5px no-repeat,
+    transparent;
+  color: var(--cv-ink);
+  font: inherit;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.cv-page-select:hover { border-color: var(--cv-line); background-color: var(--cv-panel-2); }
+.cv-page-select:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 1px; }
+.cv-page-select option { background: var(--cv-panel); color: var(--cv-ink); }

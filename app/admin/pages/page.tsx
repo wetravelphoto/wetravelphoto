@@ -10,15 +10,15 @@ const pages = [
     live: '/',
   },
   {
-    href: '/admin/pages/about',
+    href: '/edit/about',
     title: 'About',
-    description: 'The standalone about page. Separate from the intro block on the homepage.',
+    description: 'Edited on the page itself, as sections. Starts as your photograph beside your story.',
     live: '/about',
   },
   {
-    href: '/admin/pages/contact',
+    href: '/edit/contact',
     title: 'Contact',
-    description: 'Intro copy and the public email shown above the form.',
+    description: 'Edited on the page itself, as sections. Starts as a heading, a few lines and the form.',
     live: '/contact',
   },
   {

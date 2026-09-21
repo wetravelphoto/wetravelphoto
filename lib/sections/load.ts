@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getSiteSettings, type SiteSettings } from '@/lib/site'
-import { legacyHomeSections } from '@/lib/sections/legacy'
+import { legacyPageSections } from '@/lib/sections/legacy'
 import {
   resolveSettings,
   sectionDef,
@@ -67,7 +67,7 @@ export async function loadPageSections(page = 'home'): Promise<PageSections> {
 
   const stored = (data ?? []) as StoredSection[]
   const legacy = stored.length === 0
-  const rows = legacy ? legacyHomeSections(settings) : stored
+  const rows = legacy ? legacyPageSections(page, settings) : stored
 
   return { sections: resolveRows(rows, legacy), settings, legacy }
 }

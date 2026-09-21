@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { isPage } from '@/lib/sections/pages'
 import { randomUUID } from 'crypto'
 import { requireUser } from '@/lib/auth'
 import {
@@ -53,6 +54,16 @@ import {
 const requireEditor = requireUser
 
 /**
+ * The page slug arrives from the browser like everything else in an action, so
+ * it is checked against the pages the editor knows. Without this a crafted call
+ * could create a draft for "/anything", which Publish would then write into
+ * page_sections as a page nobody can see or remove.
+ */
+function requirePage(page: string): void {
+  if (!isPage(page)) throw new Error(`There is no page called "${page}".`)
+}
+
+/**
  * The editor and its preview. Not '/' — the live page has not changed, and
  * revalidating it on every keystroke would throw away the cache that keeps the
  * homepage quick for visitors.
@@ -67,6 +78,7 @@ function done(page: string) {
 /** Starts a draft if there is not one, and returns the page's sections. */
 export async function beginEditing(page: string): Promise<DraftSection[]> {
   await requireEditor()
+  requirePage(page)
   const draft = await ensureDraft(page)
   return draft.pages[page] ?? []
 }
@@ -79,6 +91,7 @@ export async function beginEditing(page: string): Promise<DraftSection[]> {
  */
 export async function reorderDraft(page: string, orderedIds: string[]) {
   await requireEditor()
+  requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
   const byId = new Map(rows.map((r) => [r.id, r]))
@@ -97,6 +110,7 @@ export async function reorderDraft(page: string, orderedIds: string[]) {
 
 export async function setDraftVisible(page: string, id: string, visible: boolean) {
   await requireEditor()
+  requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
 
@@ -110,6 +124,7 @@ export async function setDraftVisible(page: string, id: string, visible: boolean
 
 export async function addDraftSection(page: string, type: string, afterId?: string) {
   await requireEditor()
+  requirePage(page)
 
   const def = sectionDef(type)
   if (!def) throw new Error(`Unknown section type: ${type}`)
@@ -145,6 +160,7 @@ export async function addDraftSection(page: string, type: string, afterId?: stri
 
 export async function removeDraftSection(page: string, id: string) {
   await requireEditor()
+  requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
 
@@ -164,6 +180,7 @@ export async function removeDraftSection(page: string, id: string) {
 
 export async function updateDraftSection(page: string, id: string, formData: FormData) {
   await requireEditor()
+  requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
 
@@ -242,6 +259,7 @@ export async function updateDraftSectionValues(
   values: Record<string, unknown>
 ) {
   await requireEditor()
+  requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
 

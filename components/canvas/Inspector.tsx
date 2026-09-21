@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import SectionFields from '@/components/admin/SectionFields'
 import { updateDraftSection, updateDraftSectionValues } from '@/app/actions/canvas'
-import { contentKeys, type Field, type SectionDef } from '@/lib/sections/registry'
+import { contentKeys, type Field, type LiveSpec, type SectionDef } from '@/lib/sections/registry'
 import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
 import MarkImage from '@/components/canvas/editors/MarkImage'
@@ -54,10 +54,12 @@ export default function Inspector({
   sectionStyle,
   styleBase,
   onPatch,
+  onLive,
   onType,
   onDevice,
   onShowStory,
   onSaved,
+  onSettled,
   onClose,
 }: {
   /** The drag handle on this panel's left edge. */
@@ -79,6 +81,8 @@ export default function Inspector({
   styleBase: { font: string; color: string; bodyFont: string; bodyColor: string }
   /** Text as it is typed, for the page to show immediately. */
   onPatch: (field: string, value: string) => void
+  /** A design value as it moves — a slider, a layout menu. See LiveSpec. */
+  onLive: (field: string, value: string, spec: LiveSpec) => void
   /** A typography override for this section's style group. */
   onType: (group: string, changes: Record<string, unknown>) => void
   /** Put the preview into the width whose crop is being edited. */
@@ -86,6 +90,11 @@ export default function Inspector({
   /** Bring one of the hero's stories up in the preview. */
   onShowStory: (index: number | null) => void
   onSaved: () => void
+  /**
+   * The newest edit to this section has been written — nothing is queued
+   * behind it — so values painted on live can be handed back to the server.
+   */
+  onSettled: (sectionId: string) => void
   onClose: () => void
 }) {
   const form = useRef<HTMLFormElement>(null)
@@ -163,6 +172,7 @@ export default function Inspector({
         await updateDraftSection(page, target.id, target.data)
         setSavedAt(Date.now())
         onSaved()
+        if (!queued.current) onSettled(target.id)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not save that.')
       }
@@ -193,6 +203,13 @@ export default function Inspector({
     ) {
       onPatch(target.name, target.value)
     }
+
+    // A design value the page can show on the spot: sliders and layout menus
+    // whose field declares exactly which property it changes. The save below
+    // still happens on its usual debounce; this only stops the page waiting
+    // for it.
+    const spec = target?.name ? def?.fields.find((f) => f.key === target.name)?.live : undefined
+    if (spec && target) onLive(target.name, target.value, spec)
 
     queued.current = { id, data: new FormData(form.current) }
 

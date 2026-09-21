@@ -1,6 +1,6 @@
 import type { SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
-import { editable } from '@/lib/sections/editable'
+import { editable, live } from '@/lib/sections/editable'
 import { markAlign, markSize, markSrc } from '@/lib/sections/mark'
 
 /* eslint-disable @next/next/no-img-element */
@@ -30,7 +30,7 @@ export default function MarkSection({
   if (!path) {
     if (!ctx.editable) return null
     return (
-      <div className="mark-section" data-align={align}>
+      <div className="mark-section" data-align={align} {...live(ctx, ['align'])}>
         <div className="mark-slot" {...editable(ctx, 'image_path')} />
       </div>
     )
@@ -38,12 +38,23 @@ export default function MarkSection({
 
   const src = markSrc(path, process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? '')
 
+  // Size and position are written as a custom property and an attribute on
+  // the outer element — exactly what the fields' `live` declarations name —
+  // so the editor can move and resize the mark while the slider is dragged.
+  const style = { '--mark-size': `${markSize(settings.size)}px` } as React.CSSProperties
+
   return (
-    <div className="mark-section" data-align={align} aria-hidden="true">
+    <div
+      className="mark-section"
+      data-align={align}
+      style={style}
+      aria-hidden="true"
+      {...live(ctx, ['size', 'align'])}
+    >
       {/* The tag goes on a wrapper, not the <img>: an image has no children,
           so the editor's "empty field" styling would match it. */}
       <span className="mark-frame" {...editable(ctx, 'image_path')}>
-        <img src={src} alt="" style={{ width: markSize(settings.size) }} />
+        <img src={src} alt="" />
       </span>
     </div>
   )

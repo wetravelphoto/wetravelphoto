@@ -3,7 +3,7 @@ import { photoUrl } from '@/lib/images'
 import { srcSetFromPath, SIZES_ATTR } from '@/lib/srcset'
 import { styleVars } from '@/lib/type-styles'
 import { num, str, type SectionSettings } from '@/lib/sections/registry'
-import { editable } from '@/lib/sections/editable'
+import { editable, typeGroup } from '@/lib/sections/editable'
 import type { SectionContext } from '@/lib/sections/context'
 
 export default function JournalSection({
@@ -19,7 +19,7 @@ export default function JournalSection({
   const cta = str(settings, 'cta_label')
 
   return (
-    <section className="home-section" style={styleVars(ctx.styles, 'journal')}>
+    <section className="home-section" style={styleVars(ctx.styles, 'journal')} {...typeGroup(ctx, 'journal')}>
       <div className="home-inner">
         <div className="journal-section-head">
           <h2 className="section-title" {...editable(ctx, 'heading')}>

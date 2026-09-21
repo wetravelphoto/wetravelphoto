@@ -31,6 +31,26 @@
 // What the settings panel draws, and what tells the save action how to read
 // each value back out of the form. One declaration serves both.
 
+/**
+ * How the editor can show a change on the page AS IT IS MADE, before the save
+ * and the re-render come back.
+ *
+ * The rule is the same one the text patch follows: the preview may only do
+ * what the server is about to do anyway. So a field declares the ONE thing its
+ * value changes in the markup — a CSS custom property or a data attribute —
+ * and its renderer writes exactly that, on an element tagged with
+ * `live(ctx, [key])` from lib/sections/editable.ts. The preview then sets the
+ * same property to the same value, and the re-render that follows lands on
+ * what is already there.
+ *
+ * A setting whose effect is more than one property (it adds or removes
+ * elements, changes text, picks a different image) must NOT declare this. It
+ * waits for the re-render, which is correct if slower.
+ */
+export type LiveSpec =
+  | { var: `--${string}`; unit?: string }
+  | { attr: `data-${string}` }
+
 export type FieldKind =
   | 'text'
   | 'textarea'
@@ -63,6 +83,8 @@ type FieldBase = {
    * that should have changed is a click to fix, losing one is not.
    */
   content?: boolean
+  /** Shown on the page instantly while it changes. See LiveSpec. */
+  live?: LiveSpec
 }
 
 export type Field = FieldBase &
@@ -213,11 +235,11 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         placeholder: '/trips',
       },
-      { key: 'title_position', label: 'Title position', kind: 'select', group: 'Layout', options: [
+      { key: 'title_position', label: 'Title position', kind: 'select', group: 'Layout', live: { attr: 'data-title-pos' }, options: [
         { value: 'center', label: 'Centre' },
         { value: 'bottom', label: 'Bottom' },
       ] },
-      { key: 'story_align', label: 'Story text', kind: 'select', group: 'Layout', options: ALIGN, when: { key: 'mode', equals: 'stories' } },
+      { key: 'story_align', label: 'Story text', kind: 'select', group: 'Layout', options: ALIGN, live: { attr: 'data-story-align' }, when: { key: 'mode', equals: 'stories' } },
       { key: 'show_mark', label: 'Show the scroll mark', kind: 'toggle', group: 'Layout' },
       {
         key: 'featured_post_ids',
@@ -264,7 +286,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         note: 'Upload an SVG, PNG, WebP or JPEG. Transparent backgrounds work best.',
       },
-      { key: 'align', label: 'Position', kind: 'select', options: POSITION },
+      { key: 'align', label: 'Position', kind: 'select', options: POSITION, live: { attr: 'data-align' } },
       {
         key: 'size',
         label: 'Size',
@@ -274,6 +296,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         step: 2,
         slider: true,
         unit: 'px',
+        live: { var: '--mark-size', unit: 'px' },
       },
     ],
   },
@@ -304,7 +327,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         help: 'Leave a blank line between paragraphs.',
       },
       { key: 'image_path', label: 'Photograph', kind: 'image', content: true },
-      { key: 'image_side', label: 'Layout', kind: 'select', options: SIDE },
+      { key: 'image_side', label: 'Layout', kind: 'select', options: SIDE, live: { attr: 'data-side' } },
     ],
   },
 
@@ -404,7 +427,7 @@ export const SECTIONS: Record<string, SectionDef> = {
       },
       { key: 'tagline', label: 'Closing line', kind: 'text', content: true },
       { key: 'image_path', label: 'Photograph', kind: 'image', content: true },
-      { key: 'image_side', label: 'Layout', kind: 'select', options: SIDE },
+      { key: 'image_side', label: 'Layout', kind: 'select', options: SIDE, live: { attr: 'data-side' } },
     ],
   },
 }
@@ -500,3 +523,15 @@ export const map = <T,>(s: SectionSettings, key: string): Record<string, T> =>
   s[key] && typeof s[key] === 'object' && !Array.isArray(s[key])
     ? (s[key] as Record<string, T>)
     : {}
+
+/**
+ * Every data attribute any field can set live. The preview watches these for
+ * re-renders, so a live value that a stale re-render overwrote can be put back.
+ */
+export const LIVE_ATTRS: string[] = Array.from(
+  new Set(
+    Object.values(SECTIONS).flatMap((def) =>
+      def.fields.flatMap((f) => (f.live && 'attr' in f.live ? [f.live.attr] : []))
+    )
+  )
+)

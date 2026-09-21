@@ -58,6 +58,24 @@ export function styleFor(styles: TypeStyles | null, section: StyledSection): Sec
 }
 
 /**
+ * Every variable styleVars can write. The editor needs the full list to repaint
+ * a section live: a variable the new choice no longer sets has to be REMOVED,
+ * not left behind from the previous one.
+ */
+export const SEC_VARS = [
+  '--sec-font',
+  '--sec-weight',
+  '--sec-case',
+  '--sec-track',
+  '--sec-color',
+  '--sec-scale',
+  '--sec-body-font',
+  '--sec-body-weight',
+  '--sec-body-color',
+  '--sec-body-scale',
+] as const
+
+/**
  * Section typography is applied as CSS variables, so one wrapper restyles
  * every heading and paragraph inside it without threading props through.
  *

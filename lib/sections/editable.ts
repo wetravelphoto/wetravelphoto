@@ -32,3 +32,24 @@ import type { SectionContext } from '@/lib/sections/context'
 export function editable(ctx: SectionContext, key: string): Record<string, string> {
   return ctx.editable ? { 'data-field': key } : {}
 }
+
+/**
+ * Marks the element that carries these settings' live properties — the data
+ * attribute or CSS variable each one declares in its field's `live`. The
+ * renderer must write that property itself, on this same element; the preview
+ * only ever changes a value the server has already put there. See LiveSpec in
+ * lib/sections/registry.ts.
+ */
+export function live(ctx: SectionContext, keys: string[]): Record<string, string> {
+  return ctx.editable ? { 'data-live': keys.join(' ') } : {}
+}
+
+/**
+ * Marks the element a section's typography variables are written on, so the
+ * editor can repaint them while a font or size is being chosen. Must be the
+ * element that has `style={styleVars(...)}`: an inline property on a child
+ * would beat one set on its parent.
+ */
+export function typeGroup(ctx: SectionContext, group: string): Record<string, string> {
+  return ctx.editable ? { 'data-type-group': group } : {}
+}

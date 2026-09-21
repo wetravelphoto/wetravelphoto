@@ -2,7 +2,7 @@ import { photoUrl } from '@/lib/images'
 import { srcSetFromPath, SIZES_ATTR } from '@/lib/srcset'
 import { styleVars } from '@/lib/type-styles'
 import { str, type SectionSettings } from '@/lib/sections/registry'
-import { editable } from '@/lib/sections/editable'
+import { editable, live, typeGroup } from '@/lib/sections/editable'
 import type { SectionContext } from '@/lib/sections/context'
 
 export default function IntroSection({
@@ -20,8 +20,8 @@ export default function IntroSection({
   if (!heading && paragraphs.length === 0 && !image && !ctx.editable) return null
 
   return (
-    <section className="home-section" style={styleVars(ctx.styles, 'intro')}>
-      <div className="home-inner intro-grid" data-side={settings.image_side}>
+    <section className="home-section" style={styleVars(ctx.styles, 'intro')} {...typeGroup(ctx, 'intro')}>
+      <div className="home-inner intro-grid" data-side={settings.image_side} {...live(ctx, ['image_side'])}>
         {image && (
           <div className="intro-media">
             {/* eslint-disable-next-line @next/next/no-img-element */}

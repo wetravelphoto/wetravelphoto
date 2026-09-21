@@ -58,7 +58,12 @@ export default function FixedHero({
   const point = isMobile ? focalMobile : focal
 
   return (
-    <section className="hero" data-title-pos={markPosition} style={styleVars}>
+    <section
+      className="hero"
+      data-title-pos={markPosition}
+      style={styleVars}
+      {...(editable ? { 'data-live': 'title_position', 'data-type-group': 'hero' } : {})}
+    >
       <div className="hero-layer" data-active="true">
         {imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element

@@ -2,7 +2,7 @@ import { photoUrl } from '@/lib/images'
 import { formatTripDate } from '@/lib/dates'
 import { styleVars } from '@/lib/type-styles'
 import { num, str, type SectionSettings } from '@/lib/sections/registry'
-import { editable } from '@/lib/sections/editable'
+import { editable, typeGroup } from '@/lib/sections/editable'
 import type { SectionContext } from '@/lib/sections/context'
 import DragCarousel, { type CarouselItem } from '@/components/home/DragCarousel'
 
@@ -52,7 +52,7 @@ export default function GalleriesSection({
   })
 
   return (
-    <section className="carousel-section" style={styleVars(ctx.styles, 'intro')}>
+    <section className="carousel-section" style={styleVars(ctx.styles, 'intro')} {...typeGroup(ctx, 'intro')}>
       <div className="carousel-head">
         <h2 {...editable(ctx, 'heading')}>{str(settings, 'heading') || 'Recent trips'}</h2>
       </div>

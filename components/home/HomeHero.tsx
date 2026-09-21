@@ -99,7 +99,17 @@ export default function HomeHero({
   }
 
   return (
-    <section className="hero" data-title-pos={titlePosition} data-story-align={storyAlign} style={styleVars}>
+    <section
+      className="hero"
+      data-title-pos={titlePosition}
+      data-story-align={storyAlign}
+      style={styleVars}
+      // In the editor: both layout attributes and the typography variables on
+      // this element can be changed live. See LiveSpec in the registry.
+      {...(editable
+        ? { 'data-live': 'title_position story_align', 'data-type-group': 'hero' }
+        : {})}
+    >
       {items.map((item, i) => {
         // Fall back to centre if no focal point has been set for this story
         const point = (isMobile ? item.focalMobile : item.focal) ?? { x: 0.5, y: 0.5 }

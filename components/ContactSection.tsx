@@ -36,7 +36,14 @@ export default function ContactSection({
   const field = (key: string) => (editable ? { 'data-field': key } : {})
 
   return (
-    <section className="contact-split" data-side={settings.imageSide} style={styleVars}>
+    <section
+      className="contact-split"
+      data-side={settings.imageSide}
+      style={styleVars}
+      // In the editor: the layout attribute and the typography variables on
+      // this element can be changed live. See LiveSpec in the registry.
+      {...(editable ? { 'data-live': 'image_side', 'data-type-group': 'contact' } : {})}
+    >
       {settings.imageUrl && (
         <div className="contact-media">
           {/* eslint-disable-next-line @next/next/no-img-element */}

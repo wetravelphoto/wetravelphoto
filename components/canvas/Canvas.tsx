@@ -19,7 +19,14 @@ import {
   updateDraftStyles,
 } from '@/app/actions/canvas'
 import { cssVariables, fontsToLoad, type StyleTokens } from '@/lib/styles/tokens'
-import { styleFor, type StyledSection, type TypeStyles } from '@/lib/type-styles'
+import {
+  SEC_VARS,
+  styleFor,
+  styleVars,
+  type SectionStyle,
+  type StyledSection,
+  type TypeStyles,
+} from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
 import SectionRail from '@/components/canvas/SectionRail'
 import Inspector from '@/components/canvas/Inspector'
@@ -55,6 +62,13 @@ const WIDTHS: Record<Device, number | null> = { desktop: null, tablet: 820, phon
  * what is actually in the draft. A few hundred milliseconds slower than
  * optimistic patching, and it cannot lie.
  */
+/**
+ * How long a run of typography changes is gathered before it is written. The
+ * page shows each change immediately, so this only decides how many writes a
+ * slider drag costs.
+ */
+const TYPE_DEBOUNCE_MS = 250
+
 export default function Canvas({
   page,
   title,
@@ -128,9 +142,13 @@ export default function Canvas({
       id?: string
       field?: string
       value?: string
-      vars?: Record<string, string>
+      vars?: Record<string, string | null>
       fonts?: string[]
       index?: number
+      var?: string
+      unit?: string
+      attr?: string
+      group?: string
     }) => {
       frame.current?.contentWindow?.postMessage(
         { source: 'wtp-canvas', ...message },
@@ -207,6 +225,70 @@ export default function Canvas({
     },
     [tell]
   )
+
+  /**
+   * Per-section typography, shown as it is chosen.
+   *
+   * Two things used to make a size slider here feel broken. Every movement
+   * went to the server as its own action, queued behind the last; and the
+   * slider's position came from the server's copy, so it could not move until
+   * the round trip came back. Now:
+   *
+   *   · the choice is held locally (typeOverride) so the panel follows the hand;
+   *   · the section's variables are painted onto the preview at once — the same
+   *     styleVars() the renderer uses, so it is the identity, not a guess;
+   *   · the save is coalesced, and 'settle' hands the preview back to the
+   *     server once the write holding the final value has landed.
+   *
+   * The local copy is dropped the moment the server's copy changes — the save
+   * landing, a Discard, "clear overrides" — so it can never outlive the thing
+   * it stood in for.
+   */
+  const serverTypes = JSON.stringify(typeStyles)
+  const [typeOverride, setTypeOverride] = useState<{ base: string; styles: TypeStyles } | null>(
+    null
+  )
+  if (typeOverride && typeOverride.base !== serverTypes) setTypeOverride(null)
+  const shownTypes = typeOverride?.styles ?? typeStyles
+
+  const typeQueue = useRef<Record<string, Record<string, unknown>>>({})
+  const typeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const changeType = (group: string, changes: Record<string, unknown>) => {
+    const current: Record<string, unknown> = { ...(shownTypes[group] ?? {}) }
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null || value === undefined || value === '') delete current[key]
+      else current[key] = value
+    }
+    const next: TypeStyles = { ...shownTypes, [group]: current as SectionStyle }
+    setTypeOverride({ base: serverTypes, styles: next })
+
+    // Every variable, set or null: one the new choice no longer sets has to be
+    // taken off, not left over from the last one.
+    const vars = styleVars(next, group as StyledSection) as Record<string, string>
+    const all: Record<string, string | null> = {}
+    for (const name of SEC_VARS) all[name] = vars[name] ?? null
+
+    const fonts = [current.font, current.bodyFont]
+      .filter((f): f is string => typeof f === 'string' && f !== '')
+      .map(fontHref)
+
+    tell({ type: 'type-vars', group, vars: all, fonts })
+
+    typeQueue.current[group] = { ...(typeQueue.current[group] ?? {}), ...changes }
+    if (typeTimer.current) clearTimeout(typeTimer.current)
+    typeTimer.current = setTimeout(() => {
+      typeTimer.current = null
+      const batch = typeQueue.current
+      typeQueue.current = {}
+      for (const [g, c] of Object.entries(batch)) {
+        run(
+          () => updateDraftSectionType(g as StyledSection, c),
+          () => tell({ type: 'settle', group: g })
+        )
+      }
+    }, TYPE_DEBOUNCE_MS)
+  }
 
   // Selecting in the rail scrolls the preview to it.
   const choose = (id: string | null) => {
@@ -383,8 +465,8 @@ export default function Canvas({
           <StyleMode
             resizer={<PanelResizer />}
             tokens={tokens}
-            overriddenGroups={Object.keys(typeStyles).filter(
-              (g) => Object.keys(typeStyles[g] ?? {}).length > 0
+            overriddenGroups={Object.keys(shownTypes).filter(
+              (g) => Object.keys(shownTypes[g] ?? {}).length > 0
             )}
             onClearOverrides={() => {
               if (confirm('Let every section follow the site style again?')) {
@@ -404,16 +486,14 @@ export default function Canvas({
             publicUrl={publicUrl}
             stories={stories}
             focusField={focusField}
-            sectionStyle={def?.styled ? styleFor(typeStyles, def.styled) : {}}
+            sectionStyle={def?.styled ? styleFor(shownTypes, def.styled) : {}}
             styleBase={{
               font: tokens.display_font,
               color: tokens.ink,
               bodyFont: tokens.body_font,
               bodyColor: tokens.ink_soft,
             }}
-            onType={(group, changes) =>
-              run(() => updateDraftSectionType(group as StyledSection, changes))
-            }
+            onType={changeType}
             // Cropping for the phone while looking at the desktop layout is
             // guessing, so the preview follows the crop being edited.
             onDevice={(d) => setDevice(d === 'mobile' ? 'phone' : 'desktop')}
@@ -421,6 +501,10 @@ export default function Canvas({
             onPatch={(field, value) => {
               if (selected) tell({ type: 'patch', id: selected, field, value })
             }}
+            onLive={(field, value, spec) => {
+              if (selected) tell({ type: 'live', id: selected, field, value, ...spec })
+            }}
+            onSettled={(id) => tell({ type: 'settle', id })}
             onSaved={() => {
               tell({ type: 'refresh' })
               router.refresh()

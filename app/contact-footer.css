@@ -341,6 +341,7 @@
 .mark-frame { display: block; line-height: 0; }
 
 .mark-section img {
+  width: var(--mark-size, 64px);
   height: auto;
   display: block;
   opacity: 0.85;

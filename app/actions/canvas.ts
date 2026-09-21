@@ -383,7 +383,6 @@ export async function publish() {
   // and page-level revalidation would leave every page wearing the old colours.
   revalidatePath('/', 'layout')
   revalidatePath('/admin/design')
-  revalidatePath('/admin/pages/home')
   for (const page of result.pages) done(page)
 
   return result

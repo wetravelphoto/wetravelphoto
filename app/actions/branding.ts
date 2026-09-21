@@ -5,6 +5,7 @@ import { r2Client } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
+import { requireUser } from '@/lib/auth'
 
 const ALLOWED: Record<string, string> = {
   'image/svg+xml': 'svg',
@@ -77,6 +78,8 @@ export async function clearLogo(slot: Slot) {
 }
 
 export async function updateBranding(formData: FormData) {
+  await requireUser()
+
   const number = (key: string, fallback: number) => {
     const value = parseInt((formData.get(key) as string) ?? '', 10)
     return Number.isNaN(value) ? fallback : value
@@ -109,6 +112,11 @@ export async function updateBranding(formData: FormData) {
       footer_scale: decimal('footer_scale', 1),
       footer_scale_mobile: decimal('footer_scale_mobile', 1),
       logo_footer_height_mobile: number('logo_footer_height_mobile', 90),
+
+      // The accent mark below the homepage hero. A checkbox sends nothing when
+      // it is off, so absence is false — the panel is always on this form.
+      show_bird: formData.get('show_bird') === 'on',
+      logo_bird_size: number('logo_bird_size', 64),
     })
     .eq('id', 1)
 

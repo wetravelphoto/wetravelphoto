@@ -48,6 +48,7 @@ export default async function SettingsPage() {
           siteTitle={settings.site_title}
           headerLogoUrl={url(settings.logo_header_path)}
           footerLogoUrl={url(settings.logo_footer_path)}
+          birdLogoUrl={url(settings.logo_bird_path)}
           sampleImageUrl={samples?.[0] ? photoUrl(samples[0].storage_path) : null}
           initial={{
             headerHeight: settings.logo_header_height ?? 34,
@@ -63,6 +64,8 @@ export default async function SettingsPage() {
             footerHeightMobile: settings.logo_footer_height_mobile ?? 90,
             footerScaleMobile: settings.footer_scale_mobile ?? 1,
             tagline: settings.tagline,
+            showBird: settings.show_bird !== false,
+            birdSize: settings.logo_bird_size ?? 64,
           }}
         />
 

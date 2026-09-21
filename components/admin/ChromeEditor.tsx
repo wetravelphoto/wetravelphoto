@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { fontHref, getFont } from '@/lib/fonts'
 import LogoUploader from '@/components/admin/LogoUploader'
+import Toggle from '@/components/admin/Toggle'
 import FontSelect from '@/components/admin/FontSelect'
 import DeviceSwitch from '@/components/admin/DeviceSwitch'
 import SaveBar from '@/components/admin/SaveBar'
@@ -11,6 +12,8 @@ type Props = {
   siteTitle: string
   headerLogoUrl: string | null
   footerLogoUrl: string | null
+  /** The accent mark below the homepage hero. */
+  birdLogoUrl: string | null
   sampleImageUrl: string | null
   initial: {
     headerHeight: number
@@ -26,6 +29,8 @@ type Props = {
     footerHeightMobile: number
     footerScaleMobile: number
     tagline: string | null
+    showBird: boolean
+    birdSize: number
   }
 }
 
@@ -35,6 +40,7 @@ export default function ChromeEditor({
   siteTitle,
   headerLogoUrl,
   footerLogoUrl,
+  birdLogoUrl,
   sampleImageUrl,
   initial,
 }: Props) {
@@ -52,6 +58,8 @@ export default function ChromeEditor({
   const [navScaleMobile, setNavScaleMobile] = useState(initial.navScaleMobile)
   const [footerHeightMobile, setFooterHeightMobile] = useState(initial.footerHeightMobile)
   const [footerScaleMobile, setFooterScaleMobile] = useState(initial.footerScaleMobile)
+
+  const [birdSize, setBirdSize] = useState(initial.birdSize)
 
   // Which device the sliders and previews are showing
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
@@ -327,6 +335,46 @@ export default function ChromeEditor({
         </div>
       </div>
 
+      {/* ---------------- ACCENT MARK ----------------
+          Moved here from the old homepage form. It is a brand asset like the
+          two logos above — uploaded once, used as-is — not page content, so it
+          sits with them rather than in the canvas, and like them it takes
+          effect on save rather than waiting for a Publish. */}
+      <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+        <h2 className="admin-h2">Accent mark</h2>
+        <p className="admin-meta" style={{ margin: '0 0 0.85rem', lineHeight: 1.55 }}>
+          The small mark in the light band below the homepage hero.
+        </p>
+
+        <Toggle name="show_bird" label="Show the accent mark" defaultChecked={initial.showBird} />
+
+        <div className="size-row" style={{ marginTop: '0.75rem' }}>
+          <div className="logo-grid" style={{ gridTemplateColumns: '1fr', margin: 0 }}>
+            <LogoUploader
+              slot="bird"
+              label="Mark"
+              currentUrl={birdLogoUrl}
+              builtInUrl="/logos/we-travel-photo-bird.svg"
+              previewTone="light"
+            />
+          </div>
+
+          <label className="admin-field">
+            Size — {birdSize}px
+            <input
+              type="range"
+              name="logo_bird_size"
+              min="24"
+              max="180"
+              step="2"
+              value={birdSize}
+              onChange={(e) => setBirdSize(parseInt(e.target.value, 10))}
+              style={{ width: '100%', marginTop: '0.35rem', accentColor: 'var(--admin-accent)' }}
+            />
+          </label>
+        </div>
+      </div>
+
       <input type="hidden" name="logo_header_height" value={headerHeight} />
       <input type="hidden" name="logo_header_height_mobile" value={headerHeightMobile} />
       <input type="hidden" name="header_nav_scale" value={navScale} />
@@ -336,7 +384,7 @@ export default function ChromeEditor({
       <input type="hidden" name="footer_scale" value={footerScale} />
       <input type="hidden" name="footer_scale_mobile" value={footerScaleMobile} />
 
-      <SaveBar label="Save header & footer" title={siteTitle} />
+      <SaveBar label="Save header, footer & mark" title={siteTitle} />
     </>
   )
 }

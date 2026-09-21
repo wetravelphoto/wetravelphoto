@@ -83,7 +83,7 @@ export default async function DesignPage() {
             {current.look
               ? `Using ${current.look.name}, version ${current.version}.`
               : 'No look chosen yet.'}{' '}
-            <Link href="/admin/pages/home" style={{ borderBottom: '0.5px solid currentColor' }}>
+            <Link href="/edit/home" style={{ borderBottom: '0.5px solid currentColor' }}>
               Sections
             </Link>{' '}
             control what is on each page.

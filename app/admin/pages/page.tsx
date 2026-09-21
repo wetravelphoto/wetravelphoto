@@ -4,9 +4,9 @@ export const dynamic = 'force-dynamic'
 
 const pages = [
   {
-    href: '/admin/pages/home',
+    href: '/edit/home',
     title: 'Homepage',
-    description: 'Hero stories, intro block, galleries carousel, journal row and contact section.',
+    description: 'Edited on the page itself: sections, words, photographs, crops and type. Changes stay in a draft until you publish.',
     live: '/',
   },
   {

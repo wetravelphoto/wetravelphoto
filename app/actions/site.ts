@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { patchSiteSettings } from '@/lib/site-patch'
-import { syncSectionsFromSettings } from '@/app/actions/sections'
+import { syncContactSection } from '@/lib/sections/sync'
+import { requireUser } from '@/lib/auth'
 
 /**
  * Settings are split by page so each form only writes its own fields —
@@ -12,6 +13,10 @@ import { syncSectionsFromSettings } from '@/app/actions/sections'
  * have yet, lives in lib/site-patch.ts so the section actions can use it too.
  */
 async function patch(values: Record<string, unknown>, paths: string[]) {
+  // Every action in this file writes through here, so this one check covers
+  // them all. A server action is a public endpoint whatever page imports it;
+  // row-level security is the backstop, not the gate.
+  await requireUser()
   await patchSiteSettings(values)
 
   revalidatePath('/admin/settings')
@@ -38,77 +43,6 @@ export async function updateIdentity(formData: FormData) {
     },
     ['/', '/about', '/contact']
   )
-}
-
-export async function updateHomepage(formData: FormData) {
-  const featuredIds = (text(formData, 'featured_post_ids') ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-
-  const count = parseInt((formData.get('journal_count') as string) ?? '3', 10)
-
-  // Hero display names, keyed by story id — the story's own title is untouched
-  const parseJson = <T,>(key: string, fallback: T): T => {
-    try {
-      return JSON.parse((formData.get(key) as string) || 'null') ?? fallback
-    } catch {
-      return fallback
-    }
-  }
-
-  const heroTitles = parseJson<Record<string, string>>('hero_titles', {})
-  const heroSubtitles = parseJson<Record<string, string>>('hero_subtitles', {})
-  const typeStyles = parseJson<Record<string, unknown>>('type_styles', {})
-  const heroFocal = parseJson<Record<string, unknown>>('hero_focal', {})
-  const heroFixedFocal = parseJson<Record<string, unknown>>('hero_fixed_focal', {})
-
-  await patch(
-    {
-      featured_post_ids: featuredIds,
-      hero_titles: heroTitles,
-      hero_subtitles: heroSubtitles,
-      hero_focal: heroFocal,
-      hero_title_position: text(formData, 'hero_title_position') ?? 'center',
-      hero_story_align: text(formData, 'hero_story_align') ?? 'left',
-      hero_show_mark: on(formData, 'hero_show_mark'),
-      show_bird: on(formData, 'show_bird'),
-      logo_bird_size: Math.round(decimalFrom(formData, 'logo_bird_size', 64)),
-
-      hero_mode: text(formData, 'hero_mode') ?? 'stories',
-      hero_image_path: text(formData, 'hero_image_path'),
-      hero_fixed_title: text(formData, 'hero_fixed_title'),
-      hero_fixed_subtitle: text(formData, 'hero_fixed_subtitle'),
-      hero_fixed_cta_label: text(formData, 'hero_fixed_cta_label'),
-      hero_fixed_cta_href: text(formData, 'hero_fixed_cta_href'),
-      hero_fixed_focal: heroFixedFocal,
-      type_styles: typeStyles,
-      hero_kicker: text(formData, 'hero_kicker'),
-
-      show_intro: on(formData, 'show_intro'),
-      intro_kicker: text(formData, 'intro_kicker'),
-      intro_heading: text(formData, 'intro_heading'),
-      intro_body: text(formData, 'intro_body'),
-      intro_image_path: text(formData, 'intro_image_path'),
-      intro_image_side: text(formData, 'intro_image_side') ?? 'left',
-
-      show_galleries: on(formData, 'show_galleries'),
-      carousel_heading: text(formData, 'carousel_heading'),
-
-      show_journal: on(formData, 'show_journal'),
-      journal_heading: text(formData, 'journal_heading'),
-      journal_count: isNaN(count) ? 3 : count,
-
-
-      show_instagram: on(formData, 'show_instagram'),
-      instagram_heading: text(formData, 'instagram_heading'),
-    },
-    ['/', '/admin/pages/home']
-  )
-
-  // Keep the section list in step with what was just typed here. No-op until
-  // the page has been edited in the section list at least once.
-  await syncSectionsFromSettings('home')
 }
 
 export async function updateAboutPage(formData: FormData) {
@@ -145,8 +79,9 @@ export async function updateContactPage(formData: FormData) {
     ['/contact', '/', '/admin/pages/contact']
   )
 
-  // The same copy drives the homepage's contact section.
-  await syncSectionsFromSettings('home')
+  // The same copy drives the homepage's contact section — live, and in the
+  // canvas's draft if one is open.
+  await syncContactSection('home')
 }
 
 export async function updateNewsletter(formData: FormData) {

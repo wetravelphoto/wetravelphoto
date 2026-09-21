@@ -15,7 +15,7 @@ import {
   manifestForVersion,
 } from '@/lib/templates/store'
 
-const PATHS = ['/admin/design', '/admin/design/style', '/admin/pages/home']
+const PATHS = ['/admin/design']
 
 function done() {
   // 'layout' because a look sets the global style tokens, which are emitted in

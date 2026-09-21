@@ -1,55 +1,17 @@
-import Link from 'next/link'
-import { loadPageSections } from '@/lib/sections/load'
-import SectionList, { type SectionRow } from '@/components/admin/SectionList'
-import '@/app/admin/sections.css'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
-
-export default async function HomeSectionsPage() {
-  const { sections, legacy } = await loadPageSections('home')
-
-  const rows: SectionRow[] = sections.map((s) => ({
-    id: s.id,
-    type: s.type,
-    visible: s.visible,
-    settings: s.settings,
-  }))
-
-  return (
-    <div>
-      <p className="admin-crumb">
-        <Link href="/admin/pages">← Pages</Link>
-      </p>
-
-      <div className="page-editor-head">
-        <div>
-          <h1 className="admin-h1">Homepage</h1>
-          <p className="admin-meta" style={{ margin: '0.35rem 0 0' }}>
-            Sections appear in this order on the live page. Drag to reorder.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Link href="/edit/home" className="admin-btn admin-btn-sm">
-            Open the editor
-          </Link>
-          <Link
-            href="/admin/pages/home/details"
-            className="admin-btn admin-btn-ghost admin-btn-sm"
-          >
-            Stories &amp; type
-          </Link>
-          <Link href="/" target="_blank" className="admin-btn admin-btn-ghost admin-btn-sm">
-            View ↗
-          </Link>
-        </div>
-      </div>
-
-      <SectionList
-        page="home"
-        sections={rows}
-        legacy={legacy}
-        publicUrl={process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''}
-      />
-    </div>
-  )
+/**
+ * The homepage is edited in the canvas now.
+ *
+ * This used to be the section list — drag to reorder, click to open a form —
+ * and it wrote straight to the live page. The canvas does all of that on the
+ * page itself, through the draft, so nothing changes in public until Publish.
+ * Two editors writing the same page by different routes (one drafted, one not)
+ * is exactly how an unpublished edit gets silently overwritten, so the old one
+ * goes rather than lingering beside the new.
+ *
+ * A redirect rather than a 404: the link is in bookmarks and browser history.
+ */
+export default function HomeSectionsMoved() {
+  redirect('/edit/home')
 }

@@ -130,7 +130,7 @@ export default async function AboutPageEditor() {
 
           <p className="admin-meta" style={{ margin: 0, lineHeight: 1.6 }}>
             Typography follows the intro section&apos;s settings on the{' '}
-            <Link href="/admin/pages/home" style={{ borderBottom: '0.5px solid currentColor' }}>
+            <Link href="/edit/home" style={{ borderBottom: '0.5px solid currentColor' }}>
               homepage editor
             </Link>
             .

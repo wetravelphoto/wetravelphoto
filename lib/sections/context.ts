@@ -5,6 +5,8 @@ import { neededData, type LoadedSection } from '@/lib/sections/load'
 import { num } from '@/lib/sections/registry'
 import type { SiteSettings } from '@/lib/site'
 import type { TypeStyles } from '@/lib/type-styles'
+import { getShopCategories, type ShopCategory } from '@/lib/shop'
+import { getPublishedCatalogResult, type CatalogEntry } from '@/lib/catalog'
 
 export type PostRow = {
   id: string
@@ -60,6 +62,14 @@ export type SectionContext = {
   albums: AlbumWithCover[]
   albumError: string | null
   instagram: Awaited<ReturnType<typeof getInstagramFeed>>
+  /** The print wall's data, when a visible section needs it. */
+  shop: {
+    categories: ShopCategory[]
+    /** The category chosen with ?c=, or null for All. */
+    active: ShopCategory | null
+    entries: CatalogEntry[]
+    failed: boolean
+  } | null
 }
 
 /**
@@ -72,7 +82,11 @@ export type SectionContext = {
 export async function buildContext(
   sections: LoadedSection[],
   settings: SiteSettings,
-  options: { editable?: boolean } = {}
+  options: {
+    editable?: boolean
+    /** The page's query string. The print wall reads ?c= for its category. */
+    query?: Record<string, string | undefined>
+  } = {}
 ): Promise<SectionContext> {
   const needs = neededData(sections)
   const supabase = await createClient()
@@ -110,6 +124,15 @@ export async function buildContext(
       : Promise.resolve([]),
   ])
 
+  // The wall needs the categories before it knows which prints to ask for.
+  let shop: SectionContext['shop'] = null
+  if (needs.has('catalog')) {
+    const categories = await getShopCategories()
+    const active = categories.find((c) => c.slug === options.query?.c) ?? null
+    const { entries, failed } = await getPublishedCatalogResult(active?.id ?? null)
+    shop = { categories, active, entries, failed }
+  }
+
   const albums = needs.has('albums')
     ? await attachCovers((albumResult.data ?? []) as unknown as AlbumRow[])
     : []
@@ -122,5 +145,6 @@ export async function buildContext(
     albums: albums as AlbumWithCover[],
     albumError: albumResult.error?.message ?? null,
     instagram,
+    shop,
   }
 }

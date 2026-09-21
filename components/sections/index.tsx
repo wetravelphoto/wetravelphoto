@@ -10,6 +10,7 @@ import InstagramSection from '@/components/sections/InstagramSection'
 import ContactBlock from '@/components/sections/ContactBlock'
 import MarkSection from '@/components/sections/MarkSection'
 import AboutSection from '@/components/sections/AboutSection'
+import ShopSection from '@/components/sections/ShopSection'
 
 type SectionProps = { settings: SectionSettings; ctx: SectionContext }
 
@@ -32,6 +33,7 @@ const RENDERERS: Record<string, (props: SectionProps) => React.ReactNode> = {
   instagram: InstagramSection,
   contact: ContactBlock,
   about: AboutSection,
+  shop: ShopSection,
 }
 
 export function renderSection(section: LoadedSection, ctx: SectionContext): React.ReactNode {

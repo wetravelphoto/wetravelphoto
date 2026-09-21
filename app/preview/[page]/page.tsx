@@ -5,7 +5,7 @@ import { cssVariables, fontsToLoad, resolveTokens } from '@/lib/styles/tokens'
 import { fontHref } from '@/lib/fonts'
 import PageBody from '@/components/PageBody'
 import PreviewBridge from '@/components/preview/PreviewBridge'
-import { PAGES, isPage } from '@/lib/sections/pages'
+import { isPage } from '@/lib/sections/pages'
 import '@/app/home.css'
 import '@/app/home-polish.css'
 import '@/app/hero.css'
@@ -73,7 +73,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ page: 
 
       <PreviewBridge page={page} />
 
-      <PageBody sections={sections} settings={settings} selectable fill={PAGES[page].fill} />
+      <PageBody sections={sections} settings={settings} selectable page={page} />
     </div>
   )
 }

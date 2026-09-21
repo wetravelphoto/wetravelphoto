@@ -34,9 +34,9 @@ const pages = [
     live: '/trips',
   },
   {
-    href: '/admin/pages/shop',
+    href: '/edit/shop',
     title: 'Shop',
-    description: 'Publish the shop, choose what it sells, and set flat shipping.',
+    description: 'Edited on the page itself, as sections: the print wall. Opening the shop, prices and shipping are in Shop settings.',
     live: '/shop',
   },
 ]

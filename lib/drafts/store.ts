@@ -336,7 +336,9 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
     })
   }
 
-  // Keep the old homepage form in step. Transition shim.
+  // Keep the old site_settings columns in step with what was just published —
+  // the way back for pages the canvas owns, and the live contract for pages it
+  // does not (each print's page reads the shop_* columns). See MIRRORED.
   for (const page of pages) await mirrorPage(page)
 
   await deleteDraft()

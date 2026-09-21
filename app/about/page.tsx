@@ -3,7 +3,6 @@ import type { Metadata } from 'next'
 import { getSiteSettings } from '@/lib/site'
 import { loadPageSections } from '@/lib/sections/load'
 import { str } from '@/lib/sections/registry'
-import { PAGES } from '@/lib/sections/pages'
 import PageBody from '@/components/PageBody'
 
 export const revalidate = 300
@@ -37,5 +36,5 @@ export default async function AboutPage() {
 
   const { sections } = await loadPageSections('about')
 
-  return <PageBody sections={sections} settings={settings} fill={PAGES.about.fill} />
+  return <PageBody sections={sections} settings={settings} page="about" />
 }

@@ -23,6 +23,9 @@ export const PAGES = {
   // The slug is what the editor calls it; the public address has always been
   // /trips, and links to it are out in the world.
   galleries: { label: 'Galleries', path: '/trips', fill: true },
+  // Its wall, typeface and closing quote come from Shop settings, applied
+  // around the sections by lib/sections/frame.tsx.
+  shop: { label: 'Shop', path: '/shop', fill: true },
 } as const
 
 export type PageSlug = keyof typeof PAGES

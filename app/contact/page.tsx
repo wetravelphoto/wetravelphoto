@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { loadPageSections } from '@/lib/sections/load'
-import { PAGES } from '@/lib/sections/pages'
 import PageBody from '@/components/PageBody'
 
 export const revalidate = 300
@@ -18,5 +17,5 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function ContactPage() {
   const { sections, settings } = await loadPageSections('contact')
 
-  return <PageBody sections={sections} settings={settings} fill={PAGES.contact.fill} />
+  return <PageBody sections={sections} settings={settings} page="contact" />
 }

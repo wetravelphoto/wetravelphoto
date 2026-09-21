@@ -20,6 +20,7 @@ const groups: { label: string; links: { href: string; label: string; exact?: boo
       { href: '/admin/shop/catalog', label: 'Catalogue' },
       { href: '/admin/shop/scenes', label: 'Room' },
       { href: '/admin/shop', label: 'Sizes & categories', exact: true },
+      { href: '/admin/shop/settings', label: 'Shop settings' },
     ],
   },
   {

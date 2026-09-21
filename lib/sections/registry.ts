@@ -117,7 +117,7 @@ export type Field = FieldBase &
   )
 
 /** Data a section needs fetched before it can render. */
-export type SectionNeed = 'posts' | 'albums' | 'instagram'
+export type SectionNeed = 'posts' | 'albums' | 'instagram' | 'catalog'
 
 export type SectionSettings = Record<string, unknown>
 
@@ -528,6 +528,72 @@ export const SECTIONS: Record<string, SectionDef> = {
         group: 'Cards',
         live: { var: '--journal-title-scale' },
         when: { key: 'layout', equals: 'grid' },
+      },
+    ],
+  },
+
+  shop: {
+    type: 'shop',
+    label: 'Print wall',
+    blurb: 'Your prints hung on a wall in even columns, with the shop’s title and categories above.',
+    family: 'Shop',
+    version: 1,
+    singleton: true,
+    grows: true,
+    needs: ['catalog'],
+    requires: 'The shop switched on, with prints published in the catalogue',
+    defaults: {
+      eyebrow: null,
+      heading: 'Prints',
+      subheading: null,
+      intro: null,
+      columns: 3,
+      show_location: true,
+      show_collection: true,
+      show_price: true,
+    },
+    fields: [
+      { key: 'eyebrow', label: 'Line above the title', kind: 'text', content: true },
+      { key: 'heading', label: 'Title', kind: 'text', content: true },
+      { key: 'subheading', label: 'Line below the title', kind: 'text', content: true },
+      {
+        key: 'intro',
+        label: 'Intro',
+        kind: 'textarea',
+        rows: 3,
+        content: true,
+        help: 'Sits under the categories, above the wall. Optional.',
+      },
+      {
+        key: 'columns',
+        label: 'Prints across',
+        kind: 'number',
+        min: 2,
+        max: 5,
+        step: 1,
+        slider: true,
+        group: 'The wall',
+        help: 'On a wide screen. Narrower screens step down on their own.',
+        live: { var: '--cols-wide' },
+      },
+      {
+        key: 'show_location',
+        label: 'Where it was taken',
+        kind: 'toggle',
+        group: 'Captions',
+      },
+      {
+        key: 'show_collection',
+        label: 'Collection',
+        kind: 'toggle',
+        group: 'Captions',
+      },
+      {
+        key: 'show_price',
+        label: 'Price',
+        kind: 'toggle',
+        group: 'Captions',
+        help: 'The cheapest size. Off makes the shop read as a gallery.',
       },
     ],
   },

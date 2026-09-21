@@ -78,36 +78,29 @@ export async function updateNewsletter(formData: FormData) {
 }
 
 
-export async function updateShopPage(formData: FormData) {
+/**
+ * How the shop runs, and what its two pages share: open or closed, what is for
+ * sale, shipping, each print's own page, the wall and the closing quote.
+ *
+ * The shop PAGE's own layout — its title lines, prints across, captions — is
+ * a print-wall section in the canvas now, and deliberately not written here:
+ * two forms writing one column is how a published change gets undone.
+ */
+export async function updateShopSettings(formData: FormData) {
   const shipping = parseFloat(
     ((formData.get('shop_shipping_flat') as string) ?? '').replace(/[$,\s]/g, '')
   )
-
-  // Anything outside 2–5 would be rejected by the database check anyway, and a
-  // silent fallback beats a saved form that throws.
-  const typedColumns = Number(formData.get('shop_columns'))
-  const columns = Number.isFinite(typedColumns)
-    ? Math.min(5, Math.max(2, Math.round(typedColumns)))
-    : 3
 
   await patch(
     {
       show_shop: on(formData, 'show_shop'),
       shop_mode: text(formData, 'shop_mode') ?? 'curated',
-      shop_eyebrow: text(formData, 'shop_eyebrow'),
-      shop_heading: text(formData, 'shop_heading'),
-      shop_intro: text(formData, 'shop_intro'),
       shop_order_note: text(formData, 'shop_order_note'),
       // Typed in dollars, stored in cents
       shop_shipping_flat_cents:
         Number.isFinite(shipping) && shipping >= 0 ? Math.round(shipping * 100) : 0,
 
       // ── The wall ──────────────────────────────────────────────────────────
-      shop_subheading: text(formData, 'shop_subheading'),
-      shop_columns: columns,
-      shop_show_collection: on(formData, 'shop_show_collection'),
-      shop_show_location: on(formData, 'shop_show_location'),
-      shop_show_price: on(formData, 'shop_show_price'),
       // An empty string is a plain wall; null means the plaster we ship with,
       // so the two have to stay distinguishable.
       shop_wall_texture: on(formData, 'shop_plain_wall')
@@ -134,6 +127,6 @@ export async function updateShopPage(formData: FormData) {
       shop_footer_left: text(formData, 'shop_footer_left'),
       shop_footer_right: text(formData, 'shop_footer_right'),
     },
-    ['/shop', '/', '/admin/pages/shop']
+    ['/shop', '/admin/shop/settings']
   )
 }

@@ -211,6 +211,31 @@ export function legacyGalleriesSections(s: SiteSettings): StoredSection[] {
   ]
 }
 
+/** The Shop page: the print wall, from the shop_* page columns. */
+export function legacyShopSections(s: SiteSettings): StoredSection[] {
+  return [
+    {
+      id: 'legacy-shop-page',
+      type: 'shop',
+      position: 0,
+      visible: true,
+      version: 1,
+      settings: {
+        eyebrow: s.shop_eyebrow,
+        heading: s.shop_heading || 'Prints',
+        subheading: s.shop_subheading,
+        intro: s.shop_intro,
+        // What the page drew, which is not what the old form showed: the form
+        // defaulted to four, the page to three.
+        columns: Number(s.shop_columns) || 3,
+        show_location: s.shop_show_location !== false,
+        show_collection: s.shop_show_collection !== false,
+        show_price: s.shop_show_price !== false,
+      },
+    },
+  ]
+}
+
 /** Any editable page, before anything has been published for it. */
 export function legacyPageSections(page: string, s: SiteSettings): StoredSection[] {
   switch (page) {
@@ -224,6 +249,8 @@ export function legacyPageSections(page: string, s: SiteSettings): StoredSection
       return legacyJournalSections(s)
     case 'galleries':
       return legacyGalleriesSections(s)
+    case 'shop':
+      return legacyShopSections(s)
     default:
       // A page with no history starts empty — never borrow another page's.
       return []
@@ -241,6 +268,7 @@ export const MIRRORED: Record<string, string[]> = {
   about: ['about'],
   journal: ['journal'],
   galleries: ['galleries'],
+  shop: ['shop'],
 }
 
 /**
@@ -270,6 +298,23 @@ export function legacyColumns(
       journal_show_date: s.show_date === true,
       journal_show_byline: s.show_byline === true,
       journal_title_scale: s.title_scale,
+    }
+  }
+
+  // Each print's own page is not edited in the canvas and still reads these
+  // columns — its title, breadcrumb and captions — so the wall keeps them
+  // current on every Publish. Here the mirror is not a way back; it is the
+  // live contract for that page.
+  if (page === 'shop' && type === 'shop') {
+    return {
+      shop_eyebrow: s.eyebrow,
+      shop_heading: s.heading,
+      shop_subheading: s.subheading,
+      shop_intro: s.intro,
+      shop_columns: s.columns,
+      shop_show_location: s.show_location !== false,
+      shop_show_collection: s.show_collection !== false,
+      shop_show_price: s.show_price !== false,
     }
   }
 

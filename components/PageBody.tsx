@@ -5,6 +5,8 @@ import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import type { LoadedSection } from '@/lib/sections/load'
 import type { SiteSettings } from '@/lib/site'
+import { PAGES, isPage } from '@/lib/sections/pages'
+import { pageFrame } from '@/lib/sections/frame'
 // Every section's stylesheet, loaded wherever sections are drawn — so a hero
 // added to the About page brings its styles with it. app/page.tsx and the
 // preview route import the same files; Next includes each once.
@@ -41,20 +43,26 @@ export default async function PageBody({
   sections,
   settings,
   selectable = false,
-  fill = false,
+  page,
+  query,
 }: {
   sections: LoadedSection[]
   settings: SiteSettings
   selectable?: boolean
   /**
-   * Lay the page out as a full-height column so a short page keeps its footer
-   * at the bottom of the window. Set per page in lib/sections/pages.ts; the
-   * About and Contact pages always did this by hand.
+   * Which page this is. Decides whether it is laid out as a full-height column
+   * (`fill` in lib/sections/pages.ts) and what it wears around its sections
+   * (lib/sections/frame.tsx) — decided here, so the live page and the preview
+   * can never dress the same page differently.
    */
-  fill?: boolean
+  page: string
+  /** The page's query string, for sections that read it (the print wall's ?c=). */
+  query?: Record<string, string | undefined>
 }) {
   const visible = sections.filter((s) => s.visible)
-  const ctx = await buildContext(visible, settings, { editable: selectable })
+  const ctx = await buildContext(visible, settings, { editable: selectable, query })
+  const fill = isPage(page) && PAGES[page].fill
+  const frame = pageFrame(page, settings)
 
   // The header goes transparent only when something full-bleed is actually
   // drawn underneath it.
@@ -62,7 +70,8 @@ export default async function PageBody({
   const overHero = !!hero && !heroIsEmpty(hero.settings, ctx)
 
   return (
-    <main style={fill ? FILL : undefined}>
+    <main className={frame.className} style={{ ...(fill ? FILL : {}), ...frame.style }}>
+      {frame.head}
       <SiteHeader overHero={overHero} />
 
       {visible.map((section) =>
@@ -87,6 +96,8 @@ export default async function PageBody({
           renderSection(section, ctx)
         )
       )}
+
+      {frame.after}
 
       <SiteFooter />
     </main>

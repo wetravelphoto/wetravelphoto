@@ -167,6 +167,50 @@ export function legacyContactSections(s: SiteSettings): StoredSection[] {
   ]
 }
 
+/**
+ * The Journal page: every story, the newest drawn large — the journal
+ * section's grid layout, from the journal_page_* and journal_show_* columns.
+ */
+export function legacyJournalSections(s: SiteSettings): StoredSection[] {
+  return [
+    {
+      id: 'legacy-journal-page',
+      type: 'journal',
+      position: 0,
+      visible: true,
+      version: 1,
+      settings: {
+        layout: 'grid',
+        eyebrow: s.journal_page_eyebrow,
+        heading: s.journal_page_heading || 'Journal',
+        show_excerpt: s.journal_show_excerpt !== false,
+        show_date: s.journal_show_date === true,
+        show_byline: s.journal_show_byline === true,
+        title_scale: s.journal_title_scale ?? 1,
+      },
+    },
+  ]
+}
+
+/** The Galleries page: every public gallery as a tile — the grid layout. */
+export function legacyGalleriesSections(s: SiteSettings): StoredSection[] {
+  return [
+    {
+      id: 'legacy-galleries-page',
+      type: 'galleries',
+      position: 0,
+      visible: true,
+      version: 1,
+      settings: {
+        layout: 'grid',
+        eyebrow: s.galleries_eyebrow,
+        heading: s.galleries_heading || 'Galleries',
+        limit: 0,
+      },
+    },
+  ]
+}
+
 /** Any editable page, before anything has been published for it. */
 export function legacyPageSections(page: string, s: SiteSettings): StoredSection[] {
   switch (page) {
@@ -176,6 +220,10 @@ export function legacyPageSections(page: string, s: SiteSettings): StoredSection
       return legacyAboutSections(s)
     case 'contact':
       return legacyContactSections(s)
+    case 'journal':
+      return legacyJournalSections(s)
+    case 'galleries':
+      return legacyGalleriesSections(s)
     default:
       // A page with no history starts empty — never borrow another page's.
       return []
@@ -191,6 +239,8 @@ export function legacyPageSections(page: string, s: SiteSettings): StoredSection
 export const MIRRORED: Record<string, string[]> = {
   home: ['hero', 'mark', 'intro', 'galleries', 'journal', 'instagram', 'contact'],
   about: ['about'],
+  journal: ['journal'],
+  galleries: ['galleries'],
 }
 
 /**
@@ -202,11 +252,33 @@ export const MIRRORED: Record<string, string[]> = {
  * published. It goes when that stops being worth having.
  */
 export function legacyColumns(
+  page: string,
   type: string,
   settings: Record<string, unknown>,
   visible: boolean
 ): Record<string, unknown> | null {
   const s = settings
+
+  // The same section type can describe different columns on different pages:
+  // the journal section on the Journal page is the journal_page_* columns, not
+  // the homepage's journal row.
+  if (page === 'journal' && type === 'journal') {
+    return {
+      journal_page_eyebrow: s.eyebrow,
+      journal_page_heading: s.heading,
+      journal_show_excerpt: s.show_excerpt !== false,
+      journal_show_date: s.show_date === true,
+      journal_show_byline: s.show_byline === true,
+      journal_title_scale: s.title_scale,
+    }
+  }
+
+  if (page === 'galleries' && type === 'galleries') {
+    return {
+      galleries_eyebrow: s.eyebrow,
+      galleries_heading: s.heading,
+    }
+  }
 
   switch (type) {
     case 'hero':

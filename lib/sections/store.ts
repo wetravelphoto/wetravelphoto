@@ -114,11 +114,12 @@ export async function replaceSections(
 // Transition shim. See the note in lib/sections/legacy.ts.
 
 export async function mirrorSection(
+  page: string,
   type: string,
   settings: SectionSettings,
   visible: boolean
 ): Promise<void> {
-  const columns = legacyColumns(type, settings, visible)
+  const columns = legacyColumns(page, type, settings, visible)
   if (!columns) return
 
   try {
@@ -148,7 +149,9 @@ export async function mirrorSectionById(id: string): Promise<void> {
     (data.version as number) ?? 1
   )
 
-  if (resolved) await mirrorSection(data.type as string, resolved, data.visible !== false)
+  if (resolved) {
+    await mirrorSection(data.page as string, data.type as string, resolved, data.visible !== false)
+  }
 }
 
 /** Re-mirrors a whole page, after a change that touched every section. */
@@ -172,6 +175,6 @@ export async function mirrorPage(page = 'home'): Promise<void> {
       row.settings as SectionSettings,
       (row.version as number) ?? 1
     )
-    if (resolved) await mirrorSection(row.type as string, resolved, row.visible !== false)
+    if (resolved) await mirrorSection(page, row.type as string, resolved, row.visible !== false)
   }
 }

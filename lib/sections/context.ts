@@ -14,6 +14,7 @@ export type PostRow = {
   excerpt: string | null
   featured_custom_path: string | null
   published_at: string | null
+  byline: string | null
 }
 
 export type AlbumRow = {
@@ -87,7 +88,7 @@ export async function buildContext(
     needs.has('posts')
       ? supabase
           .from('blog_posts')
-          .select('id, slug, title, category, excerpt, featured_custom_path, published_at')
+          .select('id, slug, title, category, excerpt, featured_custom_path, published_at, byline')
           .eq('status', 'published')
           .order('published_at', { ascending: false })
       : Promise.resolve({ data: [], error: null }),

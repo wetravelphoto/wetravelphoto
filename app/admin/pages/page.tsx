@@ -22,15 +22,15 @@ const pages = [
     live: '/contact',
   },
   {
-    href: '/admin/pages/journal',
+    href: '/edit/journal',
     title: 'Journal',
-    description: 'The heading above your stories, and what each card shows.',
+    description: 'Edited on the page itself, as sections. Starts as every story, the newest drawn large.',
     live: '/journal',
   },
   {
-    href: '/admin/pages/galleries',
+    href: '/edit/galleries',
     title: 'Galleries',
-    description: 'The heading above your gallery index.',
+    description: 'Edited on the page itself, as sections. Starts as every public gallery as a tile.',
     live: '/trips',
   },
   {

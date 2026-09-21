@@ -391,17 +391,40 @@ export const SECTIONS: Record<string, SectionDef> = {
   galleries: {
     type: 'galleries',
     label: 'Gallery carousel',
-    blurb: 'Your public galleries as a row of covers you can drag sideways.',
+    blurb: 'Your public galleries — a row of covers to drag sideways, or the full grid of them.',
     family: 'Photographs',
     version: 1,
     styled: 'intro',
     needs: ['albums'],
     requires: 'At least one public gallery with a cover photograph',
+    // Only the grid's root has flex: 1 (it is the Galleries page's layout).
+    grows: true,
     defaults: {
+      // 'carousel': the homepage's draggable row.
+      // 'grid': every gallery as a tile, under a page heading (the Galleries
+      // page's layout).
+      layout: 'carousel',
+      eyebrow: null,
       heading: 'Recent trips',
       limit: 0,
     },
     fields: [
+      {
+        key: 'layout',
+        label: 'Layout',
+        kind: 'select',
+        options: [
+          { value: 'carousel', label: 'A row you drag sideways' },
+          { value: 'grid', label: 'A grid of every gallery' },
+        ],
+      },
+      {
+        key: 'eyebrow',
+        label: 'Over-line',
+        kind: 'text',
+        content: true,
+        when: { key: 'layout', equals: 'grid' },
+      },
       { key: 'heading', label: 'Heading', kind: 'text', content: true },
       {
         key: 'limit',
@@ -417,21 +440,95 @@ export const SECTIONS: Record<string, SectionDef> = {
   journal: {
     type: 'journal',
     label: 'Journal',
-    blurb: 'The latest stories as cards, with a link through to everything.',
+    blurb: 'Your stories as cards — the latest few with a link through, or every one of them.',
     family: 'Words',
     version: 1,
     styled: 'journal',
     needs: ['posts'],
     requires: 'At least one published story',
+    // Only the grid's root has flex: 1 (it is the Journal page's layout).
+    grows: true,
     defaults: {
+      // 'row': the latest few, with a link to the rest (the homepage's).
+      // 'grid': every story, the newest drawn large (the Journal page's).
+      layout: 'row',
+      eyebrow: null,
       heading: 'From the journal',
       count: 3,
       cta_label: 'View all stories',
+      show_excerpt: true,
+      show_date: false,
+      show_byline: false,
+      title_scale: 1,
     },
     fields: [
+      {
+        key: 'layout',
+        label: 'Layout',
+        kind: 'select',
+        options: [
+          { value: 'row', label: 'The latest few, with a link' },
+          { value: 'grid', label: 'Every story, newest first' },
+        ],
+      },
+      {
+        key: 'eyebrow',
+        label: 'Over-line',
+        kind: 'text',
+        content: true,
+        when: { key: 'layout', equals: 'grid' },
+      },
       { key: 'heading', label: 'Heading', kind: 'text', content: true },
-      { key: 'count', label: 'How many stories', kind: 'number', min: 1, max: 12 },
-      { key: 'cta_label', label: 'Link', kind: 'text', content: true, help: 'Leave empty to hide it.' },
+      {
+        key: 'count',
+        label: 'How many stories',
+        kind: 'number',
+        min: 1,
+        max: 12,
+        when: { key: 'layout', equals: 'row' },
+      },
+      {
+        key: 'cta_label',
+        label: 'Link',
+        kind: 'text',
+        content: true,
+        help: 'Leave empty to hide it.',
+        when: { key: 'layout', equals: 'row' },
+      },
+      {
+        key: 'show_excerpt',
+        label: 'Show the excerpt',
+        kind: 'toggle',
+        group: 'Cards',
+        when: { key: 'layout', equals: 'grid' },
+      },
+      {
+        key: 'show_date',
+        label: 'Show the date',
+        kind: 'toggle',
+        group: 'Cards',
+        when: { key: 'layout', equals: 'grid' },
+      },
+      {
+        key: 'show_byline',
+        label: 'Show the byline',
+        kind: 'toggle',
+        group: 'Cards',
+        when: { key: 'layout', equals: 'grid' },
+      },
+      {
+        key: 'title_scale',
+        label: 'Title size',
+        kind: 'number',
+        min: 0.7,
+        max: 1.6,
+        step: 0.05,
+        slider: true,
+        unit: '×',
+        group: 'Cards',
+        live: { var: '--journal-title-scale' },
+        when: { key: 'layout', equals: 'grid' },
+      },
     ],
   },
 

@@ -19,6 +19,10 @@ export const PAGES = {
   home: { label: 'Homepage', path: '/', fill: false },
   about: { label: 'About', path: '/about', fill: true },
   contact: { label: 'Contact', path: '/contact', fill: true },
+  journal: { label: 'Journal', path: '/journal', fill: true },
+  // The slug is what the editor calls it; the public address has always been
+  // /trips, and links to it are out in the world.
+  galleries: { label: 'Galleries', path: '/trips', fill: true },
 } as const
 
 export type PageSlug = keyof typeof PAGES

@@ -454,33 +454,23 @@ export const SECTIONS: Record<string, SectionDef> = {
     ],
   },
 
-  'contact-form': {
-    type: 'contact-form',
-    label: 'Contact form',
-    blurb: 'A heading, a few lines, and the message form — simple and direct.',
-    family: 'Connect',
-    version: 1,
-    singleton: true,
-    grows: true,
-    defaults: {
-      heading: 'Contact',
-      intro: null,
-    },
-    fields: [
-      { key: 'heading', label: 'Heading', kind: 'text', content: true },
-      { key: 'intro', label: 'Text', kind: 'textarea', rows: 4, content: true },
-    ],
-  },
-
   contact: {
     type: 'contact',
     label: 'Contact',
-    blurb: 'An invitation to get in touch, with your links and a photograph.',
+    blurb: 'An invitation to get in touch: the message form and your links, beside a photograph or centred on its own.',
     family: 'Connect',
     version: 1,
     singleton: true,
     styled: 'contact',
+    // Only the centred layout has flex: 1 on its root; the split sits at its
+    // natural height either way, so declaring this changes nothing for it.
+    grows: true,
     defaults: {
+      // 'split': photograph beside the form (the homepage's).
+      // 'centered': the form and its words in the middle, no photograph (the
+      // Contact page's). The first of the per-section layouts; more options
+      // per section are planned — see claude/the-canvas.md.
+      layout: 'split',
       eyebrow: null,
       heading: null,
       intro: null,
@@ -490,6 +480,15 @@ export const SECTIONS: Record<string, SectionDef> = {
       image_side: 'left',
     },
     fields: [
+      {
+        key: 'layout',
+        label: 'Layout',
+        kind: 'select',
+        options: [
+          { value: 'split', label: 'Photograph beside the form' },
+          { value: 'centered', label: 'Centred, no photograph' },
+        ],
+      },
       { key: 'eyebrow', label: 'Over-line', kind: 'text', content: true },
       { key: 'heading', label: 'Heading', kind: 'text', content: true },
       { key: 'intro', label: 'Text', kind: 'textarea', rows: 4, content: true },
@@ -500,9 +499,28 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         help: 'Under the links — response times, where you are.',
       },
-      { key: 'tagline', label: 'Closing line', kind: 'text', content: true },
-      { key: 'image_path', label: 'Photograph', kind: 'image', content: true },
-      { key: 'image_side', label: 'Layout', kind: 'select', options: SIDE, live: { attr: 'data-side' } },
+      {
+        key: 'tagline',
+        label: 'Caption over the photograph',
+        kind: 'text',
+        content: true,
+        when: { key: 'layout', equals: 'split' },
+      },
+      {
+        key: 'image_path',
+        label: 'Photograph',
+        kind: 'image',
+        content: true,
+        when: { key: 'layout', equals: 'split' },
+      },
+      {
+        key: 'image_side',
+        label: 'Photograph side',
+        kind: 'select',
+        options: SIDE,
+        live: { attr: 'data-side' },
+        when: { key: 'layout', equals: 'split' },
+      },
     ],
   },
 }

@@ -93,6 +93,27 @@
   max-width: 44ch;
 }
 
+/* ---------- CONTACT: centred, no photograph ----------
+   The Contact page's layout: the same words, form and links as the split,
+   in a single column in the middle. The top padding clears the fixed header,
+   as the old Contact page did; flex: 1 fills a full-height page. */
+
+.contact-centred {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  background: var(--surface);
+  padding: clamp(6rem, 10vw, 7.5rem) clamp(1.25rem, 4vw, 3rem) clamp(3rem, 6vw, 5rem);
+}
+
+.contact-centred .contact-panel-inner { max-width: 560px; }
+
+.contact-centred .contact-eyebrow,
+.contact-centred .contact-heading,
+.contact-centred .contact-copy { text-align: center; }
+
+.contact-centred .contact-copy { margin-left: auto; margin-right: auto; }
+
 /* --- form --- */
 
 .contact-field-row {

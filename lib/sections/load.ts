@@ -81,8 +81,36 @@ export async function loadPageSections(page = 'home'): Promise<PageSections> {
  * live page would not draw, and a preview that can disagree with the page is
  * worse than no preview.
  */
+/**
+ * Section types that have been folded into another, and how to read a row
+ * written under the old name.
+ *
+ * Rows are converted as they are READ, never rewritten in place: the database
+ * keeps what was written, the page draws the new type, and the next Publish of
+ * that page stores the new type naturally. So an old deploy reading the same
+ * rows still finds what it expects, and there is no migration to run first.
+ */
+const RETIRED: Record<string, (settings: SectionSettings) => { type: string; settings: SectionSettings }> = {
+  // 2026-09-21: the Contact page's own "Contact form" became the Contact
+  // section's centred layout, so a site has one contact section with two looks
+  // rather than two sections that do the same job.
+  'contact-form': (s) => ({
+    type: 'contact',
+    settings: { ...s, layout: 'centered', heading: s.heading ?? 'Contact' },
+  }),
+}
+
+/** A stored row, with a retired type read as the type that replaced it. */
+export function normalizeRow<T extends { type: string; settings: SectionSettings }>(row: T): T {
+  const convert = RETIRED[row.type]
+  if (!convert) return row
+  const next = convert(row.settings ?? {})
+  return { ...row, type: next.type, settings: next.settings }
+}
+
 export function resolveRows(rows: StoredSection[], legacy = false): LoadedSection[] {
   return rows
+    .map(normalizeRow)
     .map((row) => {
       const def = sectionDef(row.type)
       const resolved = resolveSettings(row.type, row.settings, row.version ?? 1)

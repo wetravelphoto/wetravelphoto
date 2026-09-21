@@ -147,17 +147,19 @@ export function legacyAboutSections(s: SiteSettings): StoredSection[] {
 
 /**
  * The Contact page, as app/contact/page.tsx drew it: a heading, the contact
- * intro line, and the form. From its first Publish its words are its own.
+ * intro line, and the form — the Contact section in its centred layout. From
+ * its first Publish its words are its own.
  */
 export function legacyContactSections(s: SiteSettings): StoredSection[] {
   return [
     {
-      id: 'legacy-contact-form',
-      type: 'contact-form',
+      id: 'legacy-contact-page',
+      type: 'contact',
       position: 0,
       visible: true,
       version: 1,
       settings: {
+        layout: 'centered',
         heading: 'Contact',
         intro: s.contact_intro,
       },
@@ -178,6 +180,17 @@ export function legacyPageSections(page: string, s: SiteSettings): StoredSection
       // A page with no history starts empty — never borrow another page's.
       return []
   }
+}
+
+/**
+ * Which sections the old columns described, page by page. Only these are
+ * mirrored back. The Contact page's contact section, say, must not write the
+ * contact_* columns: those describe the HOMEPAGE's contact section, and two
+ * sections writing one column means whichever published last wins.
+ */
+export const MIRRORED: Record<string, string[]> = {
+  home: ['hero', 'mark', 'intro', 'galleries', 'journal', 'instagram', 'contact'],
+  about: ['about'],
 }
 
 /**
@@ -261,10 +274,6 @@ export function legacyColumns(
         about_cta_label: s.cta_label,
         about_cta_href: s.cta_href,
       }
-
-    // 'contact-form' is deliberately not mirrored. Its only column would be
-    // contact_intro, which the homepage contact section mirrors too — and two
-    // sections writing one column means whichever published last wins.
 
     case 'mark':
       // Mirrored so that rolling the code back past the mark section still

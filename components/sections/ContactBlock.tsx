@@ -18,6 +18,7 @@ export default function ContactBlock({
       editable={ctx.editable}
       styleVars={styleVars(ctx.styles, 'contact')}
       settings={{
+        layout: str(settings, 'layout') === 'centered' ? 'centered' : 'split',
         eyebrow: str(settings, 'eyebrow'),
         heading: str(settings, 'heading'),
         intro: str(settings, 'intro'),

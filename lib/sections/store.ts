@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getSiteSettings } from '@/lib/site'
 import { patchSiteSettings } from '@/lib/site-patch'
-import { legacyColumns, legacyPageSections } from '@/lib/sections/legacy'
+import { MIRRORED, legacyColumns, legacyPageSections } from '@/lib/sections/legacy'
 import { resolveSettings, type SectionSettings } from '@/lib/sections/registry'
 import type { StoredSection } from '@/lib/sections/load'
 
@@ -135,11 +135,12 @@ export async function mirrorSectionById(id: string): Promise<void> {
 
   const { data } = await supabase
     .from('page_sections')
-    .select('type, visible, version, settings')
+    .select('page, type, visible, version, settings')
     .eq('id', id)
     .maybeSingle()
 
   if (!data) return
+  if (!(MIRRORED[data.page as string] ?? []).includes(data.type as string)) return
 
   const resolved = resolveSettings(
     data.type as string,
@@ -154,6 +155,10 @@ export async function mirrorSectionById(id: string): Promise<void> {
 export async function mirrorPage(page = 'home'): Promise<void> {
   const supabase = await createClient()
 
+  // Only the sections the old columns described on this page — see MIRRORED.
+  const mirrored = new Set(MIRRORED[page] ?? [])
+  if (mirrored.size === 0) return
+
   const { data } = await supabase
     .from('page_sections')
     .select('type, visible, version, settings')
@@ -161,6 +166,7 @@ export async function mirrorPage(page = 'home'): Promise<void> {
     .order('position', { ascending: true })
 
   for (const row of data ?? []) {
+    if (!mirrored.has(row.type as string)) continue
     const resolved = resolveSettings(
       row.type as string,
       row.settings as SectionSettings,

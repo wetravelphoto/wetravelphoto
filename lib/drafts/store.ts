@@ -2,7 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { currentUser } from '@/lib/auth'
 import { getSiteSettings, type SiteSettings } from '@/lib/site'
 import { patchSiteSettings } from '@/lib/site-patch'
-import { loadPageSections, resolveRows, type PageSections, type StoredSection } from '@/lib/sections/load'
+import {
+  loadPageSections,
+  normalizeRow,
+  resolveRows,
+  type PageSections,
+  type StoredSection,
+} from '@/lib/sections/load'
 import { replaceSections, mirrorPage } from '@/lib/sections/store'
 import { recordHistory } from '@/lib/templates/history'
 import { TOKENS_VERSION } from '@/lib/styles/tokens'
@@ -85,7 +91,15 @@ export async function readDraft(): Promise<DraftState> {
 
   return {
     draft: {
-      pages: (data.pages ?? {}) as Record<string, DraftSection[]>,
+      // Retired section types are read as their replacements here too, so a
+      // draft written before a rename can still be edited: every canvas action
+      // looks the row's type up in the registry.
+      pages: Object.fromEntries(
+        Object.entries((data.pages ?? {}) as Record<string, DraftSection[]>).map(([page, rows]) => [
+          page,
+          Array.isArray(rows) ? rows.map(normalizeRow) : [],
+        ])
+      ),
       global_styles: (data.global_styles ?? null) as DraftGlobalStyles | null,
       type_styles: (data.type_styles ?? null) as DraftTypeStyles | null,
       updatedAt: (data.updated_at as string) ?? null,

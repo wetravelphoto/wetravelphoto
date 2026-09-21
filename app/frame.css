@@ -181,10 +181,23 @@ a.piece:hover .framed {
   width: 100%;
 }
 
-/* ---------- Fewer columns as the wall narrows ---------- */
+/* The shop page's "Prints across", as an attribute. The product page's related
+   row still sets --cols-wide inline, which the rule above reads. */
+.wall-grid[data-cols='2'] { --cols: 2; }
+.wall-grid[data-cols='3'] { --cols: 3; }
+.wall-grid[data-cols='4'] { --cols: 4; }
+.wall-grid[data-cols='5'] { --cols: 5; }
+
+/* ---------- Fewer columns as the wall narrows ----------
+   Caps, never raises: a wall set to two stays at two on a laptop. This used to
+   force three below 1200px whatever was chosen, which is why changing "Prints
+   across" did nothing in the editor's preview — the preview is narrower than
+   that. */
 
 @media (max-width: 1200px) {
-  .wall-grid { --cols: 3; }
+  .wall-grid:not([data-cols]),
+  .wall-grid[data-cols='4'],
+  .wall-grid[data-cols='5'] { --cols: 3; }
 }
 
 @media (max-width: 860px) {

@@ -40,6 +40,14 @@ export function readField(field: Field, formData: FormData, current: SectionSett
     case 'custom':
       return current[field.key]
 
+    case 'select': {
+      // Only one of the offered options. Anything else — a crafted request —
+      // leaves the setting as it was rather than storing a value no renderer
+      // was written to expect.
+      const raw = ((formData.get(field.key) as string) ?? '').trim()
+      return field.options.some((o) => o.value === raw) ? raw : current[field.key]
+    }
+
     default: {
       const raw = ((formData.get(field.key) as string) ?? '').trim()
       return raw === '' ? null : raw

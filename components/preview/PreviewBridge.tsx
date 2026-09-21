@@ -71,8 +71,6 @@ type Inbound = {
   unit?: string
   /** Live field: the data attribute it sets. */
   attr?: string
-  /** A section typography group: 'hero', 'intro', 'journal', 'contact'. */
-  group?: string
 }
 
 /**
@@ -81,7 +79,7 @@ type Inbound = {
  * again when the value is already there writes nothing, which is what stops
  * the re-render watcher below from feeding itself.
  */
-type Pending = { section: string | null; group: string | null; apply: () => void }
+type Pending = { section: string; apply: () => void }
 
 // Anything else arriving in these slots is refused rather than set: a message
 // that could name any attribute could name `onclick`.
@@ -216,23 +214,28 @@ export default function PreviewBridge({ page }: { page: string }) {
             })
         }
 
-        pending.set(`field:${id}:${field}`, { section: id, group: null, apply })
+        pending.set(`field:${id}:${field}`, { section: id, apply })
         apply()
         return
       }
 
-      if (data.type === 'type-vars' && data.group && SAFE_WORD.test(data.group) && data.vars) {
-        const group = data.group
+      if (data.type === 'type-vars' && data.id && data.vars) {
+        // One section's typography, on the element its renderer writes the
+        // variables on (tagged data-type-root). Per section: changing the
+        // intro's heading no longer touches every other section.
+        const id = data.id
         const vars = Object.entries(data.vars).filter(([name]) => SAFE_VAR.test(name))
 
         const apply = () => {
           document
-            .querySelectorAll<HTMLElement>(`[data-type-group="${group}"]`)
+            .querySelectorAll<HTMLElement>(
+              `.pv-section[data-section-id="${CSS.escape(id)}"] [data-type-root]`
+            )
             .forEach((el) => vars.forEach(([name, value]) => setVar(el, name, value)))
         }
 
         loadFonts(data.fonts)
-        pending.set(`type:${group}`, { section: null, group, apply })
+        pending.set(`type:${id}`, { section: id, apply })
         apply()
         return
       }
@@ -241,7 +244,7 @@ export default function PreviewBridge({ page }: { page: string }) {
         // The save holding these values has landed and its re-render is on the
         // way, so the server is the source of truth for them again.
         for (const [key, entry] of pending) {
-          if ((data.id && entry.section === data.id) || (data.group && entry.group === data.group)) {
+          if (data.id && entry.section === data.id) {
             pending.delete(key)
           }
         }

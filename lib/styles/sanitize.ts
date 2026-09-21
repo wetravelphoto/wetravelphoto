@@ -101,21 +101,21 @@ export function sanitizeSectionStyle(input: unknown): Record<string, unknown> {
   const raw = input as Record<string, unknown>
   const out: Record<string, unknown> = {}
 
-  for (const key of ['font', 'bodyFont'] as const) {
+  for (const key of ['font', 'bodyFont', 'eyebrowFont'] as const) {
     if (!(key in raw)) continue
     const value = raw[key]
     if (value === undefined || value === null || value === '') out[key] = undefined
     else if (typeof value === 'string' && FONT_NAMES.includes(value)) out[key] = value
   }
 
-  for (const key of ['color', 'bodyColor'] as const) {
+  for (const key of ['color', 'bodyColor', 'eyebrowColor'] as const) {
     if (!(key in raw)) continue
     const value = raw[key]
     if (value === undefined || value === null || value === '') out[key] = undefined
     else if (typeof value === 'string' && HEX.test(value.trim())) out[key] = value.trim()
   }
 
-  for (const key of ['scale', 'bodyScale'] as const) {
+  for (const key of ['scale', 'bodyScale', 'eyebrowScale'] as const) {
     if (!(key in raw)) continue
     const value = raw[key]
     if (value === undefined || value === null) out[key] = undefined
@@ -125,5 +125,24 @@ export function sanitizeSectionStyle(input: unknown): Record<string, unknown> {
     }
   }
 
+  return out
+}
+
+/**
+ * A section's own typography, as it is STORED in the section's settings: only
+ * the chosen values, validated.
+ *
+ * An empty object is meaningful and kept: it is a section that has been told to
+ * follow the site. That differs from null — a section that has never had its
+ * own typography, and still inherits whatever its old shared group override
+ * said (see legacyTypeGroup in lib/type-styles.ts).
+ */
+export function sanitizeOwnStyle(input: unknown): Record<string, unknown> | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null
+
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(sanitizeSectionStyle(input))) {
+    if (value !== undefined) out[key] = value
+  }
   return out
 }

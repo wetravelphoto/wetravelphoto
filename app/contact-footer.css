@@ -66,11 +66,12 @@
 .contact-panel-inner { width: 100%; max-width: 620px; }
 
 .contact-eyebrow {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--sec-eyebrow-font, var(--font-display)), sans-serif;
+  font-weight: var(--sec-eyebrow-weight, normal);
   text-transform: uppercase;
   letter-spacing: 0.26em;
-  font-size: 0.72rem;
-  color: var(--ink-mute);
+  font-size: calc(0.72rem * var(--sec-eyebrow-scale, 1));
+  color: var(--sec-eyebrow-color, var(--ink-mute));
   margin: 0 0 0.9rem;
 }
 
@@ -86,10 +87,12 @@
 }
 
 .contact-copy {
-  color: var(--ink-soft);
+  font-family: var(--sec-body-font, var(--font-body)), system-ui, sans-serif;
+  font-weight: var(--sec-body-weight, normal);
+  color: var(--sec-body-color, var(--ink-soft));
   line-height: 1.7;
   margin: 0 0 1.75rem;
-  font-size: 0.98rem;
+  font-size: calc(0.98rem * var(--sec-body-scale, 1));
   max-width: 44ch;
 }
 

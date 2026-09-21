@@ -1,8 +1,8 @@
 import { photoUrl } from '@/lib/images'
 import { formatTripDate } from '@/lib/dates'
-import { styleVars } from '@/lib/type-styles'
+import { sectionVars } from '@/lib/type-styles'
 import { num, str, type SectionSettings } from '@/lib/sections/registry'
-import { editable, typeGroup } from '@/lib/sections/editable'
+import { editable, live, typeRoot } from '@/lib/sections/editable'
 import type { SectionContext } from '@/lib/sections/context'
 import Link from 'next/link'
 import DragCarousel, { type CarouselItem } from '@/components/home/DragCarousel'
@@ -54,15 +54,21 @@ export default function GalleriesSection({
     }
   })
 
+  const vars = sectionVars('galleries', settings, ctx.styles)
+
   if (str(settings, 'layout') === 'grid') {
     // The Galleries page: every gallery as a tile under a page heading. This is
-    // the markup app/trips/page.tsx used to draw by hand. It takes no section
-    // typography: its heading has its own type in gallery.css, and applying
-    // the intro group here would restyle a page that never followed it.
+    // the markup app/trips/page.tsx used to draw by hand. Its heading and
+    // over-line read the section's own typography, and fall back to exactly
+    // the type gallery.css always gave them.
     const eyebrow = str(settings, 'eyebrow')
+    const columns = Math.min(4, Math.max(2, Math.round(num(settings, 'columns', 3))))
 
     return (
-      <div style={{ flex: 1, padding: '7rem clamp(1.25rem, 4vw, 3rem) 4rem' }}>
+      <div
+        style={{ flex: 1, padding: '7rem clamp(1.25rem, 4vw, 3rem) 4rem', ...vars }}
+        {...typeRoot(ctx)}
+      >
         <div className="gallery-index-head">
           {(eyebrow || ctx.editable) && (
             <p className="gallery-index-eyebrow" {...editable(ctx, 'eyebrow')}>
@@ -75,7 +81,7 @@ export default function GalleriesSection({
         </div>
 
         {items.length > 0 ? (
-          <div className="gallery-grid-public">
+          <div className="gallery-grid-public" data-cols={columns} {...live(ctx, ['columns'])}>
             {items.map((item) => (
               <Link key={item.href} href={item.href} className="gallery-tile">
                 <div className="gallery-tile-cover">
@@ -99,7 +105,7 @@ export default function GalleriesSection({
   }
 
   return (
-    <section className="carousel-section" style={styleVars(ctx.styles, 'intro')} {...typeGroup(ctx, 'intro')}>
+    <section className="carousel-section" style={vars} {...typeRoot(ctx)}>
       <div className="carousel-head">
         <h2 {...editable(ctx, 'heading')}>{str(settings, 'heading') || 'Recent trips'}</h2>
       </div>

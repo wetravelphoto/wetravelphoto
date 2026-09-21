@@ -71,8 +71,48 @@
 }
 
 .journal-card-excerpt {
-  font-size: 0.85rem;
+  font-family: var(--sec-body-font, var(--font-body)), system-ui, sans-serif;
+  font-weight: var(--sec-body-weight, normal);
+  font-size: calc(0.85rem * var(--sec-body-scale, 1));
   line-height: 1.65;
-  color: var(--ink-soft);
+  color: var(--sec-body-color, var(--ink-soft));
   margin: 0;
+}
+
+/* The Journal page's title: .display's type, unless the section has its own. */
+.journal-page-title {
+  font-family: var(--sec-font, var(--font-display)), sans-serif;
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, var(--heading-case, uppercase));
+  letter-spacing: var(--sec-track, var(--heading-track, 0.02em));
+  color: var(--sec-color, currentColor);
+  font-size: calc(clamp(2rem, 5vw, 3.1rem) * var(--sec-scale, 1));
+  margin: 0 0 3rem;
+  line-height: 1;
+}
+
+/* ---------- Arrangements (the journal section's grid layout) ----------
+   feature: the newest spans two columns (journal.css, the original).
+   single:  one wide column, every story large.
+   columns: even columns of two or three, every story the same size. */
+
+.journal-grid[data-arrangement='single'] {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 860px;
+  margin: 0 auto;
+  row-gap: clamp(2.5rem, 5vw, 4rem);
+}
+
+.journal-grid[data-arrangement='single'] .journal-card { grid-column: auto; }
+
+.journal-grid[data-arrangement='columns'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.journal-grid[data-arrangement='columns'][data-cols='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 1000px) {
+  .journal-grid[data-arrangement='columns'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .journal-grid[data-arrangement='columns'],
+  .journal-grid[data-arrangement='columns'][data-cols='2'] { grid-template-columns: minmax(0, 1fr); }
 }

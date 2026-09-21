@@ -1,6 +1,6 @@
 import { photoUrl } from '@/lib/images'
 import { srcSetFromPath } from '@/lib/srcset'
-import { styleVars } from '@/lib/type-styles'
+import { sectionVars } from '@/lib/type-styles'
 import { bool, list, map, str, type SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
@@ -45,7 +45,7 @@ export default function HeroSection({
 
   const focal = (settings.focal ?? {}) as Focal
   const position = str(settings, 'title_position') ?? 'center'
-  const vars = styleVars(ctx.styles, 'hero')
+  const vars = sectionVars('hero', settings, ctx.styles)
 
   // Fall back to the standing image whenever there are no stories to show
   const fixed = settings.mode === 'fixed' || items.length === 0

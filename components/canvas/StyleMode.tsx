@@ -17,7 +17,7 @@ const DEBOUNCE_MS = 400
 export default function StyleMode({
   resizer,
   tokens,
-  overriddenGroups,
+  overridden,
   onClearOverrides,
   onPreview,
   onCommit,
@@ -26,8 +26,8 @@ export default function StyleMode({
   /** The drag handle on this panel's left edge. */
   resizer: React.ReactNode
   tokens: StyleTokens
-  /** Section groups with their own typography, which wins over everything here. */
-  overriddenGroups: string[]
+  /** Sections on this page with typography of their own, which wins over everything here. */
+  overridden: string[]
   onClearOverrides: () => void
   /** Every change, immediately — for painting the page. Never hits the network. */
   onPreview: (tokens: StyleTokens) => void
@@ -101,17 +101,17 @@ export default function StyleMode({
         </div>
       </div>
 
-      {overriddenGroups.length > 0 && (
+      {overridden.length > 0 && (
         <div className="cv-override-warn">
           <p>
-            {overriddenGroups.length === 1
-              ? 'One section has'
-              : `${overriddenGroups.length} sections have`}{' '}
-            typography of their own — {overriddenGroups.join(', ')} — which wins over the
-            typeface and colour set here.
+            {overridden.length === 1
+              ? 'One section on this page has'
+              : `${overridden.length} sections on this page have`}{' '}
+            typography of their own — {overridden.join(', ')} — which wins over the typeface
+            and colour set here.
           </p>
           <button type="button" className="cv-type-clear" onClick={onClearOverrides}>
-            Make them all follow the site
+            Make every section on every page follow the site
           </button>
         </div>
       )}

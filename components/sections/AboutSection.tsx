@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { photoUrl } from '@/lib/images'
-import { styleVars } from '@/lib/type-styles'
+import { sectionVars } from '@/lib/type-styles'
 import { str, type SectionSettings } from '@/lib/sections/registry'
-import { editable, live, typeGroup } from '@/lib/sections/editable'
+import { editable, live, typeRoot } from '@/lib/sections/editable'
 import type { SectionContext } from '@/lib/sections/context'
 import '@/app/about/about.css'
 
@@ -36,9 +36,9 @@ export default function AboutSection({
     <article
       className="about"
       data-side={settings.image_side}
-      style={styleVars(ctx.styles, 'intro')}
+      style={sectionVars('about', settings, ctx.styles)}
       {...live(ctx, ['image_side'])}
-      {...typeGroup(ctx, 'intro')}
+      {...typeRoot(ctx)}
     >
       {image && (
         <div className="about-media">

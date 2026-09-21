@@ -1,5 +1,5 @@
 import { photoUrl } from '@/lib/images'
-import { styleVars } from '@/lib/type-styles'
+import { sectionVars } from '@/lib/type-styles'
 import { str, type SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
 import ContactSection from '@/components/ContactSection'
@@ -16,7 +16,7 @@ export default function ContactBlock({
   return (
     <ContactSection
       editable={ctx.editable}
-      styleVars={styleVars(ctx.styles, 'contact')}
+      styleVars={sectionVars('contact', settings, ctx.styles)}
       settings={{
         layout: str(settings, 'layout') === 'centered' ? 'centered' : 'split',
         eyebrow: str(settings, 'eyebrow'),

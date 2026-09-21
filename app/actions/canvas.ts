@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { isPage } from '@/lib/sections/pages'
+import { PAGE_SLUGS, isPage } from '@/lib/sections/pages'
 import { randomUUID } from 'crypto'
 import { requireUser } from '@/lib/auth'
 import {
@@ -16,13 +16,7 @@ import {
 import { getSiteSettings } from '@/lib/site'
 import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
-import { sanitizeSectionStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
-import {
-  STYLED_SECTIONS,
-  type SectionStyle,
-  type StyledSection,
-  type TypeStyles,
-} from '@/lib/type-styles'
+import { sanitizeOwnStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
 import {
   PAIRINGS,
   PALETTES,
@@ -275,6 +269,11 @@ export async function updateDraftSectionValues(
     }
   }
 
+  // Values arrive from the browser, so anything with a shape is validated
+  // before it is stored. Typography is the one structured value written here
+  // that the page turns straight into CSS.
+  if ('type' in values) values = { ...values, type: sanitizeOwnStyle(values.type) }
+
   await writeDraftPage(
     page,
     rows.map((r) =>
@@ -324,48 +323,6 @@ export async function applyDraftPalette(id: string) {
 }
 
 /**
- * One section group's typography override.
- *
- * Keyed by the STYLE GROUP ('hero', 'intro', 'journal', 'contact'), not by
- * section id, because that is how lib/type-styles.ts stores it — two intro
- * sections on a page deliberately share one setting. Undefined clears the
- * override so the section goes back to following the site.
- */
-export async function updateDraftSectionType(
-  group: string,
-  changes: Record<string, unknown>
-) {
-  await requireEditor()
-
-  if (!STYLED_SECTIONS.includes(group as StyledSection)) {
-    throw new Error(`"${group}" is not a section group that carries its own typography.`)
-  }
-
-  const { draft } = await readDraft()
-  const settings = await getSiteSettings()
-  const current = (draft?.type_styles ?? settings.type_styles ?? {}) as TypeStyles
-
-  const next: SectionStyle = { ...(current[group] ?? {}) }
-
-  for (const [key, value] of Object.entries(sanitizeSectionStyle(changes))) {
-    if (value === undefined) delete next[key as keyof SectionStyle]
-    else Object.assign(next, { [key]: value })
-  }
-
-  // An override with nothing left in it is removed rather than stored empty,
-  // so "follows the site" is the absence of a record rather than a record that
-  // happens to say nothing.
-  const merged: TypeStyles = { ...current }
-  if (Object.keys(next).length === 0) delete merged[group]
-  else merged[group] = next
-
-  await writeDraftStyles({ type_styles: merged })
-
-  revalidatePath('/edit/home')
-  revalidatePath('/preview/home')
-}
-
-/**
  * Clears every per-section typography override at once.
  *
  * Worth its own action because the overrides are invisible until you go looking
@@ -375,7 +332,24 @@ export async function updateDraftSectionType(
  */
 export async function clearDraftSectionTypes() {
   await requireEditor()
+
+  // The old shared group overrides...
   await writeDraftStyles({ type_styles: {} })
+
+  // ...and every section's own. Each page is brought into the draft so this is
+  // published — and discardable — like any other edit.
+  for (const page of PAGE_SLUGS) {
+    const draft = await ensureDraft(page)
+    const rows = draft.pages[page] ?? []
+    if (!rows.some((r) => r.settings?.type)) continue
+
+    await writeDraftPage(
+      page,
+      rows.map((r) => (r.settings?.type ? { ...r, settings: { ...r.settings, type: null } } : r)),
+      draft
+    )
+    done(page)
+  }
 
   revalidatePath('/edit/home')
   revalidatePath('/preview/home')

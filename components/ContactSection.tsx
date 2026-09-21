@@ -108,7 +108,7 @@ export default function ContactSection({
       <section
         className="contact-centred"
         style={styleVars}
-        {...(editable ? { 'data-type-group': 'contact' } : {})}
+        {...(editable ? { 'data-type-root': '' } : {})}
       >
         <div className="contact-panel-inner">{words}</div>
       </section>
@@ -122,7 +122,7 @@ export default function ContactSection({
       style={styleVars}
       // In the editor: the layout attribute and the typography variables on
       // this element can be changed live. See LiveSpec in the registry.
-      {...(editable ? { 'data-live': 'image_side', 'data-type-group': 'contact' } : {})}
+      {...(editable ? { 'data-live': 'image_side', 'data-type-root': '' } : {})}
     >
       {settings.imageUrl && (
         <div className="contact-media">

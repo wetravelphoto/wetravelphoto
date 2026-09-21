@@ -8,7 +8,8 @@ import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
 import MarkImage from '@/components/canvas/editors/MarkImage'
 import SectionType from '@/components/canvas/SectionType'
-import type { SectionStyle } from '@/lib/type-styles'
+import { SEC_VARS, sectionStyle, varsFor, type SectionStyle, type TypeStyles } from '@/lib/type-styles'
+import { fontHref } from '@/lib/fonts'
 import type { CanvasSection } from '@/components/canvas/Canvas'
 
 /**
@@ -51,11 +52,11 @@ export default function Inspector({
   publicUrl,
   stories,
   focusField,
-  sectionStyle,
+  typeStyles,
   styleBase,
   onPatch,
   onLive,
-  onType,
+  onTypeVars,
   onDevice,
   onShowStory,
   onSaved,
@@ -75,16 +76,16 @@ export default function Inspector({
    * it. The nonce is what makes clicking the same one twice work.
    */
   focusField: { field: string; nonce: number } | null
-  /** What this section's style group actually overrides. */
-  sectionStyle: SectionStyle
+  /** The old shared group overrides, which a section without its own inherits. */
+  typeStyles: TypeStyles
   /** What it falls back to — the site's tokens. */
   styleBase: { font: string; color: string; bodyFont: string; bodyColor: string }
   /** Text as it is typed, for the page to show immediately. */
   onPatch: (field: string, value: string) => void
   /** A design value as it moves — a slider, a layout menu. See LiveSpec. */
   onLive: (field: string, value: string, spec: LiveSpec) => void
-  /** A typography override for this section's style group. */
-  onType: (group: string, changes: Record<string, unknown>) => void
+  /** A section's typography variables, for the page to repaint at once. */
+  onTypeVars: (sectionId: string, vars: Record<string, string | null>, fonts: string[]) => void
   /** Put the preview into the width whose crop is being edited. */
   onDevice: (device: 'desktop' | 'mobile') => void
   /** Bring one of the hero's stories up in the preview. */
@@ -147,6 +148,7 @@ export default function Inspector({
         await updateDraftSectionValues(page, batch.id, batch.values)
         setSavedAt(Date.now())
         onSaved()
+        if (!valueQueue.current) onSettled(batch.id)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not save that.')
       }
@@ -352,6 +354,31 @@ export default function Inspector({
               )
             }
 
+            if (field.editor === 'typography') {
+              const current = sectionStyle(section.type, section.settings, typeStyles)
+              return (
+                <SectionType
+                  style={current}
+                  base={styleBase}
+                  hasEyebrow={def.fields.some((f) => f.key === 'eyebrow' || f.key === 'kicker')}
+                  onChange={(next: SectionStyle | null) => {
+                    // Painted on the page at once — varsFor is what the renderer
+                    // uses, so this is the identity — then saved, coalesced.
+                    const vars = varsFor(next ?? {})
+                    const all: Record<string, string | null> = {}
+                    for (const name of SEC_VARS) all[name] = vars[name] ?? null
+                    const fonts = [next?.font, next?.bodyFont, next?.eyebrowFont]
+                      .filter((f): f is string => !!f)
+                      .map(fontHref)
+                    onTypeVars(section.id, all, fonts)
+                    // {} rather than null: "follow the site" must not fall back to
+                    // an old shared group override.
+                    saveValues(section.id, { [field.key]: next ?? {} })
+                  }}
+                />
+              )
+            }
+
             if (field.editor === 'mark-image') {
               return (
                 <MarkImage
@@ -366,20 +393,6 @@ export default function Inspector({
           }}
         />
       </form>
-
-      {/* Typography sits outside the settings form on purpose: it is stored in
-          the site's style, not in this section's settings, and putting it in
-          the same <form> would sweep it into the same FormData. */}
-      {def.styled && (
-        <div className="cv-insp-form cv-insp-type">
-          <SectionType
-            group={def.styled}
-            style={sectionStyle}
-            base={styleBase}
-            onChange={(changes) => onType(def.styled!, changes)}
-          />
-        </div>
-      )}
 
       <div className="cv-insp-foot">
         <span className="cv-insp-state" aria-live="polite">

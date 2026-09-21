@@ -6,23 +6,24 @@
 }
 
 .gallery-index-eyebrow {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--sec-eyebrow-font, var(--font-display)), sans-serif;
+  font-weight: var(--sec-eyebrow-weight, normal);
   text-transform: uppercase;
   letter-spacing: 0.26em;
-  font-size: 0.68rem;
-  color: var(--ember);
+  font-size: calc(0.68rem * var(--sec-eyebrow-scale, 1));
+  color: var(--sec-eyebrow-color, var(--ember));
   margin: 0 0 0.85rem;
 }
 
 .gallery-index-heading {
-  font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
-  font-weight: 400;
-  font-size: clamp(2rem, 5vw, 3.1rem);
+  font-family: var(--sec-font, var(--font-display)), sans-serif;
+  text-transform: var(--sec-case, uppercase);
+  letter-spacing: var(--sec-track, 0.01em);
+  font-weight: var(--sec-weight, 400);
+  font-size: calc(clamp(2rem, 5vw, 3.1rem) * var(--sec-scale, 1));
   line-height: 1;
   margin: 0;
-  color: var(--ink);
+  color: var(--sec-color, var(--ink));
 }
 
 /* An even grid — every gallery the same size, which reads cleaner than a
@@ -35,8 +36,13 @@
   gap: clamp(0.75rem, 1.8vw, 1.5rem);
 }
 
-@media (max-width: 1000px) { .gallery-grid-public { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 620px) { .gallery-grid-public { grid-template-columns: 1fr; } }
+/* "Galleries across", on a wide screen. Three is the default above. */
+.gallery-grid-public[data-cols='2'] { grid-template-columns: repeat(2, 1fr); }
+.gallery-grid-public[data-cols='4'] { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 1200px) { .gallery-grid-public[data-cols='4'] { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1000px) { .gallery-grid-public, .gallery-grid-public[data-cols] { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .gallery-grid-public, .gallery-grid-public[data-cols] { grid-template-columns: 1fr; } }
 
 .gallery-tile {
   display: block;

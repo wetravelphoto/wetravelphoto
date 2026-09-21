@@ -1759,3 +1759,106 @@
 .cv-page-select:hover { border-color: var(--cv-line); background-color: var(--cv-panel-2); }
 .cv-page-select:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 1px; }
 .cv-page-select option { background: var(--cv-panel); color: var(--cv-ink); }
+
+/* ── Panel headers, Lightroom-style (2026-09-21) ───────────────────────────
+   Each group of settings is a full-width bar: brighter, larger title, the
+   triangle on the right (◂ shut, ▾ open), and a groove between bars so the
+   panel reads as a stack of drawers you can open one at a time. */
+
+.cv-inspector .sec-fields { gap: 0; }
+
+.cv-inspector .sec-group { gap: 0.7rem; }
+
+.cv-inspector .sec-group > .sec-field:last-child { padding-bottom: 1rem; }
+
+.cv-inspector .cv-fold {
+  justify-content: flex-start;
+  width: calc(100% + 1.7rem);
+  margin: 0 -0.85rem;
+  padding: 0.7rem 0.85rem;
+  border-top: 1px solid #0b0c0e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  background: #1d1f23;
+  color: #d6d9de;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.cv-inspector .sec-group:last-child .cv-fold[aria-expanded='false'] {
+  border-bottom: 1px solid #0b0c0e;
+}
+
+.cv-inspector .cv-fold:hover {
+  color: #fff;
+  background: #22252a;
+}
+
+.cv-inspector .cv-fold .cv-fold-count {
+  order: 2;
+  margin-left: auto;
+  color: var(--cv-mute);
+}
+
+.cv-inspector .cv-fold .cv-fold-arrow {
+  order: 3;
+  width: auto;
+  margin-left: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--cv-soft);
+}
+
+.cv-inspector .cv-fold:not(:has(.cv-fold-count)) .cv-fold-arrow { margin-left: auto; }
+
+/* Shut: the triangle points left, as in Lightroom. */
+.cv-inspector .cv-fold[aria-expanded='false'] .cv-fold-arrow { transform: rotate(90deg); }
+
+.cv-inspector .cv-fold-all { margin: 0 0 0.5rem; }
+
+/* ── Typography, now a group like any other ───────────────────────────── */
+
+.cv-type {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cv-type-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cv-type .cv-type-note { margin: 0; }
+
+/* ── The preview, laid out at a real device width and scaled to fit ──────── */
+
+.cv-frame-box {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cv-frame-box .cv-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  transition: none;
+}
+
+.cv-frame-wrap[data-device='tablet'] .cv-frame-box,
+.cv-frame-wrap[data-device='phone'] .cv-frame-box {
+  border-radius: 6px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.cv-frame-wrap[data-device='tablet'] .cv-frame,
+.cv-frame-wrap[data-device='phone'] .cv-frame {
+  border-radius: 0;
+  box-shadow: none;
+}

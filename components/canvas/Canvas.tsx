@@ -16,18 +16,10 @@ import {
   resetDraftStyles,
   setDraftVisible,
   clearDraftSectionTypes,
-  updateDraftSectionType,
   updateDraftStyles,
 } from '@/app/actions/canvas'
 import { cssVariables, fontsToLoad, type StyleTokens } from '@/lib/styles/tokens'
-import {
-  SEC_VARS,
-  styleFor,
-  styleVars,
-  type SectionStyle,
-  type StyledSection,
-  type TypeStyles,
-} from '@/lib/type-styles'
+import { hasOwnType, type TypeStyles } from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
 import SectionRail from '@/components/canvas/SectionRail'
 import Inspector from '@/components/canvas/Inspector'
@@ -50,7 +42,14 @@ export type CanvasSection = {
 type Device = 'desktop' | 'tablet' | 'phone'
 type Mode = 'content' | 'style'
 
-const WIDTHS: Record<Device, number | null> = { desktop: null, tablet: 820, phone: 390 }
+/**
+ * The width each device's page is laid out at. Desktop is a real desktop
+ * width; the preview scales it down to fit the space between the panels.
+ */
+const WIDTHS: Record<Device, number> = { desktop: 1440, tablet: 820, phone: 390 }
+
+/** The breathing room above and below a tablet or phone frame. */
+const FRAME_INSET = 44
 
 /**
  * The shell. Holds the selection, owns the iframe, and is the only thing that
@@ -63,13 +62,6 @@ const WIDTHS: Record<Device, number | null> = { desktop: null, tablet: 820, phon
  * what is actually in the draft. A few hundred milliseconds slower than
  * optimistic patching, and it cannot lie.
  */
-/**
- * How long a run of typography changes is gathered before it is written. The
- * page shows each change immediately, so this only decides how many writes a
- * slider drag costs.
- */
-const TYPE_DEBOUNCE_MS = 250
-
 export default function Canvas({
   page,
   title,
@@ -102,11 +94,33 @@ export default function Canvas({
 }) {
   const router = useRouter()
   const frame = useRef<HTMLIFrameElement>(null)
+
+  // The stage's size, so the preview can be laid out at a real device width
+  // and scaled to fit it.
+  const stage = useRef<HTMLElement>(null)
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const el = stage.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      setStageSize({ width: entry.contentRect.width, height: entry.contentRect.height })
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
   const [pending, startTransition] = useTransition()
 
   const [selected, setSelected] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>(initialMode)
   const [device, setDevice] = useState<Device>('desktop')
+
+  const frameWidth = WIDTHS[device]
+  const frameInset = device === 'desktop' ? 0 : FRAME_INSET
+  // Until the stage has been measured the frame just fills it; after that it is
+  // laid out at the device width and scaled.
+  const measured = stageSize.width > 0 && stageSize.height > 0
+  const scale = measured ? Math.min(1, stageSize.width / frameWidth) : 1
+  const frameHeight = measured ? stageSize.height - frameInset : 0
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -149,7 +163,6 @@ export default function Canvas({
       var?: string
       unit?: string
       attr?: string
-      group?: string
     }) => {
       frame.current?.contentWindow?.postMessage(
         { source: 'wtp-canvas', ...message },
@@ -226,70 +239,6 @@ export default function Canvas({
     },
     [tell]
   )
-
-  /**
-   * Per-section typography, shown as it is chosen.
-   *
-   * Two things used to make a size slider here feel broken. Every movement
-   * went to the server as its own action, queued behind the last; and the
-   * slider's position came from the server's copy, so it could not move until
-   * the round trip came back. Now:
-   *
-   *   · the choice is held locally (typeOverride) so the panel follows the hand;
-   *   · the section's variables are painted onto the preview at once — the same
-   *     styleVars() the renderer uses, so it is the identity, not a guess;
-   *   · the save is coalesced, and 'settle' hands the preview back to the
-   *     server once the write holding the final value has landed.
-   *
-   * The local copy is dropped the moment the server's copy changes — the save
-   * landing, a Discard, "clear overrides" — so it can never outlive the thing
-   * it stood in for.
-   */
-  const serverTypes = JSON.stringify(typeStyles)
-  const [typeOverride, setTypeOverride] = useState<{ base: string; styles: TypeStyles } | null>(
-    null
-  )
-  if (typeOverride && typeOverride.base !== serverTypes) setTypeOverride(null)
-  const shownTypes = typeOverride?.styles ?? typeStyles
-
-  const typeQueue = useRef<Record<string, Record<string, unknown>>>({})
-  const typeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const changeType = (group: string, changes: Record<string, unknown>) => {
-    const current: Record<string, unknown> = { ...(shownTypes[group] ?? {}) }
-    for (const [key, value] of Object.entries(changes)) {
-      if (value === null || value === undefined || value === '') delete current[key]
-      else current[key] = value
-    }
-    const next: TypeStyles = { ...shownTypes, [group]: current as SectionStyle }
-    setTypeOverride({ base: serverTypes, styles: next })
-
-    // Every variable, set or null: one the new choice no longer sets has to be
-    // taken off, not left over from the last one.
-    const vars = styleVars(next, group as StyledSection) as Record<string, string>
-    const all: Record<string, string | null> = {}
-    for (const name of SEC_VARS) all[name] = vars[name] ?? null
-
-    const fonts = [current.font, current.bodyFont]
-      .filter((f): f is string => typeof f === 'string' && f !== '')
-      .map(fontHref)
-
-    tell({ type: 'type-vars', group, vars: all, fonts })
-
-    typeQueue.current[group] = { ...(typeQueue.current[group] ?? {}), ...changes }
-    if (typeTimer.current) clearTimeout(typeTimer.current)
-    typeTimer.current = setTimeout(() => {
-      typeTimer.current = null
-      const batch = typeQueue.current
-      typeQueue.current = {}
-      for (const [g, c] of Object.entries(batch)) {
-        run(
-          () => updateDraftSectionType(g as StyledSection, c),
-          () => tell({ type: 'settle', group: g })
-        )
-      }
-    }, TYPE_DEBOUNCE_MS)
-  }
 
   // Selecting in the rail scrolls the preview to it.
   const choose = (id: string | null) => {
@@ -468,15 +417,34 @@ export default function Canvas({
           />
         )}
 
-        <main className="cv-stage">
+        <main className="cv-stage" ref={stage}>
           <div className="cv-frame-wrap" data-device={device}>
-            <iframe
-              ref={frame}
-              className="cv-frame"
-              src={`/preview/${page}`}
-              title={`${title} preview`}
-              style={WIDTHS[device] ? { width: WIDTHS[device]! } : undefined}
-            />
+            {/* The page is laid out at the device's real width and scaled down
+                to fit, so "desktop" really is a desktop layout — rather than
+                whatever width happens to be left between the two panels, which
+                is a tablet's, and hides every desktop-only setting (four
+                prints across, four galleries across). */}
+            <div
+              className="cv-frame-box"
+              style={measured ? { width: frameWidth * scale, height: frameHeight } : undefined}
+              title={scale < 1 ? `${frameWidth}px wide, shown at ${Math.round(scale * 100)}%` : undefined}
+            >
+              <iframe
+                ref={frame}
+                className="cv-frame"
+                src={`/preview/${page}`}
+                title={`${title} preview`}
+                style={
+                  measured
+                    ? {
+                        width: frameWidth,
+                        height: frameHeight / scale,
+                        transform: scale < 1 ? `scale(${scale})` : undefined,
+                      }
+                    : undefined
+                }
+              />
+            </div>
           </div>
         </main>
 
@@ -484,9 +452,9 @@ export default function Canvas({
           <StyleMode
             resizer={<PanelResizer />}
             tokens={tokens}
-            overriddenGroups={Object.keys(shownTypes).filter(
-              (g) => Object.keys(shownTypes[g] ?? {}).length > 0
-            )}
+            overridden={order
+              .filter((s) => hasOwnType(s.type, s.settings, typeStyles))
+              .map((s) => s.label)}
             onClearOverrides={() => {
               if (confirm('Let every section follow the site style again?')) {
                 run(() => clearDraftSectionTypes())
@@ -505,14 +473,14 @@ export default function Canvas({
             publicUrl={publicUrl}
             stories={stories}
             focusField={focusField}
-            sectionStyle={def?.styled ? styleFor(shownTypes, def.styled) : {}}
+            typeStyles={typeStyles}
             styleBase={{
               font: tokens.display_font,
               color: tokens.ink,
               bodyFont: tokens.body_font,
               bodyColor: tokens.ink_soft,
             }}
-            onType={changeType}
+            onTypeVars={(id, vars, fonts) => tell({ type: 'type-vars', id, vars, fonts })}
             // Cropping for the phone while looking at the desktop layout is
             // guessing, so the preview follows the crop being edited.
             onDevice={(d) => setDevice(d === 'mobile' ? 'phone' : 'desktop')}

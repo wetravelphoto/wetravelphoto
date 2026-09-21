@@ -67,8 +67,13 @@ type FieldBase = {
   help?: string
   /** Groups fields under a sub-heading in the panel. */
   group?: string
-  /** Show this field only when another setting has a given value. */
-  when?: { key: string; equals: unknown }
+  /**
+   * Show this field only when another setting has a given value — or, as a
+   * list, only when every one of them does.
+   */
+  when?: When | When[]
+  /** Its group starts folded in the editor's panel. */
+  folded?: boolean
   /**
    * CONTENT or DESIGN — the line a template is not allowed to cross.
    *
@@ -86,6 +91,8 @@ type FieldBase = {
   /** Shown on the page instantly while it changes. See LiveSpec. */
   live?: LiveSpec
 }
+
+type When = { key: string; equals: unknown }
 
 export type Field = FieldBase &
   (
@@ -191,6 +198,8 @@ export const SECTIONS: Record<string, SectionDef> = {
     styled: 'hero',
     needs: ['posts'],
     defaults: {
+      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      type: null,
       mode: 'stories',
       title_position: 'center',
       story_align: 'left',
@@ -267,6 +276,15 @@ export const SECTIONS: Record<string, SectionDef> = {
         note: 'Dragging the focal point for desktop and phone.',
         when: { key: 'mode', equals: 'fixed' },
       },
+      {
+        key: 'type',
+        label: 'Typography',
+        kind: 'custom',
+        editor: 'typography',
+        group: 'Typography',
+        folded: true,
+        note: 'The typefaces, colours and sizes of this section only.',
+      },
     ],
   },
 
@@ -317,6 +335,8 @@ export const SECTIONS: Record<string, SectionDef> = {
     version: 1,
     styled: 'intro',
     defaults: {
+      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      type: null,
       kicker: null,
       heading: null,
       body: null,
@@ -336,6 +356,15 @@ export const SECTIONS: Record<string, SectionDef> = {
       },
       { key: 'image_path', label: 'Photograph', kind: 'image', content: true },
       { key: 'image_side', label: 'Layout', kind: 'select', options: SIDE, live: { attr: 'data-side' } },
+      {
+        key: 'type',
+        label: 'Typography',
+        kind: 'custom',
+        editor: 'typography',
+        group: 'Typography',
+        folded: true,
+        note: 'The typefaces, colours and sizes of this section only.',
+      },
     ],
   },
 
@@ -348,6 +377,8 @@ export const SECTIONS: Record<string, SectionDef> = {
     styled: 'intro',
     grows: true,
     defaults: {
+      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      type: null,
       eyebrow: null,
       heading: null,
       body: null,
@@ -385,6 +416,15 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         placeholder: '/trips',
       },
+      {
+        key: 'type',
+        label: 'Typography',
+        kind: 'custom',
+        editor: 'typography',
+        group: 'Typography',
+        folded: true,
+        note: 'The typefaces, colours and sizes of this section only.',
+      },
     ],
   },
 
@@ -400,6 +440,8 @@ export const SECTIONS: Record<string, SectionDef> = {
     // Only the grid's root has flex: 1 (it is the Galleries page's layout).
     grows: true,
     defaults: {
+      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      type: null,
       // 'carousel': the homepage's draggable row.
       // 'grid': every gallery as a tile, under a page heading (the Galleries
       // page's layout).
@@ -407,6 +449,8 @@ export const SECTIONS: Record<string, SectionDef> = {
       eyebrow: null,
       heading: 'Recent trips',
       limit: 0,
+      // Across, on a wide screen; narrower screens step down on their own.
+      columns: 3,
     },
     fields: [
       {
@@ -434,6 +478,28 @@ export const SECTIONS: Record<string, SectionDef> = {
         max: 24,
         help: '0 shows every public gallery.',
       },
+      {
+        key: 'columns',
+        label: 'Galleries across',
+        kind: 'select',
+        options: [
+          { value: '2', label: 'Two' },
+          { value: '3', label: 'Three' },
+          { value: '4', label: 'Four' },
+        ],
+        help: 'On a wide screen. Narrower screens step down on their own.',
+        live: { attr: 'data-cols' },
+        when: { key: 'layout', equals: 'grid' },
+      },
+      {
+        key: 'type',
+        label: 'Typography',
+        kind: 'custom',
+        editor: 'typography',
+        group: 'Typography',
+        folded: true,
+        note: 'The typefaces, colours and sizes of this section only.',
+      },
     ],
   },
 
@@ -449,6 +515,8 @@ export const SECTIONS: Record<string, SectionDef> = {
     // Only the grid's root has flex: 1 (it is the Journal page's layout).
     grows: true,
     defaults: {
+      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      type: null,
       // 'row': the latest few, with a link to the rest (the homepage's).
       // 'grid': every story, the newest drawn large (the Journal page's).
       layout: 'row',
@@ -460,6 +528,11 @@ export const SECTIONS: Record<string, SectionDef> = {
       show_date: false,
       show_byline: false,
       title_scale: 1,
+      // How the grid is arranged: 'feature' (the newest drawn large, the rest
+      // flowing after it), 'single' (one wide column, every story large) or
+      // 'columns' (even columns, every story the same size).
+      grid_style: 'feature',
+      grid_columns: 3,
     },
     fields: [
       {
@@ -496,6 +569,31 @@ export const SECTIONS: Record<string, SectionDef> = {
         when: { key: 'layout', equals: 'row' },
       },
       {
+        key: 'grid_style',
+        label: 'Arrangement',
+        kind: 'select',
+        options: [
+          { value: 'feature', label: 'Newest large, the rest flowing after' },
+          { value: 'single', label: 'One wide column' },
+          { value: 'columns', label: 'Even columns' },
+        ],
+        when: { key: 'layout', equals: 'grid' },
+      },
+      {
+        key: 'grid_columns',
+        label: 'Columns',
+        kind: 'select',
+        options: [
+          { value: '2', label: 'Two' },
+          { value: '3', label: 'Three' },
+        ],
+        live: { attr: 'data-cols' },
+        when: [
+          { key: 'layout', equals: 'grid' },
+          { key: 'grid_style', equals: 'columns' },
+        ],
+      },
+      {
         key: 'show_excerpt',
         label: 'Show the excerpt',
         kind: 'toggle',
@@ -529,6 +627,15 @@ export const SECTIONS: Record<string, SectionDef> = {
         live: { var: '--journal-title-scale' },
         when: { key: 'layout', equals: 'grid' },
       },
+      {
+        key: 'type',
+        label: 'Typography',
+        kind: 'custom',
+        editor: 'typography',
+        group: 'Typography',
+        folded: true,
+        note: 'The typefaces, colours and sizes of this section only.',
+      },
     ],
   },
 
@@ -543,6 +650,8 @@ export const SECTIONS: Record<string, SectionDef> = {
     needs: ['catalog'],
     requires: 'The shop switched on, with prints published in the catalogue',
     defaults: {
+      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      type: null,
       eyebrow: null,
       heading: 'Prints',
       subheading: null,
@@ -574,7 +683,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         slider: true,
         group: 'The wall',
         help: 'On a wide screen. Narrower screens step down on their own.',
-        live: { var: '--cols-wide' },
+        live: { attr: 'data-cols' },
       },
       {
         key: 'show_location',
@@ -594,6 +703,15 @@ export const SECTIONS: Record<string, SectionDef> = {
         kind: 'toggle',
         group: 'Captions',
         help: 'The cheapest size. Off makes the shop read as a gallery.',
+      },
+      {
+        key: 'type',
+        label: 'Typography',
+        kind: 'custom',
+        editor: 'typography',
+        group: 'Typography',
+        folded: true,
+        note: 'The typefaces, colours and sizes of this section only.',
       },
     ],
   },
@@ -629,6 +747,8 @@ export const SECTIONS: Record<string, SectionDef> = {
     // natural height either way, so declaring this changes nothing for it.
     grows: true,
     defaults: {
+      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      type: null,
       // 'split': photograph beside the form (the homepage's).
       // 'centered': the form and its words in the middle, no photograph (the
       // Contact page's). The first of the per-section layouts; more options
@@ -684,6 +804,15 @@ export const SECTIONS: Record<string, SectionDef> = {
         live: { attr: 'data-side' },
         when: { key: 'layout', equals: 'split' },
       },
+      {
+        key: 'type',
+        label: 'Typography',
+        kind: 'custom',
+        editor: 'typography',
+        group: 'Typography',
+        folded: true,
+        note: 'The typefaces, colours and sizes of this section only.',
+      },
     ],
   },
 }
@@ -726,7 +855,11 @@ export function resolveSettings(
 
 /** Fields visible given the current values — `when` resolved. */
 export function visibleFields(def: SectionDef, settings: SectionSettings): Field[] {
-  return def.fields.filter((f) => !f.when || settings[f.when.key] === f.when.equals)
+  return def.fields.filter((f) => {
+    if (!f.when) return true
+    const rules = Array.isArray(f.when) ? f.when : [f.when]
+    return rules.every((rule) => settings[rule.key] === rule.equals)
+  })
 }
 
 /** Keys a template must never overwrite. See `content` on FieldBase. */

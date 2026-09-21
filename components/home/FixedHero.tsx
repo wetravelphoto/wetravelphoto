@@ -62,7 +62,7 @@ export default function FixedHero({
       className="hero"
       data-title-pos={markPosition}
       style={styleVars}
-      {...(editable ? { 'data-live': 'title_position', 'data-type-group': 'hero' } : {})}
+      {...(editable ? { 'data-live': 'title_position', 'data-type-root': '' } : {})}
     >
       <div className="hero-layer" data-active="true">
         {imageUrl && (

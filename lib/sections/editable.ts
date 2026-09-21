@@ -47,9 +47,9 @@ export function live(ctx: SectionContext, keys: string[]): Record<string, string
 /**
  * Marks the element a section's typography variables are written on, so the
  * editor can repaint them while a font or size is being chosen. Must be the
- * element that has `style={styleVars(...)}`: an inline property on a child
+ * element that has `style={sectionVars(...)}`: an inline property on a child
  * would beat one set on its parent.
  */
-export function typeGroup(ctx: SectionContext, group: string): Record<string, string> {
-  return ctx.editable ? { 'data-type-group': group } : {}
+export function typeRoot(ctx: SectionContext): Record<string, string> {
+  return ctx.editable ? { 'data-type-root': '' } : {}
 }

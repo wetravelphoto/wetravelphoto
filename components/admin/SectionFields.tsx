@@ -49,7 +49,17 @@ export default function SectionFields({
   // Kept in state so a `when` condition re-evaluates as you change the field
   // it depends on, instead of after a save.
   const [values, setValues] = useState<SectionSettings>(settings)
-  const [folded, setFolded] = useState<Set<string>>(new Set())
+  // Groups declared `folded` in the registry (Typography, say) start shut: they
+  // are what you reach for least and the longest thing in the panel when open.
+  const [folded, setFolded] = useState<Set<string>>(() =>
+    collapsible
+      ? new Set(
+          groupFields(visibleFields(def, settings))
+            .map((g, i) => (g.fields.some((f) => f.folded) ? `${g.name}-${i}` : null))
+            .filter((k): k is string => k !== null)
+        )
+      : new Set()
+  )
   const set = (key: string, value: unknown) => setValues((v) => ({ ...v, [key]: value }))
 
   const fields = visibleFields(def, values)
@@ -64,15 +74,7 @@ export default function SectionFields({
    * had never been built. An unnamed group is still a group; it just needed a
    * name to be one.
    */
-  const FIRST = 'Content'
-
-  const groups: { name: string; fields: Field[] }[] = []
-  for (const field of fields) {
-    const name = field.group ?? FIRST
-    const last = groups[groups.length - 1]
-    if (last && last.name === name) last.fields.push(field)
-    else groups.push({ name, fields: [field] })
-  }
+  const groups = groupFields(fields)
 
   const allKeys = groups.map((g, i) => `${g.name}-${i}`)
   const allShut = collapsible && allKeys.every((k) => folded.has(k))
@@ -132,6 +134,19 @@ export default function SectionFields({
       })}
     </div>
   )
+}
+
+const FIRST = 'Content'
+
+function groupFields(fields: Field[]): { name: string; fields: Field[] }[] {
+  const groups: { name: string; fields: Field[] }[] = []
+  for (const field of fields) {
+    const name = field.group ?? FIRST
+    const last = groups[groups.length - 1]
+    if (last && last.name === name) last.fields.push(field)
+    else groups.push({ name, fields: [field] })
+  }
+  return groups
 }
 
 function renderField(

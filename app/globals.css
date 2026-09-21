@@ -41,11 +41,14 @@ a {
 }
 
 .eyebrow {
-  font-family: var(--font-display), sans-serif;
+  /* Reads a section's over-line typography when it sits inside one; the
+     fallbacks are exactly what it always was everywhere else. */
+  font-family: var(--sec-eyebrow-font, var(--font-display)), sans-serif;
+  font-weight: var(--sec-eyebrow-weight, normal);
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  font-size: 0.72rem;
-  color: var(--ember);
+  font-size: calc(0.72rem * var(--sec-eyebrow-scale, 1));
+  color: var(--sec-eyebrow-color, var(--ember));
 }
 
 .meta {

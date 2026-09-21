@@ -107,7 +107,7 @@ export default function HomeHero({
       // In the editor: both layout attributes and the typography variables on
       // this element can be changed live. See LiveSpec in the registry.
       {...(editable
-        ? { 'data-live': 'title_position story_align', 'data-type-group': 'hero' }
+        ? { 'data-live': 'title_position story_align', 'data-type-root': '' }
         : {})}
     >
       {items.map((item, i) => {

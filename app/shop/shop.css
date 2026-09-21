@@ -29,20 +29,23 @@
 }
 
 .wall-overline {
-  font-size: 0.68rem;
+  font-family: var(--sec-eyebrow-font, var(--font-body)), system-ui, sans-serif;
+  font-weight: var(--sec-eyebrow-weight, normal);
+  font-size: calc(0.68rem * var(--sec-eyebrow-scale, 1));
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: var(--ink-mute, #8a837c);
+  color: var(--sec-eyebrow-color, var(--ink-mute, #8a837c));
   margin: 0 0 1.15rem;
 }
 
 .wall-title {
-  font-family: var(--font-shop-title), Georgia, serif;
-  font-size: clamp(2.3rem, 6vw, 4.2rem);
-  font-weight: 400;
+  font-family: var(--sec-font, var(--font-shop-title)), Georgia, serif;
+  font-size: calc(clamp(2.3rem, 6vw, 4.2rem) * var(--sec-scale, 1));
+  font-weight: var(--sec-weight, 400);
+  text-transform: var(--sec-case, none);
   line-height: 1.02;
-  letter-spacing: 0.005em;
-  color: var(--ink, #1c1a18);
+  letter-spacing: var(--sec-track, 0.005em);
+  color: var(--sec-color, var(--ink, #1c1a18));
   margin: 0;
 }
 
@@ -93,11 +96,14 @@
 }
 
 .wall-intro {
+  font-family: var(--sec-body-font, var(--font-body)), system-ui, sans-serif;
+  font-weight: var(--sec-body-weight, normal);
+  font-size: calc(1rem * var(--sec-body-scale, 1));
   max-width: 34rem;
   margin: 0 auto clamp(3rem, 6vw, 4.5rem);
   text-align: center;
   line-height: 1.8;
-  color: var(--ink-mute, #77706a);
+  color: var(--sec-body-color, var(--ink-mute, #77706a));
 }
 
 .wall-empty {

@@ -37,11 +37,12 @@
 .about-inner { width: 100%; max-width: 560px; }
 
 .about-eyebrow {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--sec-eyebrow-font, var(--font-display)), sans-serif;
+  font-weight: var(--sec-eyebrow-weight, normal);
   text-transform: uppercase;
   letter-spacing: 0.28em;
-  font-size: 0.68rem;
-  color: var(--ember);
+  font-size: calc(0.68rem * var(--sec-eyebrow-scale, 1));
+  color: var(--sec-eyebrow-color, var(--ember));
   margin: 0 0 1.1rem;
 }
 

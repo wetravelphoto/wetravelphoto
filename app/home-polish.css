@@ -22,11 +22,12 @@
 /* ---------- INTRO ---------- */
 
 .intro-kicker {
-  font-family: var(--sec-font, var(--font-display));
+  font-family: var(--sec-eyebrow-font, var(--sec-font, var(--font-display)));
+  font-weight: var(--sec-eyebrow-weight, normal);
   text-transform: uppercase;
   letter-spacing: 0.2em;
-  font-size: 0.68rem;
-  color: var(--ember);
+  font-size: calc(0.68rem * var(--sec-eyebrow-scale, 1));
+  color: var(--sec-eyebrow-color, var(--ember));
   margin: 0 0 1rem;
 }
 

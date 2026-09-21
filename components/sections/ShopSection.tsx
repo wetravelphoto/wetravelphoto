@@ -4,7 +4,8 @@ import { displayTitle } from '@/lib/catalog'
 import { srcSetFor, displayUrl } from '@/lib/srcset'
 import { pieceStyle } from '@/lib/frame'
 import { num, str, type SectionSettings } from '@/lib/sections/registry'
-import { editable, live } from '@/lib/sections/editable'
+import { editable, live, typeRoot } from '@/lib/sections/editable'
+import { sectionVars } from '@/lib/type-styles'
 import type { SectionContext } from '@/lib/sections/context'
 import FramedArt from '@/components/shop/FramedArt'
 import '@/app/frame.css'
@@ -40,7 +41,7 @@ export default function ShopSection({
   const categoryName = new Map(categories.map((c) => [c.id, c.name]))
 
   return (
-    <div className="shop-body">
+    <div className="shop-body" style={sectionVars('shop', settings, ctx.styles)} {...typeRoot(ctx)}>
       <div className="shop-inner">
         <header className="wall-head">
           {(eyebrow || ctx.editable) && (
@@ -88,9 +89,11 @@ export default function ShopSection({
         {entries.length > 0 ? (
           <div
             className="wall-grid"
-            // The column count is written as the custom property the grid
-            // reads, on the element the editor repaints while the slider moves.
-            style={{ '--cols-wide': String(columns) } as React.CSSProperties}
+            // The column count is an attribute the stylesheet reads (frame.css),
+            // on the element the editor repaints while the slider moves. An
+            // attribute rather than a custom property so the narrower-screen
+            // rules can respect it — see "Fewer columns as the wall narrows".
+            data-cols={columns}
             {...live(ctx, ['columns'])}
           >
             {entries.map((entry, index) => {

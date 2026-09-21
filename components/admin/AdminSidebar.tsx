@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { PLATFORM } from '@/lib/platform'
 
 const groups: { label: string; links: { href: string; label: string; exact?: boolean }[] }[] = [
   {
@@ -46,8 +47,10 @@ export default function AdminSidebar({ email, unreadCount = 0 }: { email: string
 
   return (
     <aside className="admin-sidebar">
+      {/* The platform's name, not the site's: this is the photographer's
+          workspace. Their site's own name is on the site. */}
       <Link href="/admin" className="admin-brand">
-        WeTravelPhoto
+        {PLATFORM.name}
       </Link>
 
       <nav className="admin-nav">

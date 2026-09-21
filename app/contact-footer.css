@@ -319,24 +319,36 @@
 
 .footer-note { font-style: italic; }
 
-/* ---------- BIRD MARK ---------- */
+/* ---------- ACCENT MARK (section) ----------
+   Was .bird-mark, pinned under the hero. Now a section of its own, so it can
+   sit left, centre or right and anywhere in the page. The width comes from the
+   section's size setting as an inline style; max-width keeps a large mark from
+   crowding a phone. */
 
-.bird-mark {
+.mark-section {
   display: flex;
   justify-content: center;
   background: var(--surface);
-  padding: clamp(2.5rem, 5vw, 4rem) 1rem 0;
+  padding: clamp(2.5rem, 5vw, 4rem) clamp(1.25rem, 5vw, 4rem) 0;
   /* The section below brings its own top padding, so pull up into it */
   margin-bottom: clamp(-2rem, -2.5vw, -1rem);
   line-height: 0;
 }
 
-.bird-mark img {
+.mark-section[data-align='left'] { justify-content: flex-start; }
+.mark-section[data-align='right'] { justify-content: flex-end; }
+
+.mark-frame { display: block; line-height: 0; }
+
+.mark-section img {
   height: auto;
   display: block;
   opacity: 0.85;
   max-width: 40vw;
 }
+
+/* Only drawn in the editor: an empty mark has nothing to show in public. */
+.mark-slot { width: 8rem; line-height: 1.4; }
 
 /* Header wordmark — height comes from settings, per device */
 .site-logo { height: var(--logo-h, 34px); width: auto; }

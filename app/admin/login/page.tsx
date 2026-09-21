@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { PLATFORM } from '@/lib/platform'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -51,7 +52,7 @@ export default function LoginPage() {
             textAlign: 'center',
           }}
         >
-          WeTravelPhoto
+          {PLATFORM.name}
         </p>
 
         <form onSubmit={handleLogin}>

@@ -41,6 +41,21 @@ export function legacyHomeSections(s: SiteSettings): StoredSection[] {
       },
     },
     {
+      // The accent mark used to be drawn inside the hero, configured by the
+      // show_bird / logo_bird_* columns. As a section it sits straight after
+      // the hero, which is exactly where it always appeared. A site that never
+      // uploaded its own used the built-in file, so that is what it keeps.
+      id: 'legacy-mark',
+      type: 'mark',
+      visible: s.show_bird !== false,
+      version: 1,
+      settings: {
+        image_path: s.logo_bird_path ?? '/logos/we-travel-photo-bird.svg',
+        align: 'center',
+        size: s.logo_bird_size ?? 64,
+      },
+    },
+    {
       id: 'legacy-intro',
       type: 'intro',
       visible: s.show_intro !== false,
@@ -107,12 +122,10 @@ export function legacyHomeSections(s: SiteSettings): StoredSection[] {
 /**
  * The same mapping backwards: a section's settings as site_settings columns.
  *
- * TRANSITION SHIM. Two editors currently describe the homepage — the section
- * list, and the old form under "Stories & type" that still writes columns.
- * Whichever one you save, this keeps the other correct, so there is never a
- * version of the page that only one of them knows about.
- *
- * It goes when the old form does, along with the rest of this file.
+ * The old homepage form that wrote these columns is gone (2026-09-21). The
+ * mirror stays as the way back: if the code is ever rolled back past the
+ * section engine, the columns still describe the page as it was last
+ * published. It goes when that stops being worth having.
  */
 export function legacyColumns(
   type: string,
@@ -175,6 +188,17 @@ export function legacyColumns(
         contact_tagline: s.tagline,
         contact_image_path: s.image_path,
         contact_image_side: s.image_side,
+      }
+
+    case 'mark':
+      // Mirrored so that rolling the code back past the mark section still
+      // draws the same emblem. A built-in path has no column form — the old
+      // code expressed "built-in" as an empty column.
+      return {
+        show_bird: visible,
+        logo_bird_size: s.size,
+        logo_bird_path:
+          typeof s.image_path === 'string' && !s.image_path.startsWith('/') ? s.image_path : null,
       }
 
     default:

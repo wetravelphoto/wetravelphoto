@@ -14,7 +14,7 @@ import {
  * Draws a section's settings from its field declarations.
  *
  * There is no per-section form code anywhere: this reads the registry, and
- * app/actions/sections.ts reads the same declarations to put the values back.
+ * lib/sections/form.ts reads the same declarations to put the values back.
  * A new section type gets a working settings panel for free, and a new setting
  * on an existing type is one line in `fields`.
  *
@@ -188,6 +188,34 @@ function renderField(
       )
 
     case 'number':
+      if (field.slider) {
+        // Controlled, so the number beside the slider follows the thumb. The
+        // save still reads the input by name like any other field.
+        const current =
+          typeof value === 'number' ? value : Number(value ?? field.min ?? 0) || (field.min ?? 0)
+        return (
+          <label className="admin-field">
+            <span className="sec-slider-head">
+              {field.label}
+              <span className="sec-slider-value">
+                {current}
+                {field.unit ?? ''}
+              </span>
+            </span>
+            <input
+              type="range"
+              name={field.key}
+              min={field.min}
+              max={field.max}
+              step={field.step ?? 1}
+              value={current}
+              onChange={(e) => set(field.key, Number(e.target.value))}
+            />
+            {field.help && <span className="admin-meta">{field.help}</span>}
+          </label>
+        )
+      }
+
       return (
         <label className="admin-field">
           {field.label}

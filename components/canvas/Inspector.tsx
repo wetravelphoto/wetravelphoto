@@ -6,6 +6,7 @@ import { updateDraftSection, updateDraftSectionValues } from '@/app/actions/canv
 import { contentKeys, type Field, type SectionDef } from '@/lib/sections/registry'
 import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
+import MarkImage from '@/components/canvas/editors/MarkImage'
 import SectionType from '@/components/canvas/SectionType'
 import type { SectionStyle } from '@/lib/type-styles'
 import type { CanvasSection } from '@/components/canvas/Canvas'
@@ -330,6 +331,16 @@ export default function Inspector({
                   onDevice={onDevice}
                   onShowStory={onShowStory}
                   onChange={(values) => saveValues(section.id, values)}
+                />
+              )
+            }
+
+            if (field.editor === 'mark-image') {
+              return (
+                <MarkImage
+                  value={value}
+                  publicUrl={publicUrl}
+                  onChange={(path) => saveValues(section.id, { [field.key]: path })}
                 />
               )
             }

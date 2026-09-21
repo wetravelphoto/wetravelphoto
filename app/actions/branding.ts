@@ -14,30 +14,31 @@ const ALLOWED: Record<string, string> = {
   'image/jpeg': 'jpg',
 }
 
-type Slot = 'header' | 'footer' | 'bird'
+type Slot = 'header' | 'footer'
 
 const COLUMN: Record<Slot, string> = {
   header: 'logo_header_path',
   footer: 'logo_footer_path',
-  bird: 'logo_bird_path',
 }
 
-/**
- * Logos are stored as uploaded — no resizing. SVGs must stay vector, and a
- * PNG with transparency shouldn't be flattened into a JPEG.
- */
-export async function uploadLogo(formData: FormData) {
-  const slot = formData.get('slot') as Slot
-  const file = formData.get('file') as File
+type Stored = { ok: true; key: string } | { ok: false; message: string }
 
-  if (!slot || !COLUMN[slot]) return { ok: false, message: 'Unknown logo slot.' }
+/**
+ * Validates and stores one brand file, returning its storage key.
+ *
+ * Logos are stored as uploaded — no resizing. SVGs must stay vector, and a
+ * PNG with transparency shouldn't be flattened into a JPEG. Shared by the logo
+ * slots and the accent-mark section, so there is one list of allowed types and
+ * one size limit rather than two that drift.
+ */
+async function storeBrandFile(prefix: string, file: File | null): Promise<Stored> {
   if (!file || file.size === 0) return { ok: false, message: 'No file chosen.' }
 
   const extension = ALLOWED[file.type]
   if (!extension) return { ok: false, message: 'Use an SVG, PNG, WebP or JPEG.' }
   if (file.size > 2_000_000) return { ok: false, message: 'That file is over 2 MB.' }
 
-  const key = `branding/${slot}-${randomUUID()}.${extension}`
+  const key = `branding/${prefix}-${randomUUID()}.${extension}`
   const buffer = Buffer.from(await file.arrayBuffer())
 
   await r2Client.send(
@@ -50,10 +51,22 @@ export async function uploadLogo(formData: FormData) {
     })
   )
 
+  return { ok: true, key }
+}
+
+export async function uploadLogo(formData: FormData) {
+  await requireUser()
+
+  const slot = formData.get('slot') as Slot
+  if (!slot || !COLUMN[slot]) return { ok: false, message: 'Unknown logo slot.' }
+
+  const stored = await storeBrandFile(slot, formData.get('file') as File | null)
+  if (!stored.ok) return stored
+
   const supabase = await createClient()
   const { error } = await supabase
     .from('site_settings')
-    .update({ [COLUMN[slot]]: key })
+    .update({ [COLUMN[slot]]: stored.key })
     .eq('id', 1)
 
   if (error) return { ok: false, message: error.message }
@@ -64,7 +77,28 @@ export async function uploadLogo(formData: FormData) {
   return { ok: true, message: 'Logo updated.' }
 }
 
+/**
+ * Stores an accent mark's picture and hands back its key — and does nothing
+ * else. Which section shows it is decided by the canvas, which writes the key
+ * into that section's settings in the DRAFT. So uploading is not publishing:
+ * the file sits in the bucket unseen until the photographer publishes a page
+ * that points at it, and Discard leaves nothing on the live site.
+ */
+export async function uploadMarkImage(
+  formData: FormData
+): Promise<{ ok: true; path: string } | { ok: false; message: string }> {
+  await requireUser()
+
+  const stored = await storeBrandFile('mark', formData.get('file') as File | null)
+  if (!stored.ok) return stored
+
+  return { ok: true, path: stored.key }
+}
+
 export async function clearLogo(slot: Slot) {
+  await requireUser()
+  if (!COLUMN[slot]) return { ok: false, message: 'Unknown logo slot.' }
+
   const supabase = await createClient()
   await supabase
     .from('site_settings')
@@ -112,11 +146,6 @@ export async function updateBranding(formData: FormData) {
       footer_scale: decimal('footer_scale', 1),
       footer_scale_mobile: decimal('footer_scale_mobile', 1),
       logo_footer_height_mobile: number('logo_footer_height_mobile', 90),
-
-      // The accent mark below the homepage hero. A checkbox sends nothing when
-      // it is off, so absence is false — the panel is always on this form.
-      show_bird: formData.get('show_bird') === 'on',
-      logo_bird_size: number('logo_bird_size', 64),
     })
     .eq('id', 1)
 

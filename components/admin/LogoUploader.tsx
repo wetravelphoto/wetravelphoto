@@ -12,7 +12,7 @@ export default function LogoUploader({
   builtInUrl,
   previewTone = 'light',
 }: {
-  slot: 'header' | 'footer' | 'bird'
+  slot: 'header' | 'footer'
   label: string
   hint?: string
   currentUrl: string | null

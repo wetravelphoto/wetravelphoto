@@ -5,7 +5,6 @@ import { bool, list, map, str, type SectionSettings } from '@/lib/sections/regis
 import type { SectionContext } from '@/lib/sections/context'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
 import FixedHero from '@/components/home/FixedHero'
-import BirdBadge from '@/components/BirdBadge'
 
 type Focal = { x?: number; y?: number; mx?: number; my?: number }
 
@@ -84,10 +83,6 @@ export default function HeroSection({
         />
       )}
 
-      {/* The brand mark lives in the light band directly under the hero, so it
-          travels with it rather than floating between whatever two sections
-          happen to be first. */}
-      <BirdBadge />
     </>
   )
 }

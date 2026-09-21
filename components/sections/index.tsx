@@ -8,6 +8,7 @@ import GalleriesSection from '@/components/sections/GalleriesSection'
 import JournalSection from '@/components/sections/JournalSection'
 import InstagramSection from '@/components/sections/InstagramSection'
 import ContactBlock from '@/components/sections/ContactBlock'
+import MarkSection from '@/components/sections/MarkSection'
 
 type SectionProps = { settings: SectionSettings; ctx: SectionContext }
 
@@ -23,6 +24,7 @@ type SectionProps = { settings: SectionSettings; ctx: SectionContext }
  */
 const RENDERERS: Record<string, (props: SectionProps) => React.ReactNode> = {
   hero: HeroSection,
+  mark: MarkSection,
   intro: IntroSection,
   galleries: GalleriesSection,
   journal: JournalSection,

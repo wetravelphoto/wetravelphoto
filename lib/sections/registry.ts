@@ -70,7 +70,20 @@ export type Field = FieldBase &
     | { kind: 'text'; placeholder?: string }
     | { kind: 'textarea'; rows?: number; placeholder?: string }
     | { kind: 'toggle' }
-    | { kind: 'number'; min?: number; max?: number; step?: number }
+    | {
+        kind: 'number'
+        min?: number
+        max?: number
+        step?: number
+        /**
+         * Draw a slider with the value beside it instead of a number box. For
+         * a setting that is judged by looking at it — a size — rather than
+         * one that is a count.
+         */
+        slider?: boolean
+        /** Shown after the value on a slider, e.g. 'px'. */
+        unit?: string
+      }
     | { kind: 'select'; options: { value: string; label: string }[] }
     | { kind: 'image' }
     /**
@@ -123,6 +136,12 @@ export type SectionDef = {
 const ALIGN = [
   { value: 'left', label: 'Left' },
   { value: 'center', label: 'Centre' },
+]
+
+const POSITION = [
+  { value: 'left', label: 'Left' },
+  { value: 'center', label: 'Centre' },
+  { value: 'right', label: 'Right' },
 ]
 
 const SIDE = [
@@ -217,6 +236,44 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         note: 'Dragging the focal point for desktop and phone.',
         when: { key: 'mode', equals: 'fixed' },
+      },
+    ],
+  },
+
+  mark: {
+    type: 'mark',
+    label: 'Accent mark',
+    blurb: 'A small logo or emblem on a line of its own — a signature between two sections.',
+    family: 'Opening',
+    version: 1,
+    defaults: {
+      // A storage key in the site's bucket, or a path under /logos/ for a
+      // mark that ships with the site. Null draws nothing in public and an
+      // "add a mark" box in the editor — there is no platform-wide default,
+      // because one photographer's emblem is not another's.
+      image_path: null,
+      align: 'center',
+      size: 64,
+    },
+    fields: [
+      {
+        key: 'image_path',
+        label: 'Mark',
+        kind: 'custom',
+        editor: 'mark-image',
+        content: true,
+        note: 'Upload an SVG, PNG, WebP or JPEG. Transparent backgrounds work best.',
+      },
+      { key: 'align', label: 'Position', kind: 'select', options: POSITION },
+      {
+        key: 'size',
+        label: 'Size',
+        kind: 'number',
+        min: 24,
+        max: 240,
+        step: 2,
+        slider: true,
+        unit: 'px',
       },
     ],
   },

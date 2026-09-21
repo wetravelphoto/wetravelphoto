@@ -20,9 +20,17 @@ const body = Karla({
   variable: '--font-body',
 })
 
-export const metadata: Metadata = {
-  title: 'WeTravelPhoto',
-  description: 'Travel photography and field notes from the road, the water, and the cold places.',
+/**
+ * Each site's own name and line, from its settings — never a hard-coded one.
+ * The description falls back to a neutral sentence rather than one written
+ * for a particular photographer.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSiteSettings()
+  return {
+    title: settings.site_title,
+    description: settings.tagline ?? `Photographs by ${settings.site_title}.`,
+  }
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

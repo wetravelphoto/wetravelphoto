@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
+import { getSiteSettings } from '@/lib/site'
 import { estimateReadMinutes, type Block } from '@/lib/blocks'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
@@ -32,11 +33,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   const featured = post.featured_custom_path ? photoUrl(post.featured_custom_path) : undefined
 
+  // The photographer's site name, not a hard-coded one: on a Lens Grid site
+  // that is not WeTravelPhoto, the tab must not say WeTravelPhoto.
+  const { site_title: siteTitle } = await getSiteSettings()
+
   const seoTitle = post.seo_title || post.title
   const seoDescription = post.seo_description || post.excerpt || undefined
 
   return {
-    title: `${seoTitle} — WeTravelPhoto`,
+    title: `${seoTitle} — ${siteTitle}`,
     description: seoDescription,
     robots: post.noindex ? { index: false, follow: true } : undefined,
     openGraph: {

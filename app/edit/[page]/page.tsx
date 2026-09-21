@@ -1,3 +1,4 @@
+import { PLATFORM } from '@/lib/platform'
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadDraftPage, draftStatus, draftStyleSettings } from '@/lib/drafts/store'
@@ -26,6 +27,7 @@ import '@/app/edit/canvas.css'
 export const dynamic = 'force-dynamic'
 
 export const metadata = {
+  title: `Editor · ${PLATFORM.name}`,
   robots: { index: false, follow: false },
 }
 

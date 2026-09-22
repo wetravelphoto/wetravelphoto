@@ -23,6 +23,7 @@ import {
   redoDraft,
 } from '@/app/actions/canvas'
 import type { StepsState } from '@/lib/drafts/steps'
+import { readShortcut, shortcutHint, type Shortcut } from '@/lib/canvas-keys'
 import { cssVariables, fontsToLoad, type StyleTokens } from '@/lib/styles/tokens'
 import { hasOwnType, type TypeStyles } from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
@@ -319,23 +320,104 @@ export default function Canvas({
     [mode, page, router, tell]
   )
 
-  // Ctrl/⌘+Z and Ctrl/⌘+Shift+Z (or Ctrl+Y), anywhere in the editor except a
-  // text field, which keeps its own typing undo. The preview forwards the same
-  // keys when it has focus (PreviewBridge).
-  const historyRef = useRef(history)
+  // Selecting in the rail scrolls the preview to it.
+  const choose = useCallback(
+    (id: string | null) => {
+      setSelected(id)
+      setFocusField(null)
+      tell({ type: 'select', id: id ?? undefined })
+    },
+    [tell]
+  )
+
+  /**
+   * KEYBOARD SHORTCUTS
+   *
+   * Which key means what is in `lib/canvas-keys.ts`, shared with the preview.
+   * What each one DOES is here, because only the editor knows what is
+   * selected and whether a window is open.
+   *
+   * Two rules hold the whole thing together:
+   *  · a shortcut that does not apply right now is not swallowed — the arrows
+   *    go on scrolling, Esc goes on closing whatever is open;
+   *  · the destructive one asks first, and never fires on a section the page
+   *    cannot be without.
+   */
+  const runShortcut = useCallback(
+    (name: Shortcut): boolean => {
+      // Undo and redo work everywhere, including in Style mode.
+      if (name === 'undo' || name === 'redo') {
+        history(name)
+        return true
+      }
+
+      // A window is open. Esc belongs to it, and nothing else should reach
+      // the page underneath.
+      if (picking || managing || dialog) return false
+      if (mode !== 'content') return false
+
+      if (name === 'deselect') {
+        if (selected === null) return false
+        choose(null)
+        return true
+      }
+
+      if (name === 'prev' || name === 'next') {
+        if (order.length === 0) return false
+        const at = order.findIndex((s) => s.id === selected)
+        // Nothing selected yet: ↓ starts at the top, ↑ at the bottom.
+        const next = at === -1 ? (name === 'next' ? 0 : order.length - 1) : at + (name === 'next' ? 1 : -1)
+        if (next < 0 || next >= order.length) return false
+        choose(order[next].id)
+        return true
+      }
+
+      // The rest act on the selected section. The header and footer are
+      // selectable too (`__header`), and are neither removable nor
+      // duplicable, so `find` refusing them is the guard.
+      const target = order.find((s) => s.id === selected)
+      if (!target) return false
+
+      if (name === 'duplicate') {
+        if (target.singleton) {
+          setNote(`There can only be one ${target.label} on a page.`)
+          return true
+        }
+        run(async () => {
+          const copy = await duplicateDraftSection(page, target.id)
+          setSelected(copy)
+        })
+        return true
+      }
+
+      if (name === 'remove') {
+        if (target.permanent) {
+          setNote(`The ${target.label} section can't be removed from this page.`)
+          return true
+        }
+        if (confirm(`Remove the ${target.label} section from this page?`)) {
+          run(() => removeDraftSection(page, target.id), () => setSelected(null))
+        }
+        return true
+      }
+
+      return false
+    },
+    [choose, dialog, history, managing, mode, order, page, picking, run, selected]
+  )
+
+  // The listeners are attached once and read the latest handler through a ref,
+  // so they are not torn down and rebuilt on every selection change.
+  const shortcutRef = useRef(runShortcut)
   useEffect(() => {
-    historyRef.current = history
-  }, [history])
+    shortcutRef.current = runShortcut
+  }, [runShortcut])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
-      const key = event.key.toLowerCase()
-      if (key !== 'z' && key !== 'y') return
-      const el = event.target as HTMLElement | null
-      if (el?.closest('input, textarea, select, [contenteditable="true"]')) return
-      event.preventDefault()
-      historyRef.current(key === 'y' || event.shiftKey ? 'redo' : 'undo')
+      const name = readShortcut(event)
+      if (!name) return
+      if (shortcutRef.current(name)) event.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -350,6 +432,7 @@ export default function Canvas({
         type?: string
         id?: string
         field?: string
+        name?: Shortcut
       } | null
       if (!data || data.source !== 'wtp-preview') return
 
@@ -368,9 +451,9 @@ export default function Canvas({
         setPicking({ after: data.id })
       }
 
-      // Undo/redo keys pressed while the preview had focus.
-      if (data.type === 'undo' || data.type === 'redo') {
-        historyRef.current(data.type)
+      // A shortcut pressed while the preview had focus.
+      if (data.type === 'shortcut' && data.name) {
+        shortcutRef.current(data.name)
       }
     }
 
@@ -398,13 +481,6 @@ export default function Canvas({
     },
     [tell]
   )
-
-  // Selecting in the rail scrolls the preview to it.
-  const choose = (id: string | null) => {
-    setSelected(id)
-    setFocusField(null)
-    tell({ type: 'select', id: id ?? undefined })
-  }
 
   const current = order.find((s) => s.id === selected) ?? null
   const def = current ? sectionDef(current.type) : null
@@ -472,7 +548,7 @@ export default function Canvas({
               disabled={!steps.undo || pending}
               onClick={() => history('undo')}
               aria-label={steps.undo ? `Undo ${steps.undo}` : 'Undo'}
-              title={steps.undo ? `Undo: ${steps.undo}  (Ctrl/⌘ Z)` : 'Nothing to undo'}
+              title={steps.undo ? `Undo: ${steps.undo}  (${shortcutHint('undo')})` : 'Nothing to undo'}
             >
               ↶
             </button>
@@ -482,7 +558,7 @@ export default function Canvas({
               disabled={!steps.redo || pending}
               onClick={() => history('redo')}
               aria-label={steps.redo ? `Redo ${steps.redo}` : 'Redo'}
-              title={steps.redo ? `Redo: ${steps.redo}  (Ctrl/⌘ Shift Z)` : 'Nothing to redo'}
+              title={steps.redo ? `Redo: ${steps.redo}  (${shortcutHint('redo')})` : 'Nothing to redo'}
             >
               ↷
             </button>

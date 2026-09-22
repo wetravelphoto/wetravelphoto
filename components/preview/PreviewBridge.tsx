@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { LIVE_ATTRS } from '@/lib/sections/registry'
+import { readShortcut, type Shortcut } from '@/lib/canvas-keys'
 
 /**
  * THE WIRE BETWEEN THE CANVAS AND THE PAGE
@@ -58,8 +59,11 @@ type Outbound =
   | { source: 'wtp-preview'; type: 'clear' }
   /** "+ Add a section below" was clicked under the section with this id. */
   | { source: 'wtp-preview'; type: 'add-after'; id: string }
-  /** Ctrl/⌘+Z or Ctrl/⌘+Shift+Z / Ctrl+Y pressed while the preview had focus. */
-  | { source: 'wtp-preview'; type: 'undo' | 'redo' }
+  /**
+   * A shortcut pressed while the preview had focus. The preview only names
+   * the key; the editor decides what it means. See lib/canvas-keys.ts.
+   */
+  | { source: 'wtp-preview'; type: 'shortcut'; name: Shortcut }
 
 type Inbound = {
   source?: string
@@ -352,17 +356,19 @@ export default function PreviewBridge({ page }: { page: string }) {
       }
     }
 
-    // Undo and redo keys pressed with the preview focused belong to the
-    // editor, which is a different document and would never hear them. A
-    // form field in the page (the contact form) keeps its own text undo.
+    // Shortcuts pressed with the preview focused belong to the editor, which
+    // is a different document and would never hear them. The preview only
+    // names the key (lib/canvas-keys.ts) and hands it over.
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
-      const key = event.key.toLowerCase()
-      if (key !== 'z' && key !== 'y') return
-      const el = event.target as HTMLElement | null
-      if (el?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const name = readShortcut(event)
+      if (!name) return
+
+      // The arrows still scroll the page when nothing is selected, and
+      // Delete with nothing selected is not ours to swallow either.
+      if (!selected.current && name !== 'undo' && name !== 'redo') return
+
       event.preventDefault()
-      send({ source: 'wtp-preview', type: key === 'y' || event.shiftKey ? 'redo' : 'undo' })
+      send({ source: 'wtp-preview', type: 'shortcut', name })
     }
 
     // Capture phase, so a section that stops propagation on its own clicks

@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from 'react'
 import type { CanvasSection } from '@/components/canvas/Canvas'
+import { shortcutHint } from '@/lib/canvas-keys'
 
 /**
  * The page, as a column of sections you can drag.
@@ -153,7 +154,7 @@ export default function SectionRail({
                   type="button"
                   className="cv-ico"
                   onClick={() => onDuplicate(row.id)}
-                  title="Duplicate"
+                  title={`Duplicate  (${shortcutHint('duplicate')})`}
                   aria-label={`Duplicate ${row.label}`}
                 >
                   ⧉
@@ -165,6 +166,7 @@ export default function SectionRail({
                   type="button"
                   className="cv-ico cv-ico-bad"
                   onClick={() => onRemove(row.id, row.label)}
+                  title={`Remove  (${shortcutHint('remove')})`}
                   aria-label={`Remove ${row.label}`}
                 >
                   ×

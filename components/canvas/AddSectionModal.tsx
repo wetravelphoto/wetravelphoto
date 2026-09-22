@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { FAMILIES, SECTIONS } from '@/lib/sections/registry'
+import SectionThumb from '@/components/canvas/SectionThumb'
 
 /**
  * What can go on a page, grouped by family, straight from the registry.
@@ -64,6 +65,7 @@ export default function AddSectionModal({
                         disabled={taken}
                         onClick={() => onPick(def.type)}
                       >
+                        <SectionThumb type={def.type} />
                         <span className="cv-card-name">{def.label}</span>
                         <span className="cv-card-blurb">{def.blurb}</span>
                         {taken ? (

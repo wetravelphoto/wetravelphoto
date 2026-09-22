@@ -40,6 +40,13 @@ export function readField(field: Field, formData: FormData, current: SectionSett
     case 'custom':
       return current[field.key]
 
+    case 'color': {
+      // A #rrggbb hex, which the page writes straight into CSS — anything else
+      // leaves the setting as it was.
+      const raw = ((formData.get(field.key) as string) ?? '').trim()
+      return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : current[field.key]
+    }
+
     case 'select': {
       // Only one of the offered options. Anything else — a crafted request —
       // leaves the setting as it was rather than storing a value no renderer

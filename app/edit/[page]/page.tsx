@@ -80,6 +80,7 @@ export default async function EditPage({
     label: s.def.label,
     blurb: s.def.blurb,
     permanent: !!s.def.permanent,
+    singleton: !!s.def.singleton,
     visible: s.visible,
     settings: s.settings,
   }))

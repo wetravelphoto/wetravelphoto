@@ -58,6 +58,7 @@ export type FieldKind =
   | 'number'
   | 'select'
   | 'image'
+  | 'color'
   | 'custom'
 
 type FieldBase = {
@@ -115,6 +116,8 @@ export type Field = FieldBase &
       }
     | { kind: 'select'; options: { value: string; label: string }[] }
     | { kind: 'image' }
+    /** A colour picker. Stored as a #rrggbb hex, validated on save. */
+    | { kind: 'color' }
     /**
      * Needs a purpose-built editor (a focal-point picker, a story chooser).
      * The panel shows a link to `editor` instead of an input, and the generic
@@ -815,6 +818,100 @@ export const SECTIONS: Record<string, SectionDef> = {
       },
     ],
   },
+}
+
+// ── What every section has ───────────────────────────────────────────────────
+//
+// Spacing, background and where it shows. Added to every type here rather than
+// written into each one, so a new section type gets them for free and they
+// cannot drift apart. None of them is content: they are design, and a new look
+// may change them.
+//
+// They are drawn by a wrapper around each section (see PageBody and
+// app/sections-common.css) as data attributes and one custom property, which
+// the section's own stylesheet reads with its old value as the fallback — so a
+// section left on "Default" looks exactly as it always did.
+
+const SPACE = [
+  { value: 'default', label: 'Default' },
+  { value: 'none', label: 'None' },
+  { value: 's', label: 'Small' },
+  { value: 'm', label: 'Medium' },
+  { value: 'l', label: 'Large' },
+  { value: 'xl', label: 'Extra large' },
+]
+
+const COMMON_DEFAULTS: SectionSettings = {
+  space_top: 'default',
+  space_bottom: 'default',
+  background: 'default',
+  bg_color: '#f1efe9',
+  hide_on: 'none',
+}
+
+const SPACING_FIELDS: Field[] = [
+  {
+    key: 'space_top',
+    label: 'Space above',
+    kind: 'select',
+    options: SPACE,
+    group: 'Section',
+    folded: true,
+    live: { attr: 'data-space-top' },
+    help: 'The first section on a page needs room for the menu above it.',
+  },
+  {
+    key: 'space_bottom',
+    label: 'Space below',
+    kind: 'select',
+    options: SPACE,
+    group: 'Section',
+    live: { attr: 'data-space-bottom' },
+  },
+  {
+    key: 'background',
+    label: 'Background',
+    kind: 'select',
+    options: [
+      { value: 'default', label: 'Default' },
+      { value: 'page', label: 'Page colour' },
+      { value: 'alt', label: 'Alternate colour' },
+      { value: 'tint', label: 'A tint of the accent' },
+      { value: 'custom', label: 'A colour of my own' },
+    ],
+    group: 'Section',
+    live: { attr: 'data-bg' },
+    help: 'The page and alternate colours follow your palette in Style mode.',
+  },
+  {
+    key: 'bg_color',
+    label: 'Colour',
+    kind: 'color',
+    group: 'Section',
+    live: { var: '--sec-bg-custom' },
+    when: { key: 'background', equals: 'custom' },
+  },
+]
+
+const VISIBILITY_FIELD: Field = {
+  key: 'hide_on',
+  label: 'Show on',
+  kind: 'select',
+  options: [
+    { value: 'none', label: 'Every screen' },
+    { value: 'mobile', label: 'Desktop and tablet only' },
+    { value: 'desktop', label: 'Phones only' },
+  ],
+  group: 'Section',
+  folded: true,
+  live: { attr: 'data-hide' },
+}
+
+for (const def of Object.values(SECTIONS)) {
+  def.defaults = { ...def.defaults, ...COMMON_DEFAULTS }
+  // The hero is full-bleed and draws its own photograph edge to edge: spacing
+  // and a background colour have nothing to act on. Where it shows still does.
+  def.fields = [...def.fields, ...(def.type === 'hero' ? [VISIBILITY_FIELD] : [...SPACING_FIELDS, VISIBILITY_FIELD])]
 }
 
 export const SECTION_TYPES = Object.keys(SECTIONS)

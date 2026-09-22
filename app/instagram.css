@@ -3,8 +3,9 @@
 /* A shade deeper than the page so the grid reads as its own block, without
    the weight of a full dark band. */
 .ig-section {
-  padding: clamp(3rem, 8vw, 6rem) clamp(1.25rem, 4vw, 3rem);
-  background: #f1efe9;
+  padding: var(--sec-pad-top, clamp(3rem, 8vw, 6rem)) clamp(1.25rem, 4vw, 3rem)
+    var(--sec-pad-bottom, clamp(3rem, 8vw, 6rem));
+  background: var(--sec-bg, #f1efe9);
 }
 
 .ig-head {

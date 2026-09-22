@@ -7,6 +7,7 @@ import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import { PAGES, PAGE_SLUGS } from '@/lib/sections/pages'
 import {
   addDraftSection,
+  duplicateDraftSection,
   applyDraftPairing,
   applyDraftPalette,
   discard,
@@ -35,6 +36,7 @@ export type CanvasSection = {
   label: string
   blurb: string
   permanent: boolean
+  singleton: boolean
   visible: boolean
   settings: SectionSettings
 }
@@ -121,7 +123,12 @@ export default function Canvas({
   const measured = stageSize.width > 0 && stageSize.height > 0
   const scale = measured ? Math.min(1, stageSize.width / frameWidth) : 1
   const frameHeight = measured ? stageSize.height - frameInset : 0
-  const [picking, setPicking] = useState(false)
+  /**
+   * The add-section picker, and where the new section goes: after a given
+   * section (from "+" between rows or "Add section below" in the page), or at
+   * the end of the page (null).
+   */
+  const [picking, setPicking] = useState<{ after: string | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
@@ -212,6 +219,11 @@ export default function Canvas({
       if (data.type === 'clear') {
         setSelected(null)
         setFocusField(null)
+      }
+
+      // "Add section below" on a section in the page itself.
+      if (data.type === 'add-after' && data.id) {
+        setPicking({ after: data.id })
       }
     }
 
@@ -413,7 +425,13 @@ export default function Canvas({
                 run(() => removeDraftSection(page, id), () => setSelected(null))
               }
             }}
-            onAdd={() => setPicking(true)}
+            onAdd={(after) => setPicking({ after })}
+            onDuplicate={(id) =>
+              run(async () => {
+                const copy = await duplicateDraftSection(page, id)
+                setSelected(copy)
+              })
+            }
           />
         )}
 
@@ -504,12 +522,14 @@ export default function Canvas({
       {picking && (
         <AddSectionModal
           used={new Set(order.map((s) => s.type))}
-          onClose={() => setPicking(false)}
+          onClose={() => setPicking(null)}
           onPick={(type) => {
-            setPicking(false)
+            const after = picking.after
+            setPicking(null)
             run(async () => {
-              const id = await addDraftSection(page, type, selected ?? undefined)
+              const id = await addDraftSection(page, type, after ?? undefined)
               setSelected(id)
+              tell({ type: 'select', id })
             })
           }}
         />

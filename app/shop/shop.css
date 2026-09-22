@@ -12,7 +12,9 @@
 
 .shop-body {
   flex: 1;
-  padding: clamp(5.5rem, 9vw, 8.5rem) clamp(1.25rem, 4vw, 3.5rem) clamp(4rem, 7vw, 6rem);
+  background-color: var(--sec-bg, transparent);
+  padding: var(--sec-pad-top, clamp(5.5rem, 9vw, 8.5rem)) clamp(1.25rem, 4vw, 3.5rem)
+    var(--sec-pad-bottom, clamp(4rem, 7vw, 6rem));
 }
 
 .shop-inner {

@@ -66,7 +66,13 @@ export default function GalleriesSection({
 
     return (
       <div
-        style={{ flex: 1, padding: '7rem clamp(1.25rem, 4vw, 3rem) 4rem', ...vars }}
+        style={{
+          flex: 1,
+          padding:
+            'var(--sec-pad-top, 7rem) clamp(1.25rem, 4vw, 3rem) var(--sec-pad-bottom, 4rem)',
+          backgroundColor: 'var(--sec-bg, transparent)',
+          ...vars,
+        }}
         {...typeRoot(ctx)}
       >
         <div className="gallery-index-head">

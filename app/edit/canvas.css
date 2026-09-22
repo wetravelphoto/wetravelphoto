@@ -434,6 +434,67 @@
   color: var(--cv-ink);
 }
 
+/* "+" between two sections. A thin gap that shows a line and a "+" only when
+   the pointer is over it, so the list reads as a list until you go looking. */
+.cv-insert {
+  position: relative;
+  height: 7px;
+  margin: -3px 0;
+  z-index: 1;
+}
+
+.cv-insert-btn {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cv-insert-btn::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 1px;
+  background: var(--cv-accent);
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.cv-insert-btn span {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--cv-accent);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+
+.cv-insert-btn:hover::before,
+.cv-insert-btn:focus-visible::before,
+.cv-insert-btn:hover span,
+.cv-insert-btn:focus-visible span {
+  opacity: 1;
+  transform: none;
+}
+
 /* ── The stage ───────────────────────────────────────────────────────────── */
 
 .cv-stage {
@@ -1138,6 +1199,34 @@
 .cv-colour-hex {
   font-size: 0.66rem;
   font-variant-numeric: tabular-nums;
+  color: var(--cv-mute);
+}
+
+/* The colour field in a section's settings (e.g. a custom background). */
+.sec-color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.sec-color-row input[type='color'] {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--cv-line);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+.sec-color-row input[type='color']::-webkit-color-swatch-wrapper { padding: 0; }
+.sec-color-row input[type='color']::-webkit-color-swatch { border: 0; border-radius: 2px; }
+.sec-color-row input[type='color']::-moz-color-swatch { border: 0; border-radius: 2px; }
+
+.sec-color-hex {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
   color: var(--cv-mute);
 }
 

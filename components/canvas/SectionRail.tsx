@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { CanvasSection } from '@/components/canvas/Canvas'
 
 /**
@@ -21,6 +21,7 @@ export default function SectionRail({
   onToggle,
   onRemove,
   onAdd,
+  onDuplicate,
 }: {
   sections: CanvasSection[]
   selected: string | null
@@ -28,7 +29,9 @@ export default function SectionRail({
   onReorder: (next: CanvasSection[]) => void
   onToggle: (id: string, visible: boolean) => void
   onRemove: (id: string, label: string) => void
-  onAdd: () => void
+  /** Open the picker; the new section goes after `after`, or at the end if null. */
+  onAdd: (after: string | null) => void
+  onDuplicate: (id: string) => void
 }) {
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
@@ -47,8 +50,8 @@ export default function SectionRail({
 
       <ol className="cv-sections">
         {sections.map((row, i) => (
+          <Fragment key={row.id}>
           <li
-            key={row.id}
             className="cv-item"
             data-on={selected === row.id}
             data-hidden={!row.visible}
@@ -116,6 +119,18 @@ export default function SectionRail({
                 ↓
               </button>
 
+              {!row.singleton && (
+                <button
+                  type="button"
+                  className="cv-ico"
+                  onClick={() => onDuplicate(row.id)}
+                  title="Duplicate"
+                  aria-label={`Duplicate ${row.label}`}
+                >
+                  ⧉
+                </button>
+              )}
+
               {!row.permanent && (
                 <button
                   type="button"
@@ -128,11 +143,29 @@ export default function SectionRail({
               )}
             </span>
           </li>
+
+          {/* Insert here: a thin line between rows that shows a + on hover,
+              so a section can go exactly where it is wanted rather than at
+              the bottom and then be dragged up. */}
+          {i < sections.length - 1 && (
+            <li className="cv-insert" role="presentation">
+              <button
+                type="button"
+                className="cv-insert-btn"
+                onClick={() => onAdd(row.id)}
+                aria-label={`Add a section after ${row.label}`}
+                title="Add a section here"
+              >
+                <span aria-hidden="true">+</span>
+              </button>
+            </li>
+          )}
+          </Fragment>
         ))}
       </ol>
 
-      <button type="button" className="cv-add" onClick={onAdd}>
-        + Add a section
+      <button type="button" className="cv-add" onClick={() => onAdd(null)}>
+        + Add a section at the end
       </button>
     </aside>
   )
@@ -140,9 +173,18 @@ export default function SectionRail({
 
 /** A one-line reminder of what this section is currently showing. */
 function summarize(row: CanvasSection): string {
+  // Where it shows, first — a section missing from the desktop preview is
+  // otherwise a mystery.
+  const where =
+    row.settings.hide_on === 'mobile'
+      ? 'Not on phones · '
+      : row.settings.hide_on === 'desktop'
+        ? 'Phones only · '
+        : ''
+
   for (const key of ['heading', 'title', 'label']) {
     const value = row.settings[key]
-    if (typeof value === 'string' && value.trim()) return value
+    if (typeof value === 'string' && value.trim()) return where + value
   }
-  return row.blurb
+  return where + row.blurb
 }

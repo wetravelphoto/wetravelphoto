@@ -56,6 +56,8 @@ type Outbound =
       field?: string
     }
   | { source: 'wtp-preview'; type: 'clear' }
+  /** "+ Add a section below" was clicked under the section with this id. */
+  | { source: 'wtp-preview'; type: 'add-after'; id: string }
 
 type Inbound = {
   source?: string
@@ -141,6 +143,15 @@ export default function PreviewBridge({ page }: { page: string }) {
         event.stopPropagation()
       }
 
+      // The selected section's "+ Add a section below" button: asks the editor
+      // to open its section picker, and selects nothing.
+      const add = target?.closest<HTMLElement>('.pv-add')
+      if (add) {
+        const after = add.getAttribute('data-add-after')
+        if (after) send({ source: 'wtp-preview', type: 'add-after', id: after })
+        return
+      }
+
       if (!node) {
         paint(null)
         send({ source: 'wtp-preview', type: 'clear' })
@@ -204,10 +215,15 @@ export default function PreviewBridge({ page }: { page: string }) {
         const written = cssVar ? `${value}${data.unit ?? ''}` : value
 
         const apply = () => {
-          document
-            .querySelectorAll<HTMLElement>(
-              `.pv-section[data-section-id="${CSS.escape(id)}"] [data-live~="${field}"]`
-            )
+          // The section's own wrapper counts too: spacing, background and
+          // visibility are painted on it rather than on anything inside.
+          const box = document.querySelector<HTMLElement>(
+            `.pv-section[data-section-id="${CSS.escape(id)}"]`
+          )
+          if (!box) return
+          const targets = [box, ...box.querySelectorAll<HTMLElement>(`[data-live~="${field}"]`)]
+          targets
+            .filter((el) => el.matches(`[data-live~="${field}"]`))
             .forEach((el) => {
               if (cssVar) setVar(el, cssVar, written)
               else if (attr && el.getAttribute(attr) !== written) el.setAttribute(attr, written)

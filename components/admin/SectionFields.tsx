@@ -246,6 +246,25 @@ function renderField(
         </label>
       )
 
+    case 'color': {
+      const hex = typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff'
+      return (
+        <label className="admin-field sec-color-field">
+          {field.label}
+          <span className="sec-color-row">
+            <input
+              type="color"
+              name={field.key}
+              value={hex}
+              onChange={(e) => set(field.key, e.target.value)}
+            />
+            <span className="sec-color-hex">{hex}</span>
+          </span>
+          {field.help && <span className="admin-meta">{field.help}</span>}
+        </label>
+      )
+    }
+
     case 'image':
       return (
         <PageImagePicker

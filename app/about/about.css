@@ -4,7 +4,7 @@
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  background: var(--surface);
+  background: var(--sec-bg, var(--surface));
 }
 
 .about[data-side='right'] .about-media { order: 2; }
@@ -31,7 +31,8 @@
 .about-panel {
   display: flex;
   align-items: center;
-  padding: clamp(6rem, 10vw, 8rem) clamp(1.5rem, 5vw, 5rem) clamp(3rem, 6vw, 5rem);
+  padding: var(--sec-pad-top, clamp(6rem, 10vw, 8rem)) clamp(1.5rem, 5vw, 5rem)
+    var(--sec-pad-bottom, clamp(3rem, 6vw, 5rem));
 }
 
 .about-inner { width: 100%; max-width: 560px; }

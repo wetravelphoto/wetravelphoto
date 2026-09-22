@@ -109,7 +109,13 @@
 
 /* ---------------- INTRO / ABOUT ---------------- */
 
-.home-section { padding: calc(clamp(3.5rem, 9vw, 7rem) * var(--rhythm, 1)) clamp(1.25rem, 4vw, 3rem); }
+.home-section {
+  padding: calc(clamp(3.5rem, 9vw, 7rem) * var(--rhythm, 1)) clamp(1.25rem, 4vw, 3rem);
+  /* Spacing and background from the section's own settings (sections-common.css) */
+  padding-top: var(--sec-pad-top, calc(clamp(3.5rem, 9vw, 7rem) * var(--rhythm, 1)));
+  padding-bottom: var(--sec-pad-bottom, calc(clamp(3.5rem, 9vw, 7rem) * var(--rhythm, 1)));
+  background-color: var(--sec-bg, transparent);
+}
 .home-inner { max-width: var(--container, 1240px); margin: 0 auto; }
 
 .intro-grid {

@@ -95,7 +95,8 @@ function JournalGrid({ settings, ctx }: { settings: SectionSettings; ctx: Sectio
     <div
       style={{
         flex: 1,
-        padding: '7rem clamp(1.25rem, 4vw, 3rem) 5rem',
+        padding: 'var(--sec-pad-top, 7rem) clamp(1.25rem, 4vw, 3rem) var(--sec-pad-bottom, 5rem)',
+        backgroundColor: 'var(--sec-bg, transparent)',
         ...sectionVars('journal', settings, ctx.styles),
       }}
       {...typeRoot(ctx)}

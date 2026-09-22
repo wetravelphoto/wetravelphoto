@@ -3,7 +3,7 @@
 .contact-split {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-  background: var(--surface);
+  background: var(--sec-bg, var(--surface));
   border-top: 0.5px solid var(--line);
 }
 
@@ -60,7 +60,8 @@
 .contact-panel {
   display: flex;
   align-items: center;
-  padding: clamp(2.5rem, 6vw, 5rem) clamp(1.5rem, 5vw, 4.5rem);
+  padding: var(--sec-pad-top, clamp(2.5rem, 6vw, 5rem)) clamp(1.5rem, 5vw, 4.5rem)
+    var(--sec-pad-bottom, clamp(2.5rem, 6vw, 5rem));
 }
 
 .contact-panel-inner { width: 100%; max-width: 620px; }
@@ -105,8 +106,9 @@
   flex: 1;
   display: flex;
   justify-content: center;
-  background: var(--surface);
-  padding: clamp(6rem, 10vw, 7.5rem) clamp(1.25rem, 4vw, 3rem) clamp(3rem, 6vw, 5rem);
+  background: var(--sec-bg, var(--surface));
+  padding: var(--sec-pad-top, clamp(6rem, 10vw, 7.5rem)) clamp(1.25rem, 4vw, 3rem)
+    var(--sec-pad-bottom, clamp(3rem, 6vw, 5rem));
 }
 
 .contact-centred .contact-panel-inner { max-width: 560px; }
@@ -352,8 +354,9 @@
 .mark-section {
   display: flex;
   justify-content: center;
-  background: var(--surface);
-  padding: clamp(2.5rem, 5vw, 4rem) clamp(1.25rem, 5vw, 4rem) 0;
+  background: var(--sec-bg, var(--surface));
+  padding: var(--sec-pad-top, clamp(2.5rem, 5vw, 4rem)) clamp(1.25rem, 5vw, 4rem)
+    var(--sec-pad-bottom, 0px);
   /* The section below brings its own top padding, so pull up into it */
   margin-bottom: clamp(-2rem, -2.5vw, -1rem);
   line-height: 0;

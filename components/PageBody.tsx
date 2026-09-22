@@ -15,6 +15,7 @@ import '@/app/home-polish.css'
 import '@/app/hero.css'
 import '@/app/instagram.css'
 import '@/app/contact-footer.css'
+import '@/app/sections-common.css'
 
 /**
  * THE PAGE, DRAWN ONCE
@@ -34,6 +35,40 @@ import '@/app/contact-footer.css'
  * remove the wrapper and tag the section elements themselves — not to let the
  * preview drift.
  */
+/**
+ * A section's spacing, background and visibility, as the attributes and one
+ * custom property that app/sections-common.css turns into CSS. The section's
+ * own stylesheet reads them with its old value as the fallback, so "Default"
+ * changes nothing.
+ */
+function frameAttrs(settings: Record<string, unknown>): {
+  attrs: Record<string, string>
+  style: React.CSSProperties
+} {
+  const pick = (key: string, allowed: string[], fallback: string) => {
+    const v = settings[key]
+    return typeof v === 'string' && allowed.includes(v) ? v : fallback
+  }
+  const space = ['default', 'none', 's', 'm', 'l', 'xl']
+  const bg = pick('background', ['default', 'page', 'alt', 'tint', 'custom'], 'default')
+  const color = typeof settings.bg_color === 'string' && /^#[0-9a-f]{6}$/i.test(settings.bg_color)
+    ? settings.bg_color
+    : null
+
+  return {
+    attrs: {
+      'data-space-top': pick('space_top', space, 'default'),
+      'data-space-bottom': pick('space_bottom', space, 'default'),
+      'data-bg': bg,
+      'data-hide': pick('hide_on', ['none', 'mobile', 'desktop'], 'none'),
+    },
+    style: color ? ({ '--sec-bg-custom': color } as React.CSSProperties) : {},
+  }
+}
+
+/** The fields whose value the editor can paint onto the wrapper as it changes. */
+const WRAPPER_LIVE = 'space_top space_bottom background bg_color hide_on'
+
 const FILL: React.CSSProperties = { minHeight: '100vh', display: 'flex', flexDirection: 'column' }
 
 /** The preview wrapper of a section that grows: passes the spare height on. */
@@ -74,14 +109,18 @@ export default async function PageBody({
       {frame.head}
       <SiteHeader overHero={overHero} />
 
-      {visible.map((section) =>
-        selectable ? (
+      {visible.map((section) => {
+        const wrap = frameAttrs(section.settings)
+
+        return selectable ? (
           <div
             key={section.id}
             className="pv-section"
             data-section-id={section.id}
             data-section-type={section.type}
-            style={fill && section.def.grows ? GROW : undefined}
+            data-live={WRAPPER_LIVE}
+            {...wrap.attrs}
+            style={{ ...(fill && section.def.grows ? GROW : {}), ...wrap.style }}
           >
             {/* A real element rather than a ::before, because the wrapper's
                 two pseudo-elements are already spoken for: one is the click
@@ -91,11 +130,20 @@ export default async function PageBody({
               {section.def.label}
             </span>
             {renderSection(section, ctx)}
+            {/* Shown only on the selected section (preview.css). The bridge
+                turns a click into an "add after this id" message. */}
+            <button type="button" className="pv-add" data-add-after={section.id}>
+              + Add a section below
+            </button>
           </div>
         ) : (
-          renderSection(section, ctx)
+          // display: contents — no box, no layout change; it only carries the
+          // attributes and custom property the section reads.
+          <div key={section.id} className="sec-wrap" {...wrap.attrs} style={wrap.style}>
+            {renderSection(section, ctx)}
+          </div>
         )
-      )}
+      })}
 
       {frame.after}
 

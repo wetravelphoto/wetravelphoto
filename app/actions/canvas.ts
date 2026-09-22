@@ -152,6 +152,41 @@ export async function addDraftSection(page: string, type: string, afterId?: stri
   return row.id
 }
 
+/**
+ * A copy of a section, placed straight after it — words, photographs, layout,
+ * typography and all. Singletons (the hero, the contact section) cannot be
+ * copied: a page with two of them is a page that makes no sense.
+ */
+export async function duplicateDraftSection(page: string, id: string) {
+  await requireEditor()
+  requirePage(page)
+
+  const draft = await ensureDraft(page)
+  const rows = draft.pages[page] ?? []
+  const at = rows.findIndex((r) => r.id === id)
+  if (at < 0) throw new Error('That section is no longer on the page.')
+
+  const source = rows[at]
+  const def = sectionDef(source.type)
+  if (!def) throw new Error(`Unknown section type: ${source.type}`)
+  if (def.singleton) throw new Error(`${def.label} can only appear once on a page.`)
+
+  const copy: DraftSection = {
+    ...source,
+    id: randomUUID(),
+    // A deep copy, so editing one never reaches into the other's settings.
+    settings: structuredClone(source.settings ?? {}),
+  }
+
+  const next = [...rows]
+  next.splice(at + 1, 0, copy)
+
+  await writeDraftPage(page, next, draft)
+  done(page)
+
+  return copy.id
+}
+
 export async function removeDraftSection(page: string, id: string) {
   await requireEditor()
   requirePage(page)

@@ -1,0 +1,47 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   What every section has: spacing, background, and where it shows.
+
+   PageBody wraps each section in an element carrying data-space-top,
+   data-space-bottom, data-bg and data-hide (and --sec-bg-custom for a colour
+   of the photographer's own). On the live site that wrapper is
+   `display: contents`, so it adds no box and changes no layout; in the editor
+   it is the preview's own selection wrapper.
+
+   The rules below only SET custom properties. Each section's stylesheet reads
+   them on its own root with its old value as the fallback —
+   `padding-top: var(--sec-pad-top, <what it always had>)` — so a section left
+   on "Default" is unchanged.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.sec-wrap { display: contents; }
+
+/* ── Spacing: one scale, following the site's rhythm from Style mode ──────── */
+
+[data-space-top='none']    { --sec-pad-top: 0px; }
+[data-space-top='s']       { --sec-pad-top: calc(clamp(1.5rem, 3vw, 2.5rem) * var(--rhythm, 1)); }
+[data-space-top='m']       { --sec-pad-top: calc(clamp(3rem, 6vw, 5rem) * var(--rhythm, 1)); }
+[data-space-top='l']       { --sec-pad-top: calc(clamp(5rem, 9vw, 8rem) * var(--rhythm, 1)); }
+[data-space-top='xl']      { --sec-pad-top: calc(clamp(7rem, 12vw, 11rem) * var(--rhythm, 1)); }
+
+[data-space-bottom='none'] { --sec-pad-bottom: 0px; }
+[data-space-bottom='s']    { --sec-pad-bottom: calc(clamp(1.5rem, 3vw, 2.5rem) * var(--rhythm, 1)); }
+[data-space-bottom='m']    { --sec-pad-bottom: calc(clamp(3rem, 6vw, 5rem) * var(--rhythm, 1)); }
+[data-space-bottom='l']    { --sec-pad-bottom: calc(clamp(5rem, 9vw, 8rem) * var(--rhythm, 1)); }
+[data-space-bottom='xl']   { --sec-pad-bottom: calc(clamp(7rem, 12vw, 11rem) * var(--rhythm, 1)); }
+
+/* ── Background ───────────────────────────────────────────────────────────── */
+
+[data-bg='page']   { --sec-bg: var(--surface); }
+[data-bg='alt']    { --sec-bg: var(--surface-alt); }
+[data-bg='tint']   { --sec-bg: color-mix(in srgb, var(--ember) 10%, var(--surface)); }
+[data-bg='custom'] { --sec-bg: var(--sec-bg-custom, var(--surface)); }
+
+/* ── Where it shows. 760px is the same line the hero switches crops on. ────── */
+
+@media (max-width: 760px) {
+  [data-hide='mobile'] { display: none !important; }
+}
+
+@media (min-width: 761px) {
+  [data-hide='desktop'] { display: none !important; }
+}

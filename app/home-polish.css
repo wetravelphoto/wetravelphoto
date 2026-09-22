@@ -45,9 +45,9 @@
 /* ---------- CAROUSEL ---------- */
 
 .carousel-section {
-  background: #f1efe9;
+  background: var(--sec-bg, #f1efe9);
   color: var(--ink);
-  padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(3rem, 7vw, 5rem);
+  padding: var(--sec-pad-top, clamp(2.5rem, 6vw, 4.5rem)) 0 var(--sec-pad-bottom, clamp(3rem, 7vw, 5rem));
 }
 
 .carousel-head {

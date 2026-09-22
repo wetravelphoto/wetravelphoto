@@ -80,6 +80,38 @@
   transform: none;
 }
 
+/* "+ Add a section below", on the selected section only. Sits on the section's
+   bottom edge, so it covers nothing of the page but a sliver of spacing. */
+.pv-add {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 43;
+  display: none;
+  padding: 0.38rem 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--pv-accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  cursor: pointer;
+  transform: translate(-50%, 50%);
+}
+
+.pv-section.is-selected > .pv-add {
+  display: block;
+}
+
+.pv-add:hover {
+  filter: brightness(1.1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pv-section::after,
   .pv-tag {

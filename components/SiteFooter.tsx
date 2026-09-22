@@ -6,7 +6,8 @@ import { photoUrl } from '@/lib/images'
 import NewsletterForm from '@/components/NewsletterForm'
 import Icon from '@/components/SocialIcons'
 import Logo from '@/components/Logo'
-import { getFont } from '@/lib/fonts'
+import { fontHref } from '@/lib/fonts'
+import { footerFontVars } from '@/lib/chrome'
 
 export default async function SiteFooter({ settings: given }: { settings?: SiteSettings } = {}) {
   // PageBody passes its own settings (the draft's, in the editor's preview).
@@ -23,11 +24,11 @@ export default async function SiteFooter({ settings: given }: { settings?: SiteS
   const owner = settings.owner_name || settings.site_title
   const copy = settings.footer_copy || `© ${year} ${owner}. All photographs are my own.`
 
-  const footerFont = getFont(settings.footer_font || 'Karla')
+  const footerFont = settings.footer_font || 'Karla'
 
   const chrome: React.CSSProperties = {
-    ['--footer-font' as string]: footerFont.stack,
-    ['--footer-weight' as string]: footerFont.weight,
+    // The same function the editor repaints with (lib/chrome.ts).
+    ...(footerFontVars(footerFont) as React.CSSProperties),
     ['--footer-scale' as string]: String(settings.footer_scale ?? 1),
     ['--footer-scale-mobile' as string]: String(settings.footer_scale_mobile ?? 1),
     ['--footer-logo-h' as string]: `${settings.logo_footer_height ?? 130}px`,
@@ -35,7 +36,13 @@ export default async function SiteFooter({ settings: given }: { settings?: SiteS
   }
 
   return (
-    <footer className="site-footer" data-align={settings.footer_align || 'left'} style={chrome}>
+    <footer
+      className="site-footer"
+      data-chrome="footer"
+      data-align={settings.footer_align || 'left'}
+      style={chrome}
+    >
+      <link rel="stylesheet" href={fontHref(footerFont)} precedence="default" />
       <div className="footer-grid">
         <div className="footer-brand-col">
           <Logo

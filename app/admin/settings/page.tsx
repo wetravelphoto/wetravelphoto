@@ -1,11 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { getSiteSettings } from '@/lib/site'
-import { photoUrl } from '@/lib/images'
-import { updateIdentity, updateMenu, updateNewsletter } from '@/app/actions/site'
+import Link from 'next/link'
+import { updateIdentity, updateMenu } from '@/app/actions/site'
 import { updateBranding } from '@/app/actions/branding'
 import { saveInstagramToken } from '@/app/actions/instagram'
 import InstagramPanel from '@/components/admin/InstagramPanel'
-import ChromeEditor from '@/components/admin/ChromeEditor'
 import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
 import BackfillPanel from '@/components/admin/BackfillPanel'
@@ -38,44 +37,27 @@ export default async function SettingsPage() {
     ? await hasInstagramToken({ db: supabase, tenantId: editor.tenantId })
     : false
 
-  // A real cover makes the header preview honest about legibility
-  const { data: samples } = await supabase
-    .from('photos')
-    .select('storage_path')
-    .order('created_at', { ascending: false })
-    .limit(1)
-
-  const url = (path: string | null) => (path ? photoUrl(path) : null)
-
   return (
     <div style={{ maxWidth: 760 }}>
       <h1 className="admin-h1" style={{ marginBottom: '1.5rem' }}>
         Settings
       </h1>
 
-      <form action={updateBranding} autoComplete="off">
-        <ChromeEditor
-          siteTitle={settings.site_title}
-          headerLogoUrl={url(settings.logo_header_path)}
-          footerLogoUrl={url(settings.logo_footer_path)}
-          sampleImageUrl={samples?.[0] ? photoUrl(samples[0].storage_path) : null}
-          initial={{
-            headerHeight: settings.logo_header_height ?? 34,
-            headerAlign: settings.header_align || 'split',
-            navFont: settings.header_nav_font || 'Oswald',
-            navScale: settings.header_nav_scale ?? 1,
-            headerHeightMobile: settings.logo_header_height_mobile ?? 26,
-            navScaleMobile: settings.header_nav_scale_mobile ?? 1,
-            footerHeight: settings.logo_footer_height ?? 130,
-            footerAlign: settings.footer_align || 'left',
-            footerFont: settings.footer_font || 'Karla',
-            footerScale: settings.footer_scale ?? 1,
-            footerHeightMobile: settings.logo_footer_height_mobile ?? 90,
-            footerScaleMobile: settings.footer_scale_mobile ?? 1,
-            tagline: settings.tagline,
-          }}
-        />
+      {/* The header and footer moved into the editor, where they are seen on
+          the page as they change and go live with Publish like everything else. */}
+      <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+        <h2 className="admin-h2">Header &amp; footer</h2>
+        <p className="admin-meta" style={{ margin: '0 0 0.85rem', lineHeight: 1.6 }}>
+          Logos, layout, menu typeface and sizes, the copyright line and the newsletter block are
+          edited in the editor now: click the header or footer on any page. Changes show on the page
+          as you make them and go live when you Publish.
+        </p>
+        <Link href="/edit/home" className="admin-btn">
+          Open the editor
+        </Link>
+      </div>
 
+      <form action={updateBranding} autoComplete="off">
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
           <h2 className="admin-h2">Naming</h2>
 
@@ -98,19 +80,7 @@ export default async function SettingsPage() {
             />
           </label>
 
-          <label className="admin-field">
-            Copyright line
-            <input
-              type="text"
-              name="footer_copy"
-              defaultValue={settings.footer_copy ?? ''}
-              placeholder={`© ${new Date().getFullYear()} ${settings.owner_name || settings.site_title}`}
-              className="admin-input"
-            />
-            <span className="admin-meta" style={{ display: 'block', marginTop: '0.3rem' }}>
-              Leave blank to build it from the owner name and current year.
-            </span>
-          </label>
+          <SaveBar label="Save names" />
         </div>
       </form>
 
@@ -276,43 +246,14 @@ export default async function SettingsPage() {
         </div>
       </div>
 
-      <form action={updateNewsletter} autoComplete="off">
-        <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="admin-h2">Newsletter</h2>
-          <p className="admin-meta" style={{ margin: '0 0 0.85rem' }}>
-            {signupCount ?? 0} signup{signupCount === 1 ? '' : 's'}. Stored in your database — not yet
-            connected to a mailing service.
-          </p>
-
-          <label className="admin-field" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input type="checkbox" name="show_newsletter" defaultChecked={settings.show_newsletter !== false} />
-            Show the signup block
-          </label>
-
-          <label className="admin-field">
-            Heading
-            <input
-              type="text"
-              name="newsletter_heading"
-              defaultValue={settings.newsletter_heading ?? ''}
-              className="admin-input"
-            />
-          </label>
-
-          <label className="admin-field">
-            Body
-            <textarea
-              name="newsletter_body"
-              defaultValue={settings.newsletter_body ?? ''}
-              rows={3}
-              className="admin-input"
-              style={{ resize: 'vertical', fontFamily: 'inherit' }}
-            />
-          </label>
-
-          <SaveBar label="Save newsletter" />
-        </div>
-      </form>
+      <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+        <h2 className="admin-h2">Newsletter</h2>
+        <p className="admin-meta" style={{ margin: 0, lineHeight: 1.6 }}>
+          {signupCount ?? 0} signup{signupCount === 1 ? '' : 's'}. Stored in your database, not yet
+          connected to a mailing service. The signup block in the footer (whether it shows, its
+          heading and text) is edited in the editor: click the footer.
+        </p>
+      </div>
 
       {/* Only shown when there's actually something to process. New uploads
           build their own display sizes, so this is a recovery tool — it

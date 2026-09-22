@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { currentEditor } from '@/lib/auth'
 import { PAGES, isPage, type CustomPage } from '@/lib/sections/pages'
 import { sectionDef } from '@/lib/sections/registry'
+import { chromeLabel } from '@/lib/chrome'
 import type { SiteDraft } from '@/lib/drafts/store'
 
 /**
@@ -25,7 +26,7 @@ import type { SiteDraft } from '@/lib/drafts/store'
 /** The part of a draft a step holds. */
 export type DraftSnapshot = Pick<
   SiteDraft,
-  'pages' | 'global_styles' | 'type_styles' | 'page_seo' | 'custom_pages' | 'menu'
+  'pages' | 'global_styles' | 'type_styles' | 'page_seo' | 'custom_pages' | 'menu' | 'chrome'
 >
 
 export type StepsState = {
@@ -57,6 +58,7 @@ export function snapshotOf(draft: DraftSnapshot): DraftSnapshot {
     page_seo: draft.page_seo ?? null,
     custom_pages: draft.custom_pages ?? null,
     menu: draft.menu ?? null,
+    chrome: draft.chrome ?? null,
   }
 }
 
@@ -92,7 +94,7 @@ function pageName(slug: string, ...lists: (CustomPage[] | null)[]): string {
 export function diffDrafts(
   a: DraftSnapshot,
   b: DraftSnapshot
-): { pages: string[]; styles: boolean; seo: string[]; site: boolean } {
+): { pages: string[]; styles: boolean; seo: string[]; site: boolean; chrome: string[] } {
   const slugs = new Set([...Object.keys(a.pages ?? {}), ...Object.keys(b.pages ?? {})])
   const seoSlugs = new Set([...Object.keys(a.page_seo ?? {}), ...Object.keys(b.page_seo ?? {})])
   return {
@@ -106,6 +108,10 @@ export function diffDrafts(
     // only when writeDraftSite has actually changed something, and it names
     // its own steps.
     site: !same(a.custom_pages, b.custom_pages) || !same(a.menu, b.menu),
+    // Header and footer values that differ.
+    chrome: [...new Set([...Object.keys(a.chrome ?? {}), ...Object.keys(b.chrome ?? {})])].filter(
+      (key) => !same(a.chrome?.[key as keyof typeof a.chrome], b.chrome?.[key as keyof typeof b.chrome])
+    ),
   }
 }
 
@@ -120,10 +126,11 @@ export function diffDrafts(
  * Null when nothing changed, which keeps no step.
  */
 export function describeChange(before: DraftSnapshot, after: DraftSnapshot): string | null {
-  const { pages, styles, seo, site } = diffDrafts(before, after)
+  const { pages, styles, seo, site, chrome } = diffDrafts(before, after)
   const name = (slug: string) => pageName(slug, after.custom_pages, before.custom_pages)
 
   if (site) return 'Pages & menu'
+  if (chrome.length) return chromeLabel(chrome)
   if (seo.length) {
     return pages.length === 0 && !styles && seo.length === 1
       ? `Search & sharing · ${name(seo[0])}`
@@ -259,7 +266,8 @@ export async function moveStep(
     label,
     pages: [...new Set([...moved.pages, ...moved.seo])],
     styles: moved.styles,
-    site: moved.site,
+    // The header and footer are on every page, like the menu.
+    site: moved.site || moved.chrome.length > 0,
   }
 }
 

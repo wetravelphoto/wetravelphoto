@@ -15,6 +15,7 @@ import { TOKENS_VERSION } from '@/lib/styles/tokens'
 import { sanitizePageSeo, sanitizeSeoMap, type PageSeo, type PageSeoMap } from '@/lib/seo'
 import { isPage, sanitizeCustomPages, type CustomPage } from '@/lib/sections/pages'
 import { sanitizeMenu, type MenuItem } from '@/lib/menu'
+import { chromeLabel, sanitizeChrome, type ChromeValues } from '@/lib/chrome'
 import {
   clearSteps,
   describeChange,
@@ -86,6 +87,11 @@ export type SiteDraft = {
    */
   custom_pages: CustomPage[] | null
   menu: MenuItem[] | null
+  /**
+   * The header and footer (lib/chrome.ts): only the values changed in the
+   * draft, laid over the live settings. Null: untouched.
+   */
+  chrome: ChromeValues | null
   updatedAt: string | null
 }
 
@@ -135,6 +141,7 @@ export async function readDraft(): Promise<DraftState> {
       page_seo: data.page_seo ? sanitizeSeoMap(data.page_seo) : null,
       custom_pages: Array.isArray(data.custom_pages) ? sanitizeCustomPages(data.custom_pages) : null,
       menu: sanitizeMenu(data.menu),
+      chrome: data.chrome ? sanitizeChrome(data.chrome) : null,
       updatedAt: (data.updated_at as string) ?? null,
     },
     missing: false,
@@ -159,7 +166,8 @@ export async function draftStatus(): Promise<{
     pages: draft ? Object.keys(draft.pages) : [],
     stylesTouched: !!draft && (draft.global_styles !== null || draft.type_styles !== null),
     seoTouched: !!draft && draft.page_seo !== null,
-    siteTouched: !!draft && (draft.custom_pages !== null || draft.menu !== null),
+    siteTouched:
+      !!draft && (draft.custom_pages !== null || draft.menu !== null || draft.chrome !== null),
     updatedAt: draft?.updatedAt ?? null,
   }
 }
@@ -187,6 +195,8 @@ export async function loadDraftPage(page = 'home'): Promise<PageSections & { isD
     ...(draft.page_seo !== null ? { page_seo: draft.page_seo } : {}),
     ...(draft.custom_pages !== null ? { custom_pages: draft.custom_pages } : {}),
     ...(draft.menu !== null ? { menu: draft.menu } : {}),
+    // Each value was cleaned against its column's own limits (lib/chrome.ts).
+    ...((draft.chrome ?? {}) as Partial<SiteSettings>),
   }
 
   const rows = draft.pages[page]
@@ -251,6 +261,7 @@ export async function ensureDraft(page = 'home'): Promise<SiteDraft> {
     page_seo: draft?.page_seo ?? null,
     custom_pages: draft?.custom_pages ?? null,
     menu: draft?.menu ?? null,
+    chrome: draft?.chrome ?? null,
     updatedAt: null,
   }
 
@@ -273,7 +284,7 @@ type WriteKind =
   | { kind: 'jump' }
 
 /** Columns added after the draft table, which a save can do without. */
-const OPTIONAL_COLUMNS = ['edit_label', 'page_seo', 'custom_pages', 'menu'] as const
+const OPTIONAL_COLUMNS = ['edit_label', 'page_seo', 'custom_pages', 'menu', 'chrome'] as const
 
 async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
   const supabase = await createClient()
@@ -298,6 +309,7 @@ async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
     page_seo: draft.page_seo ?? null,
     custom_pages: draft.custom_pages ?? null,
     menu: draft.menu ?? null,
+    chrome: draft.chrome ?? null,
     updated_by: user?.id ?? null,
   }
   // Omitted on a seed, so the upsert leaves the column as it was.
@@ -382,8 +394,29 @@ function emptyDraft(): SiteDraft {
     page_seo: null,
     custom_pages: null,
     menu: null,
+    chrome: null,
     updatedAt: null,
   }
+}
+
+/**
+ * Changes header and footer values in the draft (lib/chrome.ts). Merged into
+ * what the draft already holds, so each save sends only what moved.
+ */
+export async function writeDraftChrome(values: ChromeValues): Promise<void> {
+  const { draft, missing } = await readDraft()
+  if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
+
+  const clean = sanitizeChrome(values)
+  const keys = Object.keys(clean)
+  if (keys.length === 0) return
+
+  const base: SiteDraft = draft ?? emptyDraft()
+  await upsertDraft(
+    { ...base, chrome: { ...(base.chrome ?? {}), ...clean } },
+    // Named by what was edited, so a slider's burst of saves is one Undo step.
+    { kind: 'edit', before: base, label: chromeLabel(keys) }
+  )
 }
 
 /**
@@ -505,6 +538,7 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
   const styles = draft.global_styles !== null || draft.type_styles !== null
   const seo = draft.page_seo !== null
   const site = draft.custom_pages !== null || draft.menu !== null
+  const chrome = draft.chrome !== null && Object.keys(draft.chrome).length > 0
 
   // The photographer's pages after this publish, and the ones it removes.
   const live = await getSiteSettings()
@@ -517,7 +551,7 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
   const exists = (key: string) => isPage(key) || finalCustom.some((p) => p.key === key)
   const pages = Object.keys(draft.pages).filter(exists)
 
-  if (pages.length === 0 && !styles && !seo && !site) {
+  if (pages.length === 0 && !styles && !seo && !site && !chrome) {
     throw new Error('There is nothing waiting to be published.')
   }
 
@@ -527,7 +561,7 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
     templateSlug: null,
     templateName: null,
     version: null,
-    note: describeDraft(pages, styles, seo, site),
+    note: describeDraft(pages, styles, seo, site || chrome),
   })
 
   for (const page of pages) {
@@ -565,6 +599,9 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
     })
   }
 
+  // The header and footer: the same columns Settings used to write.
+  if (chrome) await patchSiteSettings(draft.chrome as Record<string, unknown>)
+
   // A deleted page's sections are removed from the live table, not left
   // behind for a page nobody can reach.
   for (const key of removed) await replaceSections(key, [])
@@ -598,7 +635,7 @@ async function deleteDraft(): Promise<void> {
 
 function describeDraft(pages: string[], styles: boolean, seo: boolean, site: boolean): string {
   const parts: string[] = []
-  if (site) parts.push('pages and menu')
+  if (site) parts.push('pages, menu, header and footer')
   if (pages.length) parts.push(pages.length === 1 ? `the ${pages[0]} page` : `${pages.length} pages`)
   if (styles) parts.push('site style')
   if (seo) parts.push('search and sharing settings')

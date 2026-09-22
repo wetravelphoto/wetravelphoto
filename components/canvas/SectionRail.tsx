@@ -64,6 +64,19 @@ export default function SectionRail({
         </button>
       </div>
 
+      {/* The header and footer bracket every page's sections. Not movable and
+          not removable: they belong to the site, and are edited here from any
+          page. */}
+      <button
+        type="button"
+        className="cv-chrome-row"
+        data-on={selected === '__header'}
+        onClick={() => onSelect('__header')}
+      >
+        <span className="cv-item-label">Header</span>
+        <span className="cv-item-sub">Logo and menu · every page</span>
+      </button>
+
       <ol className="cv-sections">
         {sections.map((row, i) => (
           <Fragment key={row.id}>
@@ -182,6 +195,16 @@ export default function SectionRail({
 
       <button type="button" className="cv-add" onClick={() => onAdd(null)}>
         + Add a section at the end
+      </button>
+
+      <button
+        type="button"
+        className="cv-chrome-row"
+        data-on={selected === '__footer'}
+        onClick={() => onSelect('__footer')}
+      >
+        <span className="cv-item-label">Footer</span>
+        <span className="cv-item-sub">Links, newsletter, copyright · every page</span>
       </button>
     </aside>
   )

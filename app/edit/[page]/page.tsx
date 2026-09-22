@@ -11,6 +11,7 @@ import {
 import { defaultPageLabel, legacyMenu, sanitizeMenu } from '@/lib/menu'
 import { readSteps } from '@/lib/drafts/steps'
 import { readPageSeo, resolveSeo } from '@/lib/seo'
+import { chromeFrom } from '@/lib/chrome'
 import { siteUrl } from '@/lib/site'
 import { resolveTokens } from '@/lib/styles/tokens'
 import type { TypeStyles } from '@/lib/type-styles'
@@ -136,6 +137,8 @@ export default async function EditPage({
       seo={readPageSeo(settings, page)}
       seoResolved={resolveSeo(page, sections, settings)}
       siteTitle={settings.site_title}
+      chrome={chromeFrom(settings)}
+      ownerName={settings.owner_name ?? null}
       siteHost={siteUrl().replace(/^https?:\/\//, '')}
       initialMode={mode === 'style' ? 'style' : 'content'}
       />

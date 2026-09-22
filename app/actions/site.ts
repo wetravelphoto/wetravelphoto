@@ -65,19 +65,6 @@ export async function updateMenu(formData: FormData) {
   revalidatePath('/', 'layout')
 }
 
-export async function updateNewsletter(formData: FormData) {
-  await patch(
-    {
-      show_newsletter: on(formData, 'show_newsletter'),
-      newsletter_heading: text(formData, 'newsletter_heading'),
-      newsletter_body: text(formData, 'newsletter_body'),
-      footer_note: text(formData, 'footer_note'),
-    },
-    ['/']
-  )
-}
-
-
 /**
  * How the shop runs, and what its two pages share: open or closed, what is for
  * sale, shipping, each print's own page, the wall and the closing quote.

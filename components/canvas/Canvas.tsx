@@ -34,6 +34,8 @@ import StyleMode from '@/components/canvas/StyleMode'
 import PanelResizer from '@/components/canvas/PanelResizer'
 import PageSettings from '@/components/canvas/PageSettings'
 import PagesMenu from '@/components/canvas/PagesMenu'
+import ChromePanel from '@/components/canvas/ChromePanel'
+import type { ChromeKey } from '@/lib/chrome'
 import type { PageSeo, ResolvedSeo } from '@/lib/seo'
 import type { StoryOption } from '@/components/canvas/editors/HeroStories'
 
@@ -94,6 +96,8 @@ export default function Canvas({
   seoResolved,
   siteTitle,
   siteHost,
+  chrome,
+  ownerName,
   initialMode = 'content',
 }: {
   page: string
@@ -130,6 +134,9 @@ export default function Canvas({
   siteTitle: string
   /** The site's address without the scheme, for the previews. */
   siteHost: string
+  /** The header and footer values in effect (draft first). See lib/chrome.ts. */
+  chrome: Record<ChromeKey, string | number | boolean | null>
+  ownerName: string | null
   initialMode?: Mode
 }) {
   const router = useRouter()
@@ -210,6 +217,7 @@ export default function Canvas({
       var?: string
       unit?: string
       attr?: string
+      part?: string
     }) => {
       frame.current?.contentWindow?.postMessage(
         { source: 'wtp-canvas', ...message },
@@ -250,6 +258,7 @@ export default function Canvas({
    */
   const inspectorFlush = useRef<(() => Promise<void>) | null>(null)
   const pageFlush = useRef<(() => Promise<void>) | null>(null)
+  const chromeFlush = useRef<(() => Promise<void>) | null>(null)
   const styleFlush = useRef<(() => Promise<void>) | null>(null)
   const [revision, setRevision] = useState(0)
   const [remountArmed, setRemountArmed] = useState(false)
@@ -273,6 +282,7 @@ export default function Canvas({
         try {
           await inspectorFlush.current?.()
           await pageFlush.current?.()
+          await chromeFlush.current?.()
           await styleFlush.current?.()
           // Nothing painted on ahead of the server is true after this.
           tell({ type: 'settle' })
@@ -649,7 +659,29 @@ export default function Canvas({
             onCommit={(changes) => run(() => updateDraftStyles(changes))}
           />
         ) : (
-          current ? (
+          selected === '__header' || selected === '__footer' ? (
+            // The header or the footer: on every page, edited from any of them.
+            <ChromePanel
+              key={`${selected}-${revision}`}
+              flushRef={chromeFlush}
+              resizer={<PanelResizer />}
+              part={selected === '__header' ? 'header' : 'footer'}
+              values={chrome}
+              publicUrl={publicUrl}
+              siteTitle={siteTitle}
+              ownerName={ownerName}
+              device={device}
+              onDevice={setDevice}
+              onLive={(message) => tell({ type: 'chrome-live', ...message })}
+              onSettled={(part) => tell({ type: 'settle', id: `__${part}` })}
+              onSaved={() => {
+                tell({ type: 'refresh' })
+                router.refresh()
+              }}
+              onEditMenu={() => setManaging(true)}
+              onClose={() => choose(null)}
+            />
+          ) : current ? (
             <Inspector
               // Rebuilt after an undo or redo, so its inputs show the restored
               // values rather than what was typed into them. See `revision`.

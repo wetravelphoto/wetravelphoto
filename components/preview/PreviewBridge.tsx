@@ -75,6 +75,8 @@ type Inbound = {
   unit?: string
   /** Live field: the data attribute it sets. */
   attr?: string
+  /** Header/footer repaint: which of the two. */
+  part?: string
 }
 
 /**
@@ -116,6 +118,10 @@ export default function PreviewBridge({ page }: { page: string }) {
       document.querySelectorAll('.pv-section').forEach((el) => {
         el.classList.toggle('is-selected', el.getAttribute('data-section-id') === id)
       })
+      // The header and footer are selected as "__header" / "__footer".
+      document.querySelectorAll('[data-chrome]').forEach((el) => {
+        el.classList.toggle('is-selected', `__${el.getAttribute('data-chrome')}` === id)
+      })
     }
 
     // A typeface the preview has not loaded would fall back silently, which
@@ -155,6 +161,15 @@ export default function PreviewBridge({ page }: { page: string }) {
       }
 
       if (!node) {
+        // The header or the footer: not sections, but selectable all the same.
+        const chrome = target?.closest<HTMLElement>('[data-chrome]')
+        const part = chrome?.getAttribute('data-chrome')
+        if (part === 'header' || part === 'footer') {
+          paint(`__${part}`)
+          send({ source: 'wtp-preview', type: 'select', id: `__${part}`, sectionType: part })
+          return
+        }
+
         paint(null)
         send({ source: 'wtp-preview', type: 'clear' })
         return
@@ -258,6 +273,28 @@ export default function PreviewBridge({ page }: { page: string }) {
         return
       }
 
+      if (data.type === 'chrome-live' && (data.part === 'header' || data.part === 'footer')) {
+        // A header or footer value as it moves: custom properties on the
+        // element, or one attribute. Kept as pending like a section's, keyed
+        // "__header" / "__footer", until the editor says the save has landed.
+        const part = data.part
+        const vars = Object.entries(data.vars ?? {}).filter(([name]) => SAFE_VAR.test(name))
+        const attr = data.attr && SAFE_ATTR.test(data.attr) ? data.attr : null
+        const value = data.value ?? ''
+
+        const apply = () => {
+          document.querySelectorAll<HTMLElement>(`[data-chrome="${part}"]`).forEach((el) => {
+            vars.forEach(([name, v]) => setVar(el, name, v))
+            if (attr && el.getAttribute(attr) !== value) el.setAttribute(attr, value)
+          })
+        }
+
+        loadFonts(data.fonts)
+        pending.set(`chrome:${part}:${attr ?? vars.map(([n]) => n).join(',')}`, { section: `__${part}`, apply })
+        apply()
+        return
+      }
+
       if (data.type === 'settle') {
         // The save holding these values has landed and its re-render is on the
         // way, so the server is the source of truth for them again.
@@ -303,7 +340,11 @@ export default function PreviewBridge({ page }: { page: string }) {
         const id = data.id ?? null
         paint(id)
 
-        if (id) {
+        if (id === '__header') {
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        } else if (id === '__footer') {
+          document.querySelector('[data-chrome="footer"]')?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+        } else if (id) {
           document
             .querySelector(`.pv-section[data-section-id="${CSS.escape(id)}"]`)
             ?.scrollIntoView({ behavior: 'smooth', block: 'start' })

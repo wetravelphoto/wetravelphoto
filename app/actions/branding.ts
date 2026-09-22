@@ -59,29 +59,6 @@ async function storeBrandFile(
   return { ok: true, key }
 }
 
-export async function uploadLogo(formData: FormData) {
-  const { tenantId } = await requireEditor()
-
-  const slot = formData.get('slot') as Slot
-  if (!slot || !COLUMN[slot]) return { ok: false, message: 'Unknown logo slot.' }
-
-  const stored = await storeBrandFile(tenantId, slot, formData.get('file') as File | null)
-  if (!stored.ok) return stored
-
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('site_settings')
-    .update({ [COLUMN[slot]]: stored.key })
-    .eq('tenant_id', tenantId)
-
-  if (error) return { ok: false, message: error.message }
-
-  revalidatePath('/', 'layout')
-  revalidatePath('/admin/settings')
-
-  return { ok: true, message: 'Logo updated.' }
-}
-
 /**
  * Stores an accent mark's picture and hands back its key — and does nothing
  * else. Which section shows it is decided by the canvas, which writes the key
@@ -100,59 +77,43 @@ export async function uploadMarkImage(
   return { ok: true, path: stored.key }
 }
 
-export async function clearLogo(slot: Slot) {
+/**
+ * Stores a header or footer logo for the canvas and hands back its key, and
+ * does nothing else — like uploadMarkImage. The canvas writes the key into
+ * the draft, so the new logo reaches the live site on Publish, not on upload.
+ */
+export async function uploadChromeLogo(
+  formData: FormData
+): Promise<{ ok: true; path: string } | { ok: false; message: string }> {
   const { tenantId } = await requireEditor()
-  if (!COLUMN[slot]) return { ok: false, message: 'Unknown logo slot.' }
 
-  const supabase = await createClient()
-  await supabase
-    .from('site_settings')
-    .update({ [COLUMN[slot]]: null })
-    .eq('tenant_id', tenantId)
+  const slot = formData.get('slot') as Slot
+  if (!slot || !COLUMN[slot]) return { ok: false, message: 'Unknown logo slot.' }
 
-  revalidatePath('/', 'layout')
-  revalidatePath('/admin/settings')
+  const stored = await storeBrandFile(tenantId, slot, formData.get('file') as File | null)
+  if (!stored.ok) return stored
 
-  return { ok: true, message: 'Reverted to the built-in mark.' }
+  return { ok: true, path: stored.key }
 }
 
+/**
+ * The Settings page's naming form. Writes only the fields the form actually
+ * sent: the header and footer controls moved to the canvas (where they go
+ * through the draft), and a missing field must never reset a column to a
+ * default.
+ */
 export async function updateBranding(formData: FormData) {
   const { tenantId } = await requireEditor()
 
-  const number = (key: string, fallback: number) => {
-    const value = parseInt((formData.get(key) as string) ?? '', 10)
-    return Number.isNaN(value) ? fallback : value
-  }
-
-  const decimal = (key: string, fallback: number) => {
-    const value = parseFloat((formData.get(key) as string) ?? '')
-    return Number.isNaN(value) ? fallback : value
-  }
-
   const text = (key: string) => (formData.get(key) as string)?.trim() || null
+  const patch: Record<string, unknown> = {}
+
+  if (formData.has('site_title')) patch.site_title = text('site_title') ?? 'Untitled'
+  if (formData.has('owner_name')) patch.owner_name = text('owner_name')
+  if (Object.keys(patch).length === 0) return
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('site_settings')
-    .update({
-      site_title: text('site_title') ?? 'Untitled',
-      owner_name: text('owner_name'),
-      footer_copy: text('footer_copy'),
-      logo_header_height: number('logo_header_height', 34),
-      logo_footer_height: number('logo_footer_height', 130),
-
-      header_align: text('header_align') ?? 'split',
-      header_nav_font: text('header_nav_font') ?? 'Oswald',
-      header_nav_scale: decimal('header_nav_scale', 1),
-      header_nav_scale_mobile: decimal('header_nav_scale_mobile', 1),
-      logo_header_height_mobile: number('logo_header_height_mobile', 26),
-      footer_align: text('footer_align') ?? 'left',
-      footer_font: text('footer_font') ?? 'Karla',
-      footer_scale: decimal('footer_scale', 1),
-      footer_scale_mobile: decimal('footer_scale_mobile', 1),
-      logo_footer_height_mobile: number('logo_footer_height_mobile', 90),
-    })
-    .eq('tenant_id', tenantId)
+  const { error } = await supabase.from('site_settings').update(patch).eq('tenant_id', tenantId)
 
   if (error) throw new Error(error.message)
 

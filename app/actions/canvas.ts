@@ -13,6 +13,7 @@ import {
   writeDraftPage,
   writeDraftStyles,
   writeDraftSeo,
+  writeDraftChrome,
   currentCustomPages,
   type DraftSection,
 } from '@/lib/drafts/store'
@@ -21,6 +22,7 @@ import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import { sanitizeOwnStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
 import { sanitizePageSeo } from '@/lib/seo'
+import { sanitizeChrome } from '@/lib/chrome'
 import {
   PAIRINGS,
   PALETTES,
@@ -423,6 +425,20 @@ export async function updateDraftPageSeo(page: string, values: unknown) {
   await requirePage(page)
   await writeDraftSeo(page, sanitizePageSeo(values))
   done(page)
+}
+
+// ── Header and footer ────────────────────────────────────────────────────────
+
+/**
+ * Header and footer values (lib/chrome.ts), into the draft. Only what changed
+ * is sent; each value is checked against its own limits. The header and
+ * footer are on every page, so every editor page and preview is refreshed.
+ */
+export async function updateDraftChrome(values: unknown) {
+  await requireEditor()
+  await writeDraftChrome(sanitizeChrome(values))
+  revalidatePath('/edit', 'layout')
+  revalidatePath('/preview', 'layout')
 }
 
 // ── Undo and redo ────────────────────────────────────────────────────────────

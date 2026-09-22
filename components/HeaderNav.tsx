@@ -56,7 +56,14 @@ export default function HeaderNav({
 
   return (
     <>
-      <header className="site-header" data-mode={mode} data-align={align} style={navStyle}>
+      {/* data-chrome: what the editor's preview selects and repaints. */}
+      <header
+        className="site-header"
+        data-chrome="header"
+        data-mode={mode}
+        data-align={align}
+        style={navStyle}
+      >
         <Link href="/" aria-label={siteTitle}>
           <Logo
             variant="word"

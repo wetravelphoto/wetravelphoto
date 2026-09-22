@@ -198,3 +198,24 @@ span[data-field]:empty {
   min-height: 1em;
   min-width: 5rem;
 }
+
+
+/* ── The header and footer ───────────────────────────────────────────────────
+   Selectable like sections (they are clicked as "__header" / "__footer"), but
+   not wrapped: the header is fixed, and a wrapper around it would have no
+   height to outline. So the outline goes on the element itself — outline,
+   not border, so nothing moves. */
+.pv-root [data-chrome] {
+  cursor: pointer;
+  outline: 1px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color 0.12s ease;
+}
+
+.pv-root [data-chrome]:hover:not(:has(.pv-section:hover)) {
+  outline-color: color-mix(in srgb, var(--pv-accent) 55%, transparent);
+}
+
+.pv-root [data-chrome].is-selected {
+  outline: 2px solid var(--pv-accent);
+}

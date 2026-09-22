@@ -36,6 +36,10 @@ export const PAGES = {
   // Its wall, typeface and closing quote come from Shop settings, applied
   // around the sections by lib/sections/frame.tsx.
   shop: { label: 'Shop', path: '/shop', fill: true },
+  // What a visitor sees at an address that does not exist. It has no address
+  // of its own — Next draws it in place of whatever was asked for — so its
+  // path is only what the editor links to for a look at it.
+  notfound: { label: 'Not found (404)', path: '/404', fill: true },
 } as const
 
 export type PageSlug = keyof typeof PAGES
@@ -162,6 +166,11 @@ export function findPage(key: string, custom: CustomPage[]): SitePage | null {
  * Whether a string could be a page key at all — for cleaning stored maps keyed
  * by page (page_seo), where the list of pages is not at hand.
  */
+/** Pages a visitor can be sent to, and so the only ones a menu may list. */
+export function isLinkablePage(key: string): boolean {
+  return key !== 'notfound'
+}
+
 export function isPageKey(value: unknown): value is string {
   return typeof value === 'string' && (isPage(value) || CUSTOM_KEY.test(value))
 }

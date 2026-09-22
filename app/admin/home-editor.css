@@ -86,7 +86,7 @@
 .hero-slot[data-over='true'] { outline: 2px solid var(--admin-accent); outline-offset: -1px; }
 
 .hero-slot-index {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   font-size: 0.65rem;
   letter-spacing: 0.1em;
   color: var(--admin-mute);
@@ -205,7 +205,7 @@
 .stack-row[data-off='true'] { opacity: 0.4; }
 
 .stack-row-label {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.7rem;
@@ -230,7 +230,7 @@
 }
 
 .type-block-label {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 0.62rem;

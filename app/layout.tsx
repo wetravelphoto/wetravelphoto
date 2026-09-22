@@ -3,6 +3,7 @@ import { Oswald, Karla } from 'next/font/google'
 import { getSiteSettings, siteUrl } from '@/lib/site'
 import { cssVariables, fontsToLoad, resolveTokens } from '@/lib/styles/tokens'
 import { fontHref } from '@/lib/fonts'
+import { photoUrl } from '@/lib/images'
 import './globals.css'
 import './home.css'
 import './contact-footer.css'
@@ -27,6 +28,14 @@ const body = Karla({
  */
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings()
+
+  // The site icon, uploaded in Settings → Site icon. Its address changes
+  // every time one is uploaded, so the year-long cache on the file itself is
+  // safe: a new icon is simply a new address. Left out entirely when none is
+  // set, so the browser falls back to its own blank-page mark rather than
+  // asking for a file that isn't there.
+  const icon = settings.favicon_path ? photoUrl(settings.favicon_path) : null
+
   return {
     // Share images and canonical addresses are written as paths; this is what
     // they are resolved against.
@@ -34,6 +43,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: settings.site_title,
     description: settings.tagline ?? `Photographs by ${settings.site_title}.`,
     openGraph: { siteName: settings.site_title, type: 'website' },
+    ...(icon ? { icons: { icon: [{ url: icon }], shortcut: [icon], apple: [{ url: icon }] } } : {}),
   }
 }
 

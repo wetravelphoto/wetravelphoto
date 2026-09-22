@@ -9,6 +9,8 @@ export type SiteSettings = {
   logo_header_path: string | null
   logo_footer_path: string | null
   logo_bird_path: string | null
+  /** The site icon shown on the browser tab. Uploaded in Settings → Site icon. */
+  favicon_path: string | null
   logo_header_height: number
   logo_footer_height: number
   logo_bird_size: number
@@ -173,6 +175,7 @@ const FALLBACK: SiteSettings = {
   logo_header_path: null,
   logo_footer_path: null,
   logo_bird_path: null,
+  favicon_path: null,
   logo_header_height: 34,
   logo_footer_height: 130,
   logo_bird_size: 64,

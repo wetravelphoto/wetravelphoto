@@ -71,7 +71,7 @@
 .settings-tabs::-webkit-scrollbar { display: none; }
 
 .settings-tabs button {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-size: 0.78rem;

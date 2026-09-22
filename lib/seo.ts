@@ -111,6 +111,7 @@ const MAIN: Record<string, { type: string | null; fallback: string }> = {
   journal: { type: 'journal', fallback: 'Journal' },
   galleries: { type: 'galleries', fallback: 'Galleries' },
   shop: { type: 'shop', fallback: 'Prints' },
+  notfound: { type: 'intro', fallback: 'Page not found' },
 }
 
 function mainSection(page: string, sections: LoadedSection[]): LoadedSection | undefined {

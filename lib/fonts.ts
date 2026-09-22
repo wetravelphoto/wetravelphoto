@@ -68,3 +68,12 @@ export const TITLE_COLORS = [
   '#8A9A8C',
   '#D8CFC2',
 ]
+
+/**
+ * The typeface the ADMIN and the EDITOR are drawn in — not one of the site's,
+ * on purpose: the tools must not change shape when a photographer changes
+ * their site's type. Three weights, because the chrome needs regular text as
+ * well as labels and buttons.
+ */
+export const UI_FONT_HREF =
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap'

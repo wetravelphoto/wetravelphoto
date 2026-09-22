@@ -1,5 +1,22 @@
 /* Admin design system */
 
+/*
+ * THE ADMIN HAS ITS OWN TYPEFACE.
+ *
+ * It used to be drawn in the site's own fonts (--font-display / --font-body),
+ * which meant the admin changed typeface every time a photographer changed
+ * their site — and became hard to read the moment somebody chose a display
+ * face for headlines. The editor already solved this with its own closed set
+ * (Inter); the admin now matches it.
+ *
+ * Previews of the SITE inside the admin (the homepage preview, the hero
+ * picker, the logo previews) deliberately keep the site's fonts: they are
+ * showing the site, not the admin.
+ */
+:root {
+  --admin-font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
 .admin-shell {
   --admin-bg: #f7f6f3;
   --admin-panel: #ffffff;
@@ -15,7 +32,17 @@
   min-height: 100vh;
   background: var(--admin-bg);
   color: var(--admin-ink);
-  font-family: var(--font-body), system-ui, sans-serif;
+  font-family: var(--admin-font);
+  font-feature-settings: 'cv05' 1, 'ss03' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Form controls do not inherit a font on their own. */
+.admin-shell input,
+.admin-shell textarea,
+.admin-shell select,
+.admin-shell button {
+  font-family: var(--admin-font);
 }
 
 @media (max-width: 720px) {
@@ -35,7 +62,7 @@
 }
 
 .admin-brand {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-size: 0.85rem;
@@ -65,7 +92,7 @@
 .admin-main { padding: clamp(1.5rem, 3vw, 2.5rem); min-width: 0; }
 
 .admin-h1 {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   font-weight: 400;
@@ -75,7 +102,7 @@
 }
 
 .admin-h2 {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 400;
@@ -110,7 +137,7 @@
 .admin-select:focus { outline: 2px solid var(--admin-accent); outline-offset: -1px; }
 
 .admin-btn {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-size: 0.78rem;
@@ -224,7 +251,7 @@
   padding: 0.2rem;
   color: var(--admin-mute);
   text-align: center;
-  font-family: var(--font-body), sans-serif;
+  font-family: var(--admin-font);
 }
 
 .cover-modal {

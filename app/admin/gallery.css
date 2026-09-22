@@ -48,7 +48,7 @@
 
 .gallery-card-title {
   display: block;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   font-size: 0.95rem;

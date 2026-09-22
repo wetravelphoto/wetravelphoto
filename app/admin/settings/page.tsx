@@ -6,6 +6,7 @@ import { updateBranding } from '@/app/actions/branding'
 import { saveInstagramToken } from '@/app/actions/instagram'
 import InstagramPanel from '@/components/admin/InstagramPanel'
 import ContactEmailPanel from '@/components/admin/ContactEmailPanel'
+import FaviconPanel from '@/components/admin/FaviconPanel'
 import NewsletterPanel from '@/components/admin/NewsletterPanel'
 import { emailConfigured } from '@/lib/email'
 import { providerInfo } from '@/lib/newsletter/providers'
@@ -103,6 +104,11 @@ export default async function SettingsPage() {
           <SaveBar label="Save names" />
         </div>
       </form>
+
+      <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+        <h2 className="admin-h2">Site icon</h2>
+        <FaviconPanel path={settings.favicon_path ?? null} />
+      </div>
 
       <form action={updateIdentity} autoComplete="off">
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>

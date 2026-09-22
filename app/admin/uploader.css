@@ -16,7 +16,7 @@
 }
 
 .uploader-title {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-size: 0.92rem;

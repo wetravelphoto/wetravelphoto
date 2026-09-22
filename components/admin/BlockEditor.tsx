@@ -216,7 +216,7 @@ export default function BlockEditor({
                     setDropIndex(null)
                   }}
                   style={{
-                    fontFamily: 'var(--font-display), sans-serif',
+                    fontFamily: 'var(--admin-font)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.1em',
                     fontSize: '0.68rem',

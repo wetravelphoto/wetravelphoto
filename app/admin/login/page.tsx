@@ -87,7 +87,7 @@ export default function LoginPage() {
               background: '#f2efe9',
               color: '#1a1715',
               border: 'none',
-              fontFamily: 'var(--font-display), sans-serif',
+              fontFamily: 'var(--admin-font)',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               fontSize: '0.8rem',

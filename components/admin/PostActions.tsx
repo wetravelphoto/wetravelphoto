@@ -34,7 +34,7 @@ export default function PostActions({
       {title && (
         <span
           style={{
-            fontFamily: 'var(--font-display), sans-serif',
+            fontFamily: 'var(--admin-font)',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
             fontSize: '0.85rem',

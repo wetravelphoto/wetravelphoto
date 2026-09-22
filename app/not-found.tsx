@@ -1,30 +1,26 @@
-import Link from 'next/link'
+import { getSiteSettings } from '@/lib/site'
+import { loadPageSections } from '@/lib/sections/load'
+import PageBody from '@/components/PageBody'
 
-export default function NotFound() {
-  return (
-    <main
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '2rem',
-        textAlign: 'center',
-      }}
-    >
-      <p className="eyebrow" style={{ margin: '0 0 1rem' }}>
-        Error 404
-      </p>
-      <h1 className="display" style={{ fontSize: 'clamp(2rem, 6vw, 3.5rem)', margin: '0 0 1rem', lineHeight: 1 }}>
-        Off the map
-      </h1>
-      <p style={{ color: 'var(--ink-soft)', maxWidth: '38ch', lineHeight: 1.7, margin: '0 0 2rem' }}>
-        This page doesn&apos;t exist, or the album you&apos;re looking for is private.
-      </p>
-      <Link href="/" className="underline-link" style={{ fontSize: '0.85rem', letterSpacing: '0.06em' }}>
-        Back to all trips
-      </Link>
-    </main>
-  )
+/**
+ * PAGE NOT FOUND — now the photographer's own page.
+ *
+ * Next draws this in place of any address that does not exist, and in place
+ * of anything that calls notFound() (a private album, a story that was taken
+ * down). It used to be laid out here in code; it is now an editor page
+ * ("Not found (404)" in the page menu), so it carries the site's header,
+ * footer and style like every other page, and its words can be changed.
+ *
+ * Until its first Publish it is drawn from lib/sections/legacy.ts, which
+ * reproduces what this file used to say.
+ *
+ * It cannot be in the menu (lib/menu.ts): it has no address of its own.
+ */
+export default async function NotFound() {
+  const [{ sections }, settings] = await Promise.all([
+    loadPageSections('notfound'),
+    getSiteSettings(),
+  ])
+
+  return <PageBody sections={sections} settings={settings} page="notfound" />
 }

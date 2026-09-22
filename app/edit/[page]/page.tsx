@@ -15,7 +15,7 @@ import { chromeFrom } from '@/lib/chrome'
 import { siteUrl } from '@/lib/site'
 import { resolveTokens } from '@/lib/styles/tokens'
 import type { TypeStyles } from '@/lib/type-styles'
-import { fontHref } from '@/lib/fonts'
+import { UI_FONT_HREF } from '@/lib/fonts'
 import Canvas, { type CanvasSection } from '@/components/canvas/Canvas'
 import type { StoryOption } from '@/components/canvas/editors/HeroStories'
 import '@/app/edit/canvas.css'
@@ -108,7 +108,7 @@ export default async function EditPage({
     <>
       {/* The editor's own typeface, loaded only here. Admin chrome, so a
           stylesheet request costs a visitor nothing. */}
-      <link rel="stylesheet" href={fontHref('Inter')} />
+      <link rel="stylesheet" href={UI_FONT_HREF} />
 
       <Canvas
       page={page}

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import AdminSidebar from '@/components/admin/AdminSidebar'
+import { UI_FONT_HREF } from '@/lib/fonts'
 import './admin.css'
 import './settings-extra.css'
 import './admin-extra.css'
@@ -26,7 +27,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) return <>{children}</>
+  // The admin's own typeface, loaded only here (see admin.css). The sign-in
+  // page has no shell, so it is loaded for that too.
+  const font = <link rel="stylesheet" href={UI_FONT_HREF} precedence="default" />
+
+  if (!user)
+    return (
+      <>
+        {font}
+        {children}
+      </>
+    )
 
   const { count } = await supabase
     .from('contact_messages')
@@ -35,6 +46,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="admin-shell">
+      {font}
       <AdminSidebar email={user.email ?? ''} unreadCount={count ?? 0} />
       <main className="admin-main">{children}</main>
     </div>

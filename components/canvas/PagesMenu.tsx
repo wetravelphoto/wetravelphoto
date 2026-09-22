@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { createDraftPage, deleteDraftPage, saveDraftMenu, updateDraftPage } from '@/app/actions/pages'
-import { slugify, type CustomPage, type SitePage } from '@/lib/sections/pages'
+import { isLinkablePage, slugify, type CustomPage, type SitePage } from '@/lib/sections/pages'
 import { cleanUrl, newMenuId, type MenuFolder, type MenuItem, type MenuLeaf } from '@/lib/menu'
 
 /** Menu edits are saved this long after the last change, like typing elsewhere. */
@@ -137,7 +137,8 @@ export default function PagesMenu({
           : []
     )
   )
-  const addable = pages.filter((p) => !inMenu.has(p.key))
+  // The 404 page is edited like any other, but it has no address to link to.
+  const addable = pages.filter((p) => !inMenu.has(p.key) && isLinkablePage(p.key))
 
   // Where an entry is: at the top level (child = null) or inside a folder.
   type At = { index: number; child: number | null }

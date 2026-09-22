@@ -19,7 +19,7 @@
 }
 
 .save-bar-title {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 0.85rem;
@@ -50,7 +50,7 @@
 
 .type-tabs button {
   flex: 1;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--admin-font);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.66rem;

@@ -1,4 +1,4 @@
-import { findPage, isPageKey, type CustomPage } from '@/lib/sections/pages'
+import { findPage, isLinkablePage, isPageKey, type CustomPage } from '@/lib/sections/pages'
 import type { SiteSettings } from '@/lib/site'
 
 /**
@@ -188,6 +188,8 @@ export function defaultPageLabel(key: string, settings: MenuSettings, custom: Cu
  * leading to a "not found".
  */
 function pageIsLive(key: string, settings: MenuSettings, custom: CustomPage[]): boolean {
+  // The 404 page has no address of its own, so it can never be a menu entry.
+  if (!isLinkablePage(key)) return false
   if (key === 'about') return settings.show_about !== false
   if (key === 'shop') return settings.show_shop === true
   return findPage(key, custom) !== null

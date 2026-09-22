@@ -237,6 +237,29 @@ export function legacyShopSections(s: SiteSettings): StoredSection[] {
 }
 
 /** Any editable page, before anything has been published for it. */
+/**
+ * The "page not found" page as it was written in code before it could be
+ * edited: a line, a heading, a sentence and the way back. From its first
+ * Publish it is the photographer's own.
+ */
+export function legacyNotFoundSections(): StoredSection[] {
+  return [
+    {
+      id: 'legacy-notfound',
+      type: 'intro',
+      position: 0,
+      visible: true,
+      version: 1,
+      settings: {
+        kicker: 'Error 404',
+        heading: 'Off the map',
+        body: "This page doesn't exist, or the album you're looking for is private.",
+        space_top: 'xl',
+      },
+    },
+  ]
+}
+
 export function legacyPageSections(page: string, s: SiteSettings): StoredSection[] {
   switch (page) {
     case 'home':
@@ -251,6 +274,8 @@ export function legacyPageSections(page: string, s: SiteSettings): StoredSection
       return legacyGalleriesSections(s)
     case 'shop':
       return legacyShopSections(s)
+    case 'notfound':
+      return legacyNotFoundSections()
     default:
       // A page with no history starts empty — never borrow another page's.
       return []

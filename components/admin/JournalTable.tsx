@@ -158,7 +158,7 @@ const head: React.CSSProperties = {
   textAlign: 'left',
   padding: '0.7rem 1rem',
   borderBottom: '0.5px solid var(--admin-line)',
-  fontFamily: 'var(--font-display), sans-serif',
+  fontFamily: 'var(--admin-font)',
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
   fontSize: '0.68rem',

@@ -97,6 +97,87 @@ export async function uploadChromeLogo(
 }
 
 /**
+ * THE SITE ICON (FAVICON)
+ * ═══════════════════════
+ *
+ * The picture on the browser tab. Unlike the logos it never appears on the
+ * page, so there is nothing to preview and nothing to publish: it is written
+ * straight to site_settings and is live at once.
+ *
+ * ICO is allowed on top of the usual list because that is what a lot of
+ * favicon generators hand back, and browsers still ask for /favicon.ico. The
+ * size limit is deliberately small — an icon that needs a megabyte is the
+ * wrong file.
+ */
+const FAVICON_TYPES: Record<string, string> = {
+  'image/svg+xml': 'svg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/x-icon': 'ico',
+  'image/vnd.microsoft.icon': 'ico',
+}
+
+export async function uploadFavicon(
+  formData: FormData
+): Promise<{ ok: true; path: string } | { ok: false; message: string }> {
+  const { tenantId } = await requireEditor()
+
+  const file = formData.get('file') as File | null
+  if (!file || file.size === 0) return { ok: false, message: 'No file chosen.' }
+
+  const extension = FAVICON_TYPES[file.type]
+  if (!extension) return { ok: false, message: 'Use a PNG, SVG, WebP or ICO file.' }
+  if (file.size > 500_000) return { ok: false, message: 'That file is over 500 KB — an icon should be tiny.' }
+
+  // A fresh name every time, so a browser that has cached the old icon for a
+  // year is looking at a different address and picks the new one up.
+  const key = tenantKey(tenantId, `branding/icon-${randomUUID()}.${extension}`)
+
+  await r2Client.send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: key,
+      Body: Buffer.from(await file.arrayBuffer()),
+      ContentType: file.type,
+      CacheControl: 'public, max-age=31536000, immutable',
+    })
+  )
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('site_settings')
+    .update({ favicon_path: key })
+    .eq('tenant_id', tenantId)
+
+  if (error) return { ok: false, message: error.message }
+
+  revalidatePath('/', 'layout')
+  revalidatePath('/admin/settings')
+  return { ok: true, path: key }
+}
+
+/**
+ * Forgets the site icon. The file itself is left in the bucket — it costs
+ * nothing and an icon pointed at by an older published page should not turn
+ * into a broken image.
+ */
+export async function removeFavicon(): Promise<{ ok: boolean; message: string }> {
+  const { tenantId } = await requireEditor()
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('site_settings')
+    .update({ favicon_path: null })
+    .eq('tenant_id', tenantId)
+
+  if (error) return { ok: false, message: error.message }
+
+  revalidatePath('/', 'layout')
+  revalidatePath('/admin/settings')
+  return { ok: true, message: 'Site icon removed.' }
+}
+
+/**
  * The Settings page's naming form. Writes only the fields the form actually
  * sent: the header and footer controls moved to the canvas (where they go
  * through the draft), and a missing field must never reset a column to a

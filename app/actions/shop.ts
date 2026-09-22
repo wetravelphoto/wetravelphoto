@@ -1,5 +1,6 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { parseMoneyToCents, slugifyCategory } from '@/lib/shop'
 import { revalidatePath } from 'next/cache'
@@ -15,6 +16,8 @@ const text = (formData: FormData, key: string) => (formData.get(key) as string)?
 // ── Print options ────────────────────────────────────────────────────────────
 
 export async function createPrintOption(formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const label = text(formData, 'label')
   const priceCents = parseMoneyToCents(formData.get('price') as string)
 
@@ -46,6 +49,8 @@ export async function createPrintOption(formData: FormData) {
  * delete in the middle can't shift the wrong values onto the wrong row.
  */
 export async function savePrintOptions(formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
   const ids = formData.getAll('option_id').map(String)
 
@@ -82,6 +87,8 @@ export async function savePrintOptions(formData: FormData) {
 // ── Categories ───────────────────────────────────────────────────────────────
 
 export async function createShopCategory(formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const name = text(formData, 'name')
   if (!name) return
 
@@ -110,6 +117,8 @@ export async function createShopCategory(formData: FormData) {
 }
 
 export async function saveShopCategories(formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
   const ids = formData.getAll('category_id').map(String)
 

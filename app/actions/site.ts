@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { patchSiteSettings } from '@/lib/site-patch'
-import { requireUser } from '@/lib/auth'
+import { requireEditor } from '@/lib/auth'
 
 /**
  * Settings are split by page so each form only writes its own fields —
@@ -15,7 +15,7 @@ async function patch(values: Record<string, unknown>, paths: string[]) {
   // Every action in this file writes through here, so this one check covers
   // them all. A server action is a public endpoint whatever page imports it;
   // row-level security is the backstop, not the gate.
-  await requireUser()
+  await requireEditor()
   await patchSiteSettings(values)
 
   revalidatePath('/admin/settings')

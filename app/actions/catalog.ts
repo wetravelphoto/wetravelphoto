@@ -1,5 +1,6 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { parseMoneyToCents } from '@/lib/shop'
 import { revalidatePath } from 'next/cache'
@@ -14,6 +15,8 @@ import { redirect } from 'next/navigation'
  * prices, because a panorama and a portrait rarely sell in the same formats.
  */
 export async function saveCatalogItem(photoId: string, formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const text = (key: string) => (formData.get(key) as string)?.trim() || null
@@ -111,6 +114,8 @@ export async function saveCatalogItem(photoId: string, formData: FormData) {
  * its prices survive, so republishing restores exactly what was there.
  */
 export async function setCatalogPublished(photoId: string, publish: boolean) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const { error } = await supabase
@@ -128,6 +133,8 @@ export async function setCatalogPublished(photoId: string, publish: boolean) {
 }
 
 export async function saveAndReturn(photoId: string, formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   await saveCatalogItem(photoId, formData)
   redirect('/admin/shop/catalog')
 }

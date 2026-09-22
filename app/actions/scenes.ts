@@ -1,5 +1,6 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
@@ -10,9 +11,11 @@ import { revalidatePath } from 'next/cache'
  * lib/preset-rooms.ts — so this is the only thing a site stores about them.
  */
 export async function setShopRoom(room: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { error } = await supabase.from('site_settings').update({ shop_room: room }).eq('id', 1)
+  const { error } = await supabase.from('site_settings').update({ shop_room: room }).eq('tenant_id', tenantId)
 
   // A site that hasn't run the migration keeps its default rather than erroring
   if (error && !/shop_room/i.test(error.message)) throw new Error(error.message)

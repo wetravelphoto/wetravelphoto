@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { currentEditor } from '@/lib/auth'
+import { tenantKey } from '@/lib/storage-keys'
 import { r2Client } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
@@ -22,12 +24,14 @@ const ALLOWED: Record<string, string> = {
  * photographs comfortably exceed.
  */
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+  // Signed in AND able to edit a site — and that site decides where the file
+  // goes. A signed URL is a write into the shared bucket, so it is handed out
+  // only for this site's own prefix (lib/storage-keys.ts).
+  const editor = await currentEditor()
+  if (!editor) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+  if (!editor.platformAdmin && !['owner', 'admin', 'editor'].includes(editor.role)) {
+    return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
+  }
 
   const { albumId, folder, contentType } = (await request.json()) as {
     albumId?: string
@@ -35,11 +39,20 @@ export async function POST(request: NextRequest) {
     contentType?: string
   }
 
-  // Album photos live under the album; journal and branding images have their
-  // own folders but use the same signed-upload flow.
-  const prefix = albumId ? `photos/${albumId}` : folder === 'journal' ? 'journal' : null
+  // An album must be one this account can see — row-level security answers
+  // that — or the upload would sit under another site's gallery id.
+  if (albumId) {
+    const supabase = await createClient()
+    const { data: album } = await supabase.from('albums').select('id').eq('id', albumId).maybeSingle()
+    if (!album) return NextResponse.json({ error: 'No such gallery' }, { status: 404 })
+  }
 
-  if (!prefix) return NextResponse.json({ error: 'Missing destination' }, { status: 400 })
+  // Album photos live under the album; journal images have their own folder
+  // but use the same signed-upload flow.
+  const folderPath = albumId ? `photos/${albumId}` : folder === 'journal' ? 'journal' : null
+  if (!folderPath) return NextResponse.json({ error: 'Missing destination' }, { status: 400 })
+
+  const prefix = tenantKey(editor.tenantId, folderPath)
 
   const extension = ALLOWED[contentType ?? '']
   if (!extension) {

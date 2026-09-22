@@ -1,5 +1,6 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { patchSiteSettings } from '@/lib/site-patch'
@@ -69,6 +70,8 @@ async function install(manifest: TemplateManifest, page = 'home') {
 // ── Switching look ───────────────────────────────────────────────────────────
 
 export async function applyLook(slug: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -119,6 +122,8 @@ export async function applyLook(slug: string) {
  * nothing on anyone's site until they do this.
  */
 export async function takeUpdate() {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const current = await currentLook()
   if (!current.look) throw new Error('This site is not using a look yet.')
   if (!current.updateAvailable) throw new Error('You are already on the newest version.')
@@ -160,6 +165,8 @@ export async function takeUpdate() {
  * A restore is itself recorded, so going back is never a one-way door either.
  */
 export async function revertTo(historyId: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -236,6 +243,8 @@ export async function revertTo(historyId: string) {
  * cannot carry writing or photographs even if you ask it to.
  */
 export async function captureLook(formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const name = ((formData.get('name') as string) ?? '').trim()
   if (!name) throw new Error('Give the look a name.')
 
@@ -289,6 +298,8 @@ export async function captureLook(formData: FormData) {
  * look. Sites already on it are untouched until each one takes the update.
  */
 export async function publishLookVersion(slug: string, notes?: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const { data: look, error } = await supabase

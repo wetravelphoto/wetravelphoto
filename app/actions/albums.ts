@@ -1,5 +1,7 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
+import { tenantKey } from '@/lib/storage-keys'
 import { createClient } from '@/lib/supabase/server'
 import { hashPassword } from '@/lib/password'
 import { r2Client } from '@/lib/r2'
@@ -30,6 +32,8 @@ async function uniqueSlug(supabase: SupabaseClient, base: string, excludeId?: st
 }
 
 export async function createAlbum(formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const title = formData.get('title') as string
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,6 +53,8 @@ export async function createAlbum(formData: FormData) {
 }
 
 export async function updateAlbumSettings(albumId: string, formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const get = (k: string) => formData.get(k) as string
   const num = (k: string, fallback: number) => {
     const v = parseFloat(formData.get(k) as string)
@@ -111,6 +117,8 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
 }
 
 export async function updateLayoutStyle(albumId: string, layoutStyle: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
   const { error } = await supabase.from('albums').update({ layout_style: layoutStyle }).eq('id', albumId)
   if (error) throw new Error(error.message)
@@ -118,6 +126,8 @@ export async function updateLayoutStyle(albumId: string, layoutStyle: string) {
 }
 
 export async function uploadCustomCover(albumId: string, formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  const { tenantId } = await requireEditor()
   const file = formData.get('file') as File
   if (!file || file.size === 0) return
 
@@ -128,7 +138,7 @@ export async function uploadCustomCover(albumId: string, formData: FormData) {
   // still cost ~650KB with no smaller file to fall back on. The path ends in
   // /<size>.webp, which is what srcSetFromPath keys off to build the srcset —
   // covers have no derivatives column of their own.
-  const keyBase = `covers/${albumId}/${randomUUID()}`
+  const keyBase = tenantKey(tenantId, `covers/${albumId}/${randomUUID()}`)
   const processed = await processExistingOriginal(buffer, keyBase, keyBase)
 
   const supabase = await createClient()
@@ -145,6 +155,8 @@ export async function uploadCustomCover(albumId: string, formData: FormData) {
 }
 
 export async function clearCustomCover(albumId: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
   const { error } = await supabase.from('albums').update({ cover_custom_path: null }).eq('id', albumId)
   if (error) throw new Error(error.message)
@@ -154,12 +166,14 @@ export async function clearCustomCover(albumId: string) {
 
 /** Video covers are stored as-is — no server-side transcoding. */
 export async function uploadCoverVideo(albumId: string, formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  const { tenantId } = await requireEditor()
   const file = formData.get('file') as File
   if (!file || file.size === 0) return
 
   const buffer = Buffer.from(await file.arrayBuffer())
   const ext = file.type === 'video/webm' ? 'webm' : 'mp4'
-  const key = `covers/${albumId}/${randomUUID()}.${ext}`
+  const key = tenantKey(tenantId, `covers/${albumId}/${randomUUID()}.${ext}`)
 
   await r2Client.send(
     new PutObjectCommand({
@@ -179,6 +193,8 @@ export async function uploadCoverVideo(albumId: string, formData: FormData) {
 }
 
 export async function clearCoverVideo(albumId: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
   const { error } = await supabase.from('albums').update({ cover_video_path: null }).eq('id', albumId)
   if (error) throw new Error(error.message)

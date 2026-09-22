@@ -1,5 +1,7 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
+import { ownsKey } from '@/lib/storage-keys'
 import { r2Client } from '@/lib/r2'
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createClient } from '@/lib/supabase/server'
@@ -18,6 +20,15 @@ export async function registerPhoto(
   base: string,
   originalBytes: number
 ) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  const { tenantId } = await requireEditor()
+
+  // The key comes from the browser. Only this site's own uploads may be
+  // registered — see lib/storage-keys.ts.
+  if (!ownsKey(tenantId, key) || !ownsKey(tenantId, base) || !key.startsWith(`${base}/`)) {
+    throw new Error('That upload does not belong to this site.')
+  }
+
   const object = await r2Client.send(
     new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key })
   )
@@ -93,6 +104,8 @@ export async function registerPhoto(
 }
 
 export async function deletePhoto(albumId: string, photoId: string, storagePath: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   // A photo is now several files — the original plus each display size
@@ -125,6 +138,8 @@ export async function deletePhoto(albumId: string, photoId: string, storagePath:
 }
 
 export async function updateCaption(albumId: string, photoId: string, formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const caption = formData.get('caption') as string
   const supabase = await createClient()
 
@@ -135,6 +150,8 @@ export async function updateCaption(albumId: string, photoId: string, formData: 
 }
 
 export async function updatePhotoTags(albumId: string, photoId: string, tags: string[]) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const clean = tags.map((t) => t.trim().toLowerCase()).filter(Boolean)
@@ -145,6 +162,8 @@ export async function updatePhotoTags(albumId: string, photoId: string, tags: st
 }
 
 export async function toggleForSale(albumId: string, photoId: string, currentValue: boolean) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const { error } = await supabase
@@ -165,6 +184,8 @@ export async function toggleForSale(albumId: string, photoId: string, currentVal
 }
 
 export async function reorderPhotos(albumId: string, orderedIds: string[]) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   await Promise.all(

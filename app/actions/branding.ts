@@ -5,7 +5,8 @@ import { r2Client } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
-import { requireUser } from '@/lib/auth'
+import { requireEditor } from '@/lib/auth'
+import { tenantKey } from '@/lib/storage-keys'
 
 const ALLOWED: Record<string, string> = {
   'image/svg+xml': 'svg',
@@ -31,14 +32,18 @@ type Stored = { ok: true; key: string } | { ok: false; message: string }
  * slots and the accent-mark section, so there is one list of allowed types and
  * one size limit rather than two that drift.
  */
-async function storeBrandFile(prefix: string, file: File | null): Promise<Stored> {
+async function storeBrandFile(
+  tenantId: string,
+  prefix: string,
+  file: File | null
+): Promise<Stored> {
   if (!file || file.size === 0) return { ok: false, message: 'No file chosen.' }
 
   const extension = ALLOWED[file.type]
   if (!extension) return { ok: false, message: 'Use an SVG, PNG, WebP or JPEG.' }
   if (file.size > 2_000_000) return { ok: false, message: 'That file is over 2 MB.' }
 
-  const key = `branding/${prefix}-${randomUUID()}.${extension}`
+  const key = tenantKey(tenantId, `branding/${prefix}-${randomUUID()}.${extension}`)
   const buffer = Buffer.from(await file.arrayBuffer())
 
   await r2Client.send(
@@ -55,19 +60,19 @@ async function storeBrandFile(prefix: string, file: File | null): Promise<Stored
 }
 
 export async function uploadLogo(formData: FormData) {
-  await requireUser()
+  const { tenantId } = await requireEditor()
 
   const slot = formData.get('slot') as Slot
   if (!slot || !COLUMN[slot]) return { ok: false, message: 'Unknown logo slot.' }
 
-  const stored = await storeBrandFile(slot, formData.get('file') as File | null)
+  const stored = await storeBrandFile(tenantId, slot, formData.get('file') as File | null)
   if (!stored.ok) return stored
 
   const supabase = await createClient()
   const { error } = await supabase
     .from('site_settings')
     .update({ [COLUMN[slot]]: stored.key })
-    .eq('id', 1)
+    .eq('tenant_id', tenantId)
 
   if (error) return { ok: false, message: error.message }
 
@@ -87,23 +92,23 @@ export async function uploadLogo(formData: FormData) {
 export async function uploadMarkImage(
   formData: FormData
 ): Promise<{ ok: true; path: string } | { ok: false; message: string }> {
-  await requireUser()
+  const { tenantId } = await requireEditor()
 
-  const stored = await storeBrandFile('mark', formData.get('file') as File | null)
+  const stored = await storeBrandFile(tenantId, 'mark', formData.get('file') as File | null)
   if (!stored.ok) return stored
 
   return { ok: true, path: stored.key }
 }
 
 export async function clearLogo(slot: Slot) {
-  await requireUser()
+  const { tenantId } = await requireEditor()
   if (!COLUMN[slot]) return { ok: false, message: 'Unknown logo slot.' }
 
   const supabase = await createClient()
   await supabase
     .from('site_settings')
     .update({ [COLUMN[slot]]: null })
-    .eq('id', 1)
+    .eq('tenant_id', tenantId)
 
   revalidatePath('/', 'layout')
   revalidatePath('/admin/settings')
@@ -112,7 +117,7 @@ export async function clearLogo(slot: Slot) {
 }
 
 export async function updateBranding(formData: FormData) {
-  await requireUser()
+  const { tenantId } = await requireEditor()
 
   const number = (key: string, fallback: number) => {
     const value = parseInt((formData.get(key) as string) ?? '', 10)
@@ -147,7 +152,7 @@ export async function updateBranding(formData: FormData) {
       footer_scale_mobile: decimal('footer_scale_mobile', 1),
       logo_footer_height_mobile: number('logo_footer_height_mobile', 90),
     })
-    .eq('id', 1)
+    .eq('tenant_id', tenantId)
 
   if (error) throw new Error(error.message)
 

@@ -10,6 +10,8 @@ import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
 import BackfillPanel from '@/components/admin/BackfillPanel'
 import { countUnprocessed } from '@/app/actions/backfill'
+import { currentEditor } from '@/lib/auth'
+import { hasInstagramToken } from '@/lib/instagram'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +30,13 @@ export default async function SettingsPage() {
   const { data: team } = await supabase.from('profiles').select('id, email, display_name, role')
 
   const unprocessed = await countUnprocessed()
+
+  // Whether a token is saved — asked of site_secrets, which only this site's
+  // editors can read. The token itself never comes back to the page.
+  const editor = await currentEditor()
+  const instagramConnected = editor
+    ? await hasInstagramToken({ db: supabase, tenantId: editor.tenantId })
+    : false
 
   // A real cover makes the header preview honest about legibility
   const { data: samples } = await supabase
@@ -247,7 +256,7 @@ export default async function SettingsPage() {
             <input
               type="password"
               name="instagram_token"
-              placeholder={settings.instagram_token ? 'Saved — paste a new one to replace it' : 'IGQ…'}
+              placeholder={instagramConnected ? 'Saved — paste a new one to replace it' : 'IGQ…'}
               className="admin-input"
               autoComplete="new-password"
             />
@@ -258,7 +267,7 @@ export default async function SettingsPage() {
 
         <div style={{ borderTop: '0.5px solid var(--admin-line)', paddingTop: '1rem' }}>
           <InstagramPanel
-            connected={!!settings.instagram_token}
+            connected={instagramConnected}
             expiresAt={settings.instagram_token_expires}
             syncedAt={settings.instagram_synced_at}
             postCount={igCount ?? 0}

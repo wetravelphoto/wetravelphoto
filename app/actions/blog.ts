@@ -1,5 +1,7 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
+import { ownsKey } from '@/lib/storage-keys'
 import { createClient } from '@/lib/supabase/server'
 import { r2Client } from '@/lib/r2'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
@@ -28,6 +30,8 @@ async function uniqueSlug(supabase: SupabaseClient, base: string, excludeId?: st
 }
 
 export async function createPost(formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const title = formData.get('title') as string
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -46,6 +50,8 @@ export async function createPost(formData: FormData) {
 }
 
 export async function updatePost(postId: string, formData: FormData) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const get = (k: string) => (formData.get(k) as string) ?? ''
 
   let blocks: Block[] = []
@@ -105,6 +111,8 @@ export async function updatePost(postId: string, formData: FormData) {
 }
 
 export async function deletePost(postId: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
   const { error } = await supabase.from('blog_posts').delete().eq('id', postId)
   if (error) throw new Error(error.message)
@@ -116,6 +124,8 @@ export async function deletePost(postId: string) {
 
 /** Feeds the image picker — albums list, or one album's photos. */
 export async function fetchAlbumPhotos(albumId: string | null) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const { data: albums } = await supabase.from('albums').select('id, title').order('created_at', { ascending: false })
@@ -138,6 +148,15 @@ export async function fetchAlbumPhotos(albumId: string | null) {
  * Builds the display sizes and hands back the path blocks should reference.
  */
 export async function registerJournalImage(key: string, base: string): Promise<string | null> {
+  // A server action is a public endpoint: check who is asking before anything else.
+  const { tenantId } = await requireEditor()
+
+  // The key comes from the browser. Only this site's own uploads may be
+  // registered — see lib/storage-keys.ts.
+  if (!ownsKey(tenantId, key) || !ownsKey(tenantId, base) || !key.startsWith(`${base}/`)) {
+    throw new Error('That upload does not belong to this site.')
+  }
+
   const object = await r2Client.send(
     new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key })
   )
@@ -151,6 +170,8 @@ export async function registerJournalImage(key: string, base: string): Promise<s
 }
 
 export async function bulkUpdateStatus(ids: string[], status: 'draft' | 'published') {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   if (ids.length === 0) return
 
   const supabase = await createClient()
@@ -164,6 +185,8 @@ export async function bulkUpdateStatus(ids: string[], status: 'draft' | 'publish
 }
 
 export async function bulkDelete(ids: string[]) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   if (ids.length === 0) return
 
   const supabase = await createClient()
@@ -174,6 +197,8 @@ export async function bulkDelete(ids: string[]) {
 }
 
 export async function duplicatePosts(ids: string[]) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   if (ids.length === 0) return
 
   const supabase = await createClient()

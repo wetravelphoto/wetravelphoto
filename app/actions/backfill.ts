@@ -1,5 +1,6 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { r2Client } from '@/lib/r2'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
@@ -14,6 +15,8 @@ import { revalidatePath } from 'next/cache'
  * Runs in small batches so a long library doesn't exhaust the request.
  */
 export async function backfillDerivatives(limit = 10) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const { data: photos, error } = await supabase
@@ -77,6 +80,8 @@ export async function backfillDerivatives(limit = 10) {
 }
 
 export async function countUnprocessed() {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   const { count } = await supabase

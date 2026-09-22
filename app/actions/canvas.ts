@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { PAGE_SLUGS, isPage } from '@/lib/sections/pages'
 import { randomUUID } from 'crypto'
-import { requireUser } from '@/lib/auth'
+import { requireEditor as requireSiteEditor } from '@/lib/auth'
 import {
   discardDraft,
   ensureDraft,
@@ -45,7 +45,7 @@ import {
  * Request-cached, so calling it here and again inside the draft write costs one
  * round trip to the auth server rather than two. See lib/auth.ts.
  */
-const requireEditor = requireUser
+const requireEditor = requireSiteEditor
 
 /**
  * The page slug arrives from the browser like everything else in an action, so

@@ -1,5 +1,6 @@
 'use server'
 
+import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { r2Client } from '@/lib/r2'
 import { DeleteObjectsCommand } from '@aws-sdk/client-s3'
@@ -16,6 +17,8 @@ import { revalidatePath } from 'next/cache'
  * whatever was using them.
  */
 export async function deleteAlbum(albumId: string) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data: album } = await supabase
@@ -56,7 +59,7 @@ export async function deleteAlbum(albumId: string) {
   const { data: settings } = await supabase
     .from('site_settings')
     .select('intro_image_path, contact_image_path, logo_header_path, logo_footer_path, logo_bird_path')
-    .eq('id', 1)
+    .eq('tenant_id', tenantId)
     .maybeSingle()
 
   for (const value of Object.values(settings ?? {})) {
@@ -96,6 +99,8 @@ export async function deleteAlbum(albumId: string) {
  * 'date_desc') — writing positions into it silently destroyed that setting.
  */
 export async function reorderAlbums(ids: string[]) {
+  // A server action is a public endpoint: check who is asking before anything else.
+  await requireEditor()
   const supabase = await createClient()
 
   await Promise.all(

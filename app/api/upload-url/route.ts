@@ -47,9 +47,12 @@ export async function POST(request: NextRequest) {
     if (!album) return NextResponse.json({ error: 'No such gallery' }, { status: 404 })
   }
 
-  // Album photos live under the album; journal images have their own folder
-  // but use the same signed-upload flow.
-  const folderPath = albumId ? `photos/${albumId}` : folder === 'journal' ? 'journal' : null
+  // Album photos live under the album; journal images and the ones uploaded
+  // from the editor's photo picker have their own folders but use the same
+  // signed-upload flow. The list is closed on purpose: `folder` comes from the
+  // browser, and anything not named here has no destination.
+  const FOLDERS: Record<string, string> = { journal: 'journal', site: 'site-images' }
+  const folderPath = albumId ? `photos/${albumId}` : (FOLDERS[folder ?? ''] ?? null)
   if (!folderPath) return NextResponse.json({ error: 'Missing destination' }, { status: 400 })
 
   const prefix = tenantKey(editor.tenantId, folderPath)

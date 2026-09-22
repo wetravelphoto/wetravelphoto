@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import ImagePickerModal from '@/components/admin/ImagePickerModal'
+import PhotoPicker from '@/components/canvas/PhotoPicker'
 import { updateDraftPageSeo } from '@/app/actions/canvas'
 import {
   DESCRIPTION_LIMIT,
@@ -10,7 +10,6 @@ import {
   type PageSeo,
   type ResolvedSeo,
 } from '@/lib/seo'
-import type { BlockImage } from '@/lib/blocks'
 
 /** Typing is saved this long after the last keystroke, like section text. */
 const DEBOUNCE_MS = 450
@@ -218,7 +217,7 @@ export default function PageSettings({
           <span className="admin-meta">{imageNote}</span>
           <div className="cv-seo-image-tools">
             <button type="button" className="cv-btn" onClick={() => setPicking(true)}>
-              {values.image ? 'Change' : 'Choose a photo'}
+              {values.image ? 'Change' : 'Choose or upload'}
             </button>
             {values.image && (
               <button
@@ -284,12 +283,13 @@ export default function PageSettings({
       </div>
 
       {picking && (
-        <ImagePickerModal
+        <PhotoPicker
           publicUrl={publicUrl}
+          title="Share image"
           onClose={() => setPicking(false)}
-          onSelect={(images: BlockImage[]) => {
+          onPick={(path) => {
             setPicking(false)
-            if (images[0]?.path) change({ image: images[0].path }, true)
+            change({ image: path }, true)
           }}
         />
       )}

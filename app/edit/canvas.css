@@ -1504,6 +1504,190 @@
   cursor: default;
 }
 
+/* ── A section's photograph, in the panel ────────────────────────────────── */
+
+.cv-img-has img {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 3px;
+  background: var(--cv-panel-2);
+}
+
+.cv-img-tools {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.cv-img-empty {
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 1.5rem 0.8rem;
+  border: 1px dashed var(--cv-line);
+  border-radius: 4px;
+  background: none;
+  color: var(--cv-mute);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.cv-img-empty:hover {
+  border-color: var(--cv-accent);
+  color: var(--cv-ink);
+}
+
+/* ── The photo picker ────────────────────────────────────────────────────── */
+
+.cv-pick {
+  position: relative;
+  width: min(900px, 100%);
+  height: min(680px, 100%);
+}
+
+.cv-pick[data-drop='true'] {
+  outline: 2px dashed var(--cv-accent);
+  outline-offset: -6px;
+}
+
+.cv-pick-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--cv-line);
+}
+
+/* The sources scroll rather than wrap: a photographer with twenty galleries
+   should not push the grid off the bottom of the window. */
+.cv-pick-sources {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.cv-pick-source {
+  flex: none;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--cv-soft);
+  font: inherit;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cv-pick-source:hover {
+  color: var(--cv-ink);
+}
+
+.cv-pick-source[data-on='true'] {
+  background: var(--cv-panel-2);
+  border-color: var(--cv-line);
+  color: var(--cv-ink);
+}
+
+.cv-pick-error {
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--cv-line);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--cv-bad);
+}
+
+.cv-pick-note {
+  margin: 0;
+  padding: 2rem 0;
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--cv-mute);
+}
+
+.cv-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 0.4rem;
+}
+
+.cv-pick-cell {
+  position: relative;
+}
+
+.cv-pick-photo {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--cv-line);
+  border-radius: 3px;
+  background: var(--cv-panel-2);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.cv-pick-photo:hover,
+.cv-pick-photo:focus-visible {
+  border-color: var(--cv-accent);
+  outline: none;
+}
+
+.cv-pick-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+/* Only on hover or keyboard focus: a row of × over every thumbnail reads as a
+   wall of delete buttons, which is not what this window is for. */
+.cv-pick-forget {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--cv-ink);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.cv-pick-cell:hover .cv-pick-forget,
+.cv-pick-forget:focus-visible {
+  opacity: 1;
+}
+
+.cv-pick-forget:hover {
+  background: var(--cv-bad);
+}
+
+.cv-pick-drop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(19, 20, 22, 0.82);
+  color: var(--cv-ink);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
 /* A small drawing of the arrangement, above the name.
    See components/canvas/SectionThumb.tsx: p = a photograph, t = a line of
    text, a = whatever carries the eye first, f = a field in a form. */

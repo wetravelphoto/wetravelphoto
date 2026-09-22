@@ -7,6 +7,7 @@ import { contentKeys, type Field, type LiveSpec, type SectionDef } from '@/lib/s
 import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
 import MarkImage from '@/components/canvas/editors/MarkImage'
+import ImageField from '@/components/canvas/ImageField'
 import SectionType from '@/components/canvas/SectionType'
 import { SEC_VARS, sectionStyle, varsFor, type SectionStyle, type TypeStyles } from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
@@ -370,6 +371,22 @@ export default function Inspector({
           settings={section.settings}
           publicUrl={publicUrl}
           collapsible
+          renderImage={(field: Field, value: unknown, set) => (
+            <ImageField
+              name={field.key}
+              label={field.label}
+              value={typeof value === 'string' && value ? value : null}
+              publicUrl={publicUrl}
+              note={field.kind === 'image' ? field.help : undefined}
+              onChange={(path) => {
+                // Written into the panel's own copy so a `when` on this field
+                // re-evaluates now, and saved straight away rather than waiting
+                // for a keystroke somewhere else in the form.
+                set(field.key, path ?? '')
+                saveValues(section.id, { [field.key]: path })
+              }}
+            />
+          )}
           renderCustom={(field: Field, value: unknown) => {
             // A `custom` field names the editor it needs; this is where the
             // canvas supplies one. Anything without an editor yet falls back to

@@ -27,6 +27,7 @@ export default function SectionFields({
   settings,
   publicUrl,
   renderCustom,
+  renderImage,
   collapsible = false,
 }: {
   def: SectionDef
@@ -40,6 +41,17 @@ export default function SectionFields({
    * to a description rather than a blank.
    */
   renderCustom?: (field: Field, value: unknown) => React.ReactNode | null
+  /**
+   * Draws an `image` field, where a caller has a picker of its own. The canvas
+   * passes one (its own dark picker, which can also upload); anything that
+   * passes nothing gets the admin's chooser, as before.
+   */
+  renderImage?: (
+    field: Field,
+    value: unknown,
+    /** Writes the new value into the local copy, so a `when` on it re-evaluates. */
+    set: (key: string, value: unknown) => void
+  ) => React.ReactNode | null
   /**
    * Groups fold away. The canvas turns this on; the old admin forms are short
    * enough not to need it and keep every group open.
@@ -126,6 +138,7 @@ export default function SectionFields({
             <div key={field.key} className="sec-field">
               <input type="hidden" name={`__present_${field.key}`} value="1" />
               {(field.kind === 'custom' && renderCustom?.(field, values[field.key])) ||
+                (field.kind === 'image' && renderImage?.(field, values[field.key], set)) ||
                 renderField(field, values, set, publicUrl)}
             </div>
           ))}

@@ -12,12 +12,14 @@ import {
   stepDraft,
   writeDraftPage,
   writeDraftStyles,
+  writeDraftSeo,
   type DraftSection,
 } from '@/lib/drafts/store'
 import { getSiteSettings } from '@/lib/site'
 import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import { sanitizeOwnStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
+import { sanitizePageSeo } from '@/lib/seo'
 import {
   PAIRINGS,
   PALETTES,
@@ -402,6 +404,20 @@ export async function resetDraftStyles() {
 
   revalidatePath('/edit/home')
   revalidatePath('/preview/home')
+}
+
+// ── Page settings ────────────────────────────────────────────────────────────
+
+/**
+ * A page's search and sharing values: title, description, share image, and
+ * whether search engines may list it. The whole set for the page, as the panel
+ * holds it; empty fields go back to being worked out from the page.
+ */
+export async function updateDraftPageSeo(page: string, values: unknown) {
+  await requireEditor()
+  requirePage(page)
+  await writeDraftSeo(page, sanitizePageSeo(values))
+  done(page)
 }
 
 // ── Undo and redo ────────────────────────────────────────────────────────────

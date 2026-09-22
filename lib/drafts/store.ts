@@ -12,6 +12,7 @@ import {
 import { replaceSections, mirrorPage } from '@/lib/sections/store'
 import { recordHistory } from '@/lib/templates/history'
 import { TOKENS_VERSION } from '@/lib/styles/tokens'
+import { sanitizePageSeo, sanitizeSeoMap, type PageSeo, type PageSeoMap } from '@/lib/seo'
 import {
   clearSteps,
   describeChange,
@@ -71,6 +72,11 @@ export type SiteDraft = {
   /** Null means this draft has not touched style — not that style is empty. */
   global_styles: DraftGlobalStyles | null
   type_styles: DraftTypeStyles | null
+  /**
+   * Search and sharing for EVERY page (lib/seo.ts), copied from the live
+   * settings on the first change. Null: this draft has not touched it.
+   */
+  page_seo: PageSeoMap | null
   updatedAt: string | null
 }
 
@@ -91,7 +97,10 @@ export async function readDraft(): Promise<DraftState> {
 
   const { data, error } = await supabase
     .from('site_draft')
-    .select('pages, global_styles, type_styles, updated_at')
+    // '*' rather than a column list, so a column added by a newer migration
+    // that has not been run yet reads as absent instead of failing the read —
+    // which the canvas would show as "the draft table is missing".
+    .select('*')
     .maybeSingle()
 
   if (error) {
@@ -114,6 +123,7 @@ export async function readDraft(): Promise<DraftState> {
       ),
       global_styles: (data.global_styles ?? null) as DraftGlobalStyles | null,
       type_styles: (data.type_styles ?? null) as DraftTypeStyles | null,
+      page_seo: data.page_seo ? sanitizeSeoMap(data.page_seo) : null,
       updatedAt: (data.updated_at as string) ?? null,
     },
     missing: false,
@@ -126,6 +136,7 @@ export async function draftStatus(): Promise<{
   missing: boolean
   pages: string[]
   stylesTouched: boolean
+  seoTouched: boolean
   updatedAt: string | null
 }> {
   const { draft, missing } = await readDraft()
@@ -135,6 +146,7 @@ export async function draftStatus(): Promise<{
     missing,
     pages: draft ? Object.keys(draft.pages) : [],
     stylesTouched: !!draft && (draft.global_styles !== null || draft.type_styles !== null),
+    seoTouched: !!draft && draft.page_seo !== null,
     updatedAt: draft?.updatedAt ?? null,
   }
 }
@@ -149,17 +161,21 @@ export async function draftStatus(): Promise<{
  */
 export async function loadDraftPage(page = 'home'): Promise<PageSections & { isDraft: boolean }> {
   const [{ draft }, live] = await Promise.all([readDraft(), loadPageSections(page)])
+  if (!draft) return { ...live, isDraft: false }
 
-  const rows = draft?.pages[page]
-  if (!rows) return { ...live, isDraft: false }
-
-  // Draft style overrides sit on top of the live settings object, so a draft
-  // that changed only the sections still renders in the site's real colours.
+  // Draft style and search settings sit on top of the live settings object,
+  // so a draft that changed only the sections still renders in the site's
+  // real colours — and a page whose sections are untouched still shows the
+  // draft's colours and page settings.
   const settings: SiteSettings = {
     ...live.settings,
     ...(draft.global_styles !== null ? { global_styles: draft.global_styles } : {}),
     ...(draft.type_styles !== null ? { type_styles: draft.type_styles } : {}),
+    ...(draft.page_seo !== null ? { page_seo: draft.page_seo } : {}),
   }
+
+  const rows = draft.pages[page]
+  if (!rows) return { ...live, settings, isDraft: false }
 
   return {
     sections: resolveRows(rows, false),
@@ -217,6 +233,7 @@ export async function ensureDraft(page = 'home'): Promise<SiteDraft> {
     pages: { ...(draft?.pages ?? {}), [page]: rows },
     global_styles: draft?.global_styles ?? null,
     type_styles: draft?.type_styles ?? null,
+    page_seo: draft?.page_seo ?? null,
     updatedAt: null,
   }
 
@@ -238,6 +255,9 @@ type WriteKind =
   | { kind: 'seed' }
   | { kind: 'jump' }
 
+/** Columns added after the draft table, which a save can do without. */
+const OPTIONAL_COLUMNS = ['edit_label', 'page_seo'] as const
+
 async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
   const supabase = await createClient()
   // currentUser() is request-cached, so this rides on the check the action has
@@ -258,6 +278,7 @@ async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
     pages: draft.pages,
     global_styles: draft.global_styles,
     type_styles: draft.type_styles,
+    page_seo: draft.page_seo ?? null,
     updated_by: user?.id ?? null,
   }
   // Omitted on a seed, so the upsert leaves the column as it was.
@@ -265,11 +286,14 @@ async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
 
   let { error } = await supabase.from('site_draft').upsert(row, { onConflict: 'tenant_id' })
 
-  // Deployed before db/migrations/2026-09-22_draft_steps.sql was run: save the
-  // edit anyway, without the column Undo uses.
-  if (error && 'edit_label' in row && /edit_label/.test(error.message)) {
-    delete row.edit_label
-    ;({ error } = await supabase.from('site_draft').upsert(row, { onConflict: 'tenant_id' }))
+  // Deployed before a newer migration was run: save the edit anyway, without
+  // the column it adds (edit_label: undo; page_seo: search and sharing). A
+  // search-settings edit made then is the one thing that cannot be kept.
+  for (const column of OPTIONAL_COLUMNS) {
+    if (error && column in row && error.message.includes(column)) {
+      delete row[column]
+      ;({ error } = await supabase.from('site_draft').upsert(row, { onConflict: 'tenant_id' }))
+    }
   }
 
   if (error) throw new Error(`Could not save the draft. (${error.message})`)
@@ -319,12 +343,7 @@ export async function writeDraftStyles(
   const { draft, missing } = await readDraft()
   if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
 
-  const base: SiteDraft = draft ?? {
-    pages: {},
-    global_styles: null,
-    type_styles: null,
-    updatedAt: null,
-  }
+  const base: SiteDraft = draft ?? emptyDraft()
 
   await upsertDraft(
     {
@@ -334,6 +353,37 @@ export async function writeDraftStyles(
     },
     { kind: 'edit', before: base, label }
   )
+}
+
+function emptyDraft(): SiteDraft {
+  return { pages: {}, global_styles: null, type_styles: null, page_seo: null, updatedAt: null }
+}
+
+/**
+ * Sets one page's search and sharing values (lib/seo.ts) in the draft.
+ *
+ * The draft holds every page's values, not just this one's, so Publish can
+ * write the column in one go. On the first change they are copied from the
+ * live site, or publishing one page's title would wipe every other page's.
+ */
+export async function writeDraftSeo(page: string, values: PageSeo): Promise<void> {
+  const { draft, missing } = await readDraft()
+  if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
+
+  const base: SiteDraft = draft ?? emptyDraft()
+  const current = base.page_seo ?? sanitizeSeoMap((await getSiteSettings()).page_seo)
+  const clean = sanitizePageSeo(values)
+
+  const next: PageSeoMap = { ...current }
+  if (Object.keys(clean).length) next[page] = clean
+  else delete next[page]
+
+  // Named against the live values, not against "untouched", so the first
+  // change reads as a change to this page rather than to every page.
+  const label = describeChange({ ...base, page_seo: current }, { ...base, page_seo: next })
+  if (!label) return
+
+  await upsertDraft({ ...base, page_seo: next }, { kind: 'edit', before: base, label })
 }
 
 // ── Undo and redo ────────────────────────────────────────────────────────────
@@ -374,8 +424,9 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
 
   const pages = Object.keys(draft.pages)
   const styles = draft.global_styles !== null || draft.type_styles !== null
+  const seo = draft.page_seo !== null
 
-  if (pages.length === 0 && !styles) {
+  if (pages.length === 0 && !styles && !seo) {
     throw new Error('There is nothing waiting to be published.')
   }
 
@@ -385,7 +436,7 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
     templateSlug: null,
     templateName: null,
     version: null,
-    note: describeDraft(pages, styles),
+    note: describeDraft(pages, styles, seo),
   })
 
   for (const page of pages) {
@@ -408,6 +459,8 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
       ...(draft.type_styles !== null ? { type_styles: draft.type_styles } : {}),
     })
   }
+
+  if (seo) await patchSiteSettings({ page_seo: draft.page_seo })
 
   // Keep the old site_settings columns in step with what was just published —
   // the way back for pages the canvas owns, and the live contract for pages it
@@ -436,9 +489,10 @@ async function deleteDraft(): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
-function describeDraft(pages: string[], styles: boolean): string {
+function describeDraft(pages: string[], styles: boolean, seo: boolean): string {
   const parts: string[] = []
   if (pages.length) parts.push(pages.length === 1 ? `the ${pages[0]} page` : `${pages.length} pages`)
   if (styles) parts.push('site style')
+  if (seo) parts.push('search and sharing settings')
   return `Published ${parts.join(' and ')} from the editor.`
 }

@@ -23,7 +23,7 @@ import type { SiteDraft } from '@/lib/drafts/store'
  */
 
 /** The part of a draft a step holds. */
-export type DraftSnapshot = Pick<SiteDraft, 'pages' | 'global_styles' | 'type_styles'>
+export type DraftSnapshot = Pick<SiteDraft, 'pages' | 'global_styles' | 'type_styles' | 'page_seo'>
 
 export type StepsState = {
   /** What Undo would take back, or null when there is nothing to undo. */
@@ -35,7 +35,7 @@ export type StepsState = {
 export type StepResult = {
   /** What was undone or redone. */
   label: string
-  /** The pages whose sections changed. */
+  /** The pages whose sections, or search and sharing settings, changed. */
   pages: string[]
   /** Whether the site style changed. */
   styles: boolean
@@ -48,6 +48,8 @@ export function snapshotOf(draft: DraftSnapshot): DraftSnapshot {
     pages: draft.pages ?? {},
     global_styles: draft.global_styles ?? null,
     type_styles: draft.type_styles ?? null,
+    // Steps kept before search settings existed have none: null, "untouched".
+    page_seo: draft.page_seo ?? null,
   }
 }
 
@@ -71,12 +73,23 @@ function pageName(slug: string): string {
   return isPage(slug) ? PAGES[slug].label : slug
 }
 
-/** Which pages, and whether the style, differ between two drafts. */
-export function diffDrafts(a: DraftSnapshot, b: DraftSnapshot): { pages: string[]; styles: boolean } {
+/**
+ * What differs between two drafts: pages whose sections changed, whether the
+ * style did, and pages whose search and sharing settings did.
+ */
+export function diffDrafts(
+  a: DraftSnapshot,
+  b: DraftSnapshot
+): { pages: string[]; styles: boolean; seo: string[] } {
   const slugs = new Set([...Object.keys(a.pages ?? {}), ...Object.keys(b.pages ?? {})])
+  const seoSlugs = new Set([...Object.keys(a.page_seo ?? {}), ...Object.keys(b.page_seo ?? {})])
   return {
     pages: [...slugs].filter((slug) => !same(a.pages?.[slug], b.pages?.[slug])),
     styles: !same(a.global_styles, b.global_styles) || !same(a.type_styles, b.type_styles),
+    // Null ("untouched") compares as empty. writeDraftSeo names its first
+    // change against the live values, so this only has to be exact about
+    // WHICH pages moved when undoing.
+    seo: [...seoSlugs].filter((slug) => !same(a.page_seo?.[slug], b.page_seo?.[slug])),
   }
 }
 
@@ -91,8 +104,13 @@ export function diffDrafts(a: DraftSnapshot, b: DraftSnapshot): { pages: string[
  * Null when nothing changed, which keeps no step.
  */
 export function describeChange(before: DraftSnapshot, after: DraftSnapshot): string | null {
-  const { pages, styles } = diffDrafts(before, after)
+  const { pages, styles, seo } = diffDrafts(before, after)
 
+  if (seo.length) {
+    return pages.length === 0 && !styles && seo.length === 1
+      ? `Search & sharing · ${pageName(seo[0])}`
+      : 'Several changes'
+  }
   if (pages.length === 0) return styles ? 'Site style' : null
   if (pages.length > 1 || styles) return 'Several changes'
 
@@ -218,7 +236,8 @@ export async function moveStep(
 
   await supabase.from('site_draft_steps').delete().eq('id', step.id as number)
 
-  return { label, ...diffDrafts(current, target) }
+  const moved = diffDrafts(current, target)
+  return { label, pages: [...new Set([...moved.pages, ...moved.seo])], styles: moved.styles }
 }
 
 /** Publish and Discard end the draft, and its steps with it. */

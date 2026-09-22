@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { loadPageSections } from '@/lib/sections/load'
-import { str } from '@/lib/sections/registry'
 import PageBody from '@/components/PageBody'
+import { pageMetadata } from '@/lib/seo'
 
 export const revalidate = 60
 
@@ -12,14 +12,10 @@ export const revalidate = 60
  * newest drawn large.
  */
 export async function generateMetadata(): Promise<Metadata> {
+  // Title, description, share image and indexing: set in the canvas (Page
+  // settings), otherwise worked out from the page. See lib/seo.ts.
   const { sections, settings } = await loadPageSections('journal')
-  const journal = sections.find((s) => s.type === 'journal' && s.visible)
-  const heading = journal ? str(journal.settings, 'heading') : null
-
-  return {
-    title: `${heading || 'Journal'} — ${settings.site_title}`,
-    description: settings.tagline ?? undefined,
-  }
+  return pageMetadata('journal', sections, settings)
 }
 
 export default async function JournalPage() {

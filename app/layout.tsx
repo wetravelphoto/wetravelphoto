@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Oswald, Karla } from 'next/font/google'
-import { getSiteSettings } from '@/lib/site'
+import { getSiteSettings, siteUrl } from '@/lib/site'
 import { cssVariables, fontsToLoad, resolveTokens } from '@/lib/styles/tokens'
 import { fontHref } from '@/lib/fonts'
 import './globals.css'
@@ -28,8 +28,12 @@ const body = Karla({
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings()
   return {
+    // Share images and canonical addresses are written as paths; this is what
+    // they are resolved against.
+    metadataBase: new URL(siteUrl()),
     title: settings.site_title,
     description: settings.tagline ?? `Photographs by ${settings.site_title}.`,
+    openGraph: { siteName: settings.site_title, type: 'website' },
   }
 }
 

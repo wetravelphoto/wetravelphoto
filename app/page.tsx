@@ -1,4 +1,6 @@
+import type { Metadata } from 'next'
 import { loadPageSections } from '@/lib/sections/load'
+import { pageMetadata } from '@/lib/seo'
 import PageBody from '@/components/PageBody'
 import './home.css'
 import './home-polish.css'
@@ -25,6 +27,13 @@ export const revalidate = 60
  * is a separate route rather than a draft-mode cookie on this one, which would
  * have made every visit to the homepage dynamic.
  */
+export async function generateMetadata(): Promise<Metadata> {
+  // Title, description, share image and indexing: set in the canvas (Page
+  // settings), otherwise the site's name and tagline. See lib/seo.ts.
+  const { sections, settings } = await loadPageSections('home')
+  return pageMetadata('home', sections, settings)
+}
+
 export default async function HomePage() {
   const { sections, settings } = await loadPageSections('home')
 

@@ -4,6 +4,8 @@ import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadDraftPage, draftStatus, draftStyleSettings } from '@/lib/drafts/store'
 import { readSteps } from '@/lib/drafts/steps'
+import { readPageSeo, resolveSeo } from '@/lib/seo'
+import { siteUrl } from '@/lib/site'
 import { resolveTokens } from '@/lib/styles/tokens'
 import type { TypeStyles } from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
@@ -52,7 +54,7 @@ export default async function EditPage({
 
   if (!user) redirect('/admin/login')
 
-  const [{ sections, legacy }, status, style, steps] = await Promise.all([
+  const [{ sections, legacy, settings }, status, style, steps] = await Promise.all([
     loadDraftPage(page),
     draftStatus(),
     // The draft's tokens if it has any, otherwise the live site's — so opening
@@ -107,6 +109,10 @@ export default async function EditPage({
       tokens={resolveTokens(style.global_styles, style.global_styles_version)}
       typeStyles={(style.type_styles ?? {}) as TypeStyles}
       stories={stories}
+      seo={readPageSeo(settings, page)}
+      seoResolved={resolveSeo(page, sections, settings)}
+      siteTitle={settings.site_title}
+      siteHost={siteUrl().replace(/^https?:\/\//, '')}
       initialMode={mode === 'style' ? 'style' : 'content'}
       />
     </>

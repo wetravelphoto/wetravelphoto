@@ -1,6 +1,8 @@
 import type { MetadataRoute } from 'next'
 import { createClient } from '@/lib/supabase/server'
-import { siteUrl } from '@/lib/site'
+import { getSiteSettings, siteUrl } from '@/lib/site'
+import { readPageSeo } from '@/lib/seo'
+import { PAGES, type PageSlug } from '@/lib/sections/pages'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl()
@@ -16,12 +18,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .select('slug, updated_at')
     .eq('status', 'published')
 
-  const staticPages: MetadataRoute.Sitemap = [
-    { url: base, changeFrequency: 'weekly', priority: 1 },
-    { url: `${base}/journal`, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${base}/about`, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${base}/contact`, changeFrequency: 'yearly', priority: 0.3 },
+  // The editor's pages, minus any the photographer has switched off or asked
+  // search engines to leave out (Page settings → Search & sharing).
+  const settings = await getSiteSettings()
+  const listed: { page: PageSlug; changeFrequency: 'weekly' | 'monthly' | 'yearly'; priority: number }[] = [
+    { page: 'home', changeFrequency: 'weekly', priority: 1 },
+    { page: 'journal', changeFrequency: 'weekly', priority: 0.8 },
+    { page: 'galleries', changeFrequency: 'weekly', priority: 0.8 },
+    { page: 'shop', changeFrequency: 'weekly', priority: 0.6 },
+    { page: 'about', changeFrequency: 'monthly', priority: 0.5 },
+    { page: 'contact', changeFrequency: 'yearly', priority: 0.3 },
   ]
+
+  const staticPages: MetadataRoute.Sitemap = listed
+    .filter(({ page }) => !(page === 'about' && settings.show_about === false))
+    .filter(({ page }) => !(page === 'shop' && !settings.show_shop))
+    .filter(({ page }) => !readPageSeo(settings, page).noindex)
+    .map(({ page, changeFrequency, priority }) => ({
+      url: page === 'home' ? base : `${base}${PAGES[page].path}`,
+      changeFrequency,
+      priority,
+    }))
 
   return [
     ...staticPages,

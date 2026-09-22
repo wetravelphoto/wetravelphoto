@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { loadPageSections } from '@/lib/sections/load'
 import PageBody from '@/components/PageBody'
+import { pageMetadata } from '@/lib/seo'
 
 export const revalidate = 300
 
@@ -10,8 +11,10 @@ export const revalidate = 300
  * as it always was: a heading, the intro line, and the form.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  const { settings } = await loadPageSections('contact')
-  return { title: `Contact — ${settings.site_title}` }
+  // Title, description, share image and indexing: set in the canvas (Page
+  // settings), otherwise worked out from the page. See lib/seo.ts.
+  const { sections, settings } = await loadPageSections('contact')
+  return pageMetadata('contact', sections, settings)
 }
 
 export default async function ContactPage() {

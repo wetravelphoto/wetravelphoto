@@ -89,6 +89,12 @@ export type SiteSettings = {
   footer_note: string | null
   contact_image_path: string | null
   type_styles: Record<string, { font?: string; color?: string; scale?: number }>
+  /**
+   * Search and sharing, per editor page (lib/seo.ts): { home: { title,
+   * description, image, noindex }, about: {…} }. Anything not set is worked out
+   * from the page itself.
+   */
+  page_seo: Record<string, unknown>
 
   show_newsletter: boolean
   newsletter_heading: string | null
@@ -233,6 +239,7 @@ const FALLBACK: SiteSettings = {
   footer_note: null,
   contact_image_path: null,
   type_styles: {},
+  page_seo: {},
   show_newsletter: true,
   newsletter_heading: null,
   newsletter_body: null,

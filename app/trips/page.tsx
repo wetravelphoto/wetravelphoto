@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { loadPageSections } from '@/lib/sections/load'
-import { str } from '@/lib/sections/registry'
 import PageBody from '@/components/PageBody'
+import { pageMetadata } from '@/lib/seo'
 
 export const revalidate = 60
 
@@ -12,14 +12,10 @@ export const revalidate = 60
  * its grid layout — every public gallery as a tile.
  */
 export async function generateMetadata(): Promise<Metadata> {
+  // Title, description, share image and indexing: set in the canvas (Page
+  // settings), otherwise worked out from the page. See lib/seo.ts.
   const { sections, settings } = await loadPageSections('galleries')
-  const grid = sections.find((s) => s.type === 'galleries' && s.visible)
-  const heading = grid ? str(grid.settings, 'heading') : null
-
-  return {
-    title: `${heading || 'Galleries'} — ${settings.site_title}`,
-    description: settings.tagline ?? undefined,
-  }
+  return pageMetadata('galleries', sections, settings)
 }
 
 export default async function GalleriesPage() {

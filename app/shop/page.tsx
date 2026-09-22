@@ -2,8 +2,8 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getSiteSettings } from '@/lib/site'
 import { loadPageSections } from '@/lib/sections/load'
-import { str } from '@/lib/sections/registry'
 import PageBody from '@/components/PageBody'
+import { pageMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,15 +14,10 @@ export const dynamic = 'force-dynamic'
  * quote — is Shop settings, put around the page by lib/sections/frame.tsx.
  */
 export async function generateMetadata(): Promise<Metadata> {
+  // Title, description, share image and indexing: set in the canvas (Page
+  // settings), otherwise worked out from the page. See lib/seo.ts.
   const { sections, settings } = await loadPageSections('shop')
-  const wall = sections.find((s) => s.type === 'shop' && s.visible)
-  const heading = wall ? str(wall.settings, 'heading') : null
-  const subheading = wall ? str(wall.settings, 'subheading') : null
-
-  return {
-    title: `${heading || 'Prints'} — ${settings.site_title}`,
-    description: subheading ?? settings.shop_intro ?? settings.tagline ?? undefined,
-  }
+  return pageMetadata('shop', sections, settings)
 }
 
 export default async function ShopPage({

@@ -31,6 +31,8 @@ import AddSectionModal from '@/components/canvas/AddSectionModal'
 import PresetRail from '@/components/canvas/PresetRail'
 import StyleMode from '@/components/canvas/StyleMode'
 import PanelResizer from '@/components/canvas/PanelResizer'
+import PageSettings from '@/components/canvas/PageSettings'
+import type { PageSeo, ResolvedSeo } from '@/lib/seo'
 import type { StoryOption } from '@/components/canvas/editors/HeroStories'
 
 export type CanvasSection = {
@@ -80,6 +82,10 @@ export default function Canvas({
   tokens,
   typeStyles,
   stories,
+  seo,
+  seoResolved,
+  siteTitle,
+  siteHost,
   initialMode = 'content',
 }: {
   page: string
@@ -98,6 +104,13 @@ export default function Canvas({
   typeStyles: TypeStyles
   /** Published stories the hero can feature. */
   stories: StoryOption[]
+  /** This page's stored search and sharing values (draft first). */
+  seo: PageSeo
+  /** What the page uses for anything not stored. */
+  seoResolved: ResolvedSeo
+  siteTitle: string
+  /** The site's address without the scheme, for the previews. */
+  siteHost: string
   initialMode?: Mode
 }) {
   const router = useRouter()
@@ -215,6 +228,7 @@ export default function Canvas({
    * and would otherwise go on showing the value that was just undone.
    */
   const inspectorFlush = useRef<(() => Promise<void>) | null>(null)
+  const pageFlush = useRef<(() => Promise<void>) | null>(null)
   const styleFlush = useRef<(() => Promise<void>) | null>(null)
   const [revision, setRevision] = useState(0)
   const [remountArmed, setRemountArmed] = useState(false)
@@ -237,6 +251,7 @@ export default function Canvas({
       startTransition(async () => {
         try {
           await inspectorFlush.current?.()
+          await pageFlush.current?.()
           await styleFlush.current?.()
           // Nothing painted on ahead of the server is true after this.
           tell({ type: 'settle' })
@@ -545,6 +560,7 @@ export default function Canvas({
               }
             }}
             onAdd={(after) => setPicking({ after })}
+            onPageSettings={() => choose(null)}
             onDuplicate={(id) =>
               run(async () => {
                 const copy = await duplicateDraftSection(page, id)
@@ -604,43 +620,61 @@ export default function Canvas({
             onCommit={(changes) => run(() => updateDraftStyles(changes))}
           />
         ) : (
-          <Inspector
-            // Rebuilt after an undo or redo, so its inputs show the restored
-            // values rather than what was typed into them. See `revision`.
-            key={`inspector-${revision}`}
-            flushRef={inspectorFlush}
-            resizer={<PanelResizer />}
-            page={page}
-            section={current}
-            def={def}
-            publicUrl={publicUrl}
-            stories={stories}
-            focusField={focusField}
-            typeStyles={typeStyles}
-            styleBase={{
-              font: tokens.display_font,
-              color: tokens.ink,
-              bodyFont: tokens.body_font,
-              bodyColor: tokens.ink_soft,
-            }}
-            onTypeVars={(id, vars, fonts) => tell({ type: 'type-vars', id, vars, fonts })}
-            // Cropping for the phone while looking at the desktop layout is
-            // guessing, so the preview follows the crop being edited.
-            onDevice={(d) => setDevice(d === 'mobile' ? 'phone' : 'desktop')}
-            onShowStory={(index) => tell({ type: 'hero-story', index: index ?? undefined })}
-            onPatch={(field, value) => {
-              if (selected) tell({ type: 'patch', id: selected, field, value })
-            }}
-            onLive={(field, value, spec) => {
-              if (selected) tell({ type: 'live', id: selected, field, value, ...spec })
-            }}
-            onSettled={(id) => tell({ type: 'settle', id })}
-            onSaved={() => {
-              tell({ type: 'refresh' })
-              router.refresh()
-            }}
-            onClose={() => choose(null)}
-          />
+          current ? (
+            <Inspector
+              // Rebuilt after an undo or redo, so its inputs show the restored
+              // values rather than what was typed into them. See `revision`.
+              key={`inspector-${revision}`}
+              flushRef={inspectorFlush}
+              resizer={<PanelResizer />}
+              page={page}
+              section={current}
+              def={def}
+              publicUrl={publicUrl}
+              stories={stories}
+              focusField={focusField}
+              typeStyles={typeStyles}
+              styleBase={{
+                font: tokens.display_font,
+                color: tokens.ink,
+                bodyFont: tokens.body_font,
+                bodyColor: tokens.ink_soft,
+              }}
+              onTypeVars={(id, vars, fonts) => tell({ type: 'type-vars', id, vars, fonts })}
+              // Cropping for the phone while looking at the desktop layout is
+              // guessing, so the preview follows the crop being edited.
+              onDevice={(d) => setDevice(d === 'mobile' ? 'phone' : 'desktop')}
+              onShowStory={(index) => tell({ type: 'hero-story', index: index ?? undefined })}
+              onPatch={(field, value) => {
+                if (selected) tell({ type: 'patch', id: selected, field, value })
+              }}
+              onLive={(field, value, spec) => {
+                if (selected) tell({ type: 'live', id: selected, field, value, ...spec })
+              }}
+              onSettled={(id) => tell({ type: 'settle', id })}
+              onSaved={() => {
+                tell({ type: 'refresh' })
+                router.refresh()
+              }}
+              onClose={() => choose(null)}
+            />
+          ) : (
+            // Nothing selected: the page's own settings.
+            <PageSettings
+              key={`page-${page}-${revision}`}
+              flushRef={pageFlush}
+              resizer={<PanelResizer />}
+              page={page}
+              pageLabel={title}
+              path={PAGES[page as keyof typeof PAGES]?.path ?? '/'}
+              seo={seo}
+              resolved={seoResolved}
+              siteTitle={siteTitle}
+              siteHost={siteHost}
+              publicUrl={publicUrl}
+              onSaved={() => router.refresh()}
+            />
+          )
         )}
       </div>
 

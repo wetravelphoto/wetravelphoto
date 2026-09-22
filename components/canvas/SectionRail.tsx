@@ -22,6 +22,7 @@ export default function SectionRail({
   onRemove,
   onAdd,
   onDuplicate,
+  onPageSettings,
 }: {
   sections: CanvasSection[]
   selected: string | null
@@ -32,6 +33,8 @@ export default function SectionRail({
   /** Open the picker; the new section goes after `after`, or at the end if null. */
   onAdd: (after: string | null) => void
   onDuplicate: (id: string) => void
+  /** Show the page's own settings (search and sharing) in the right panel. */
+  onPageSettings: () => void
 }) {
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
@@ -46,7 +49,20 @@ export default function SectionRail({
 
   return (
     <aside className="cv-rail" aria-label="Sections">
-      <p className="cv-rail-head">Page</p>
+      <div className="cv-rail-top">
+        <p className="cv-rail-head">Sections</p>
+        {/* The same thing clicking empty space does: select nothing, which
+            shows the page's own settings. */}
+        <button
+          type="button"
+          className="cv-rail-page"
+          data-on={selected === null}
+          onClick={onPageSettings}
+          title="Search results and link sharing for this page"
+        >
+          Page settings
+        </button>
+      </div>
 
       <ol className="cv-sections">
         {sections.map((row, i) => (

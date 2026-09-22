@@ -2,8 +2,8 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getSiteSettings } from '@/lib/site'
 import { loadPageSections } from '@/lib/sections/load'
-import { str } from '@/lib/sections/registry'
 import PageBody from '@/components/PageBody'
+import { pageMetadata } from '@/lib/seo'
 
 export const revalidate = 300
 
@@ -15,16 +15,10 @@ export const revalidate = 300
  * About section: the photograph beside the story.
  */
 export async function generateMetadata(): Promise<Metadata> {
+  // Title, description, share image and indexing: set in the canvas (Page
+  // settings), otherwise worked out from the page. See lib/seo.ts.
   const { sections, settings } = await loadPageSections('about')
-  // The title follows the page's own heading, as it always did — now read
-  // from its first About section rather than a column.
-  const about = sections.find((s) => s.type === 'about' && s.visible)
-  const heading = about ? str(about.settings, 'heading') : null
-
-  return {
-    title: `${heading || 'About'} — ${settings.site_title}`,
-    description: settings.tagline ?? undefined,
-  }
+  return pageMetadata('about', sections, settings)
 }
 
 export default async function AboutPage() {

@@ -846,6 +846,11 @@ const COMMON_DEFAULTS: SectionSettings = {
   space_bottom: 'default',
   background: 'default',
   bg_color: '#f1efe9',
+  bg_image: null,
+  bg_position: 'center',
+  bg_text: 'light',
+  bg_dim: 30,
+  width: 'default',
   hide_on: 'none',
 }
 
@@ -878,6 +883,7 @@ const SPACING_FIELDS: Field[] = [
       { value: 'alt', label: 'Alternate colour' },
       { value: 'tint', label: 'A tint of the accent' },
       { value: 'custom', label: 'A colour of my own' },
+      { value: 'image', label: 'A photograph' },
     ],
     group: 'Section',
     live: { attr: 'data-bg' },
@@ -890,6 +896,76 @@ const SPACING_FIELDS: Field[] = [
     group: 'Section',
     live: { var: '--sec-bg-custom' },
     when: { key: 'background', equals: 'custom' },
+  },
+  {
+    key: 'bg_image',
+    label: 'Photograph',
+    kind: 'image',
+    group: 'Section',
+    // The photographer's own picture, so switching to a different look carries
+    // it across rather than replacing it. See `content` on FieldBase.
+    content: true,
+    when: { key: 'background', equals: 'image' },
+    // Deliberately NOT `live`: a path has to be wrapped in url() before it is
+    // a background, which is a transformation rather than the identity, and
+    // the rule is that an instant patch must be exactly what the server is
+    // about to render. It arrives with the refresh a moment later.
+    help: 'Behind everything in this section, filling it.',
+  },
+  {
+    key: 'bg_position',
+    label: 'Keep in view',
+    kind: 'select',
+    options: [
+      { value: 'center', label: 'The middle' },
+      { value: 'top', label: 'The top' },
+      { value: 'bottom', label: 'The bottom' },
+    ],
+    group: 'Section',
+    when: { key: 'background', equals: 'image' },
+    live: { attr: 'data-bg-pos' },
+    help: 'The part that survives when the section is narrower than the photograph.',
+  },
+  {
+    key: 'bg_text',
+    label: 'Words',
+    kind: 'select',
+    options: [
+      { value: 'light', label: 'Light, on a darkened photograph' },
+      { value: 'dark', label: 'Dark, on a pale photograph' },
+    ],
+    group: 'Section',
+    when: { key: 'background', equals: 'image' },
+    live: { attr: 'data-ink' },
+    help: 'A photograph does not change the text colour on its own, and the site’s ink is usually too dark to read on one.',
+  },
+  {
+    key: 'bg_dim',
+    label: 'Darken it',
+    kind: 'number',
+    slider: true,
+    min: 0,
+    max: 80,
+    step: 5,
+    unit: '%',
+    group: 'Section',
+    when: { key: 'background', equals: 'image' },
+    live: { var: '--sec-bg-dim', unit: '%' },
+    help: 'Words have to be readable on top of it. Most photographs need some.',
+  },
+  {
+    key: 'width',
+    label: 'Width',
+    kind: 'select',
+    options: [
+      { value: 'default', label: 'The site’s width' },
+      { value: 'narrow', label: 'Narrow — a reading column' },
+      { value: 'wide', label: 'Wide' },
+      { value: 'full', label: 'Edge to edge' },
+    ],
+    group: 'Section',
+    live: { attr: 'data-width' },
+    help: 'How wide the words and pictures sit. The hero and About are always edge to edge.',
   },
 ]
 

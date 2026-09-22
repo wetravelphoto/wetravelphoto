@@ -62,6 +62,9 @@
   align-items: center;
   padding: var(--sec-pad-top, clamp(2.5rem, 6vw, 5rem)) clamp(1.5rem, 5vw, 4.5rem)
     var(--sec-pad-bottom, clamp(2.5rem, 6vw, 5rem));
+  /* Edge to edge drops the gutter; anything else keeps this one. */
+  padding-left: var(--sec-pad-x, clamp(1.5rem, 5vw, 4.5rem));
+  padding-right: var(--sec-pad-x, clamp(1.5rem, 5vw, 4.5rem));
 }
 
 .contact-panel-inner { width: 100%; max-width: 620px; }
@@ -109,6 +112,9 @@
   background: var(--sec-bg, var(--surface));
   padding: var(--sec-pad-top, clamp(6rem, 10vw, 7.5rem)) clamp(1.25rem, 4vw, 3rem)
     var(--sec-pad-bottom, clamp(3rem, 6vw, 5rem));
+  /* Edge to edge drops the gutter; anything else keeps this one. */
+  padding-left: var(--sec-pad-x, clamp(1.25rem, 4vw, 3rem));
+  padding-right: var(--sec-pad-x, clamp(1.25rem, 4vw, 3rem));
 }
 
 .contact-centred .contact-panel-inner { max-width: 560px; }
@@ -357,6 +363,9 @@
   background: var(--sec-bg, var(--surface));
   padding: var(--sec-pad-top, clamp(2.5rem, 5vw, 4rem)) clamp(1.25rem, 5vw, 4rem)
     var(--sec-pad-bottom, 0px);
+  /* Edge to edge drops the gutter; anything else keeps this one. */
+  padding-left: var(--sec-pad-x, clamp(1.25rem, 5vw, 4rem));
+  padding-right: var(--sec-pad-x, clamp(1.25rem, 5vw, 4rem));
   /* The section below brings its own top padding, so pull up into it */
   margin-bottom: clamp(-2rem, -2.5vw, -1rem);
   line-height: 0;

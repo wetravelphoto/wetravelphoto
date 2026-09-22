@@ -33,6 +33,9 @@
   align-items: center;
   padding: var(--sec-pad-top, clamp(6rem, 10vw, 8rem)) clamp(1.5rem, 5vw, 5rem)
     var(--sec-pad-bottom, clamp(3rem, 6vw, 5rem));
+  /* Edge to edge drops the gutter; anything else keeps this one. */
+  padding-left: var(--sec-pad-x, clamp(1.5rem, 5vw, 5rem));
+  padding-right: var(--sec-pad-x, clamp(1.5rem, 5vw, 5rem));
 }
 
 .about-inner { width: 100%; max-width: 560px; }

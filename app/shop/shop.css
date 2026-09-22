@@ -15,10 +15,13 @@
   background-color: var(--sec-bg, transparent);
   padding: var(--sec-pad-top, clamp(5.5rem, 9vw, 8.5rem)) clamp(1.25rem, 4vw, 3.5rem)
     var(--sec-pad-bottom, clamp(4rem, 7vw, 6rem));
+  /* Edge to edge drops the gutter; anything else keeps this one. */
+  padding-left: var(--sec-pad-x, clamp(1.25rem, 4vw, 3.5rem));
+  padding-right: var(--sec-pad-x, clamp(1.25rem, 4vw, 3.5rem));
 }
 
 .shop-inner {
-  max-width: 1320px;
+  max-width: var(--sec-measure, 1320px);
   margin: 0 auto;
 }
 

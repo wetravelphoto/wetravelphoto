@@ -1,7 +1,7 @@
 /* ---------- Gallery index (public) ---------- */
 
 .gallery-index-head {
-  max-width: 1400px;
+  max-width: var(--sec-measure, 1400px);
   margin: 0 auto clamp(1.75rem, 4vw, 3rem);
 }
 
@@ -29,7 +29,7 @@
 /* An even grid — every gallery the same size, which reads cleaner than a
    ragged masonry when covers use different layouts. */
 .gallery-grid-public {
-  max-width: 1400px;
+  max-width: var(--sec-measure, 1400px);
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);

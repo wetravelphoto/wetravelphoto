@@ -98,7 +98,7 @@
 
 .journal-grid[data-arrangement='single'] {
   grid-template-columns: minmax(0, 1fr);
-  max-width: 860px;
+  max-width: var(--sec-measure, 860px);
   margin: 0 auto;
   row-gap: clamp(2.5rem, 5vw, 4rem);
 }

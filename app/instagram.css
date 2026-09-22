@@ -5,11 +5,14 @@
 .ig-section {
   padding: var(--sec-pad-top, clamp(3rem, 8vw, 6rem)) clamp(1.25rem, 4vw, 3rem)
     var(--sec-pad-bottom, clamp(3rem, 8vw, 6rem));
+  /* Edge to edge drops the gutter; anything else keeps this one. */
+  padding-left: var(--sec-pad-x, clamp(1.25rem, 4vw, 3rem));
+  padding-right: var(--sec-pad-x, clamp(1.25rem, 4vw, 3rem));
   background: var(--sec-bg, #f1efe9);
 }
 
 .ig-head {
-  max-width: 1240px;
+  max-width: var(--sec-measure, 1240px);
   margin: 0 auto clamp(1.5rem, 3vw, 2.5rem);
   display: flex;
   align-items: baseline;
@@ -46,7 +49,7 @@
    Row 2:  [ A A ] [ s ] [ B   B   ]
    Row 3:  [ s ] [ s ] [ s ] [ B  B ]  */
 .ig-grid {
-  max-width: 1240px;
+  max-width: var(--sec-measure, 1240px);
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);

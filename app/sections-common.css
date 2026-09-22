@@ -36,6 +36,67 @@
 [data-bg='tint']   { --sec-bg: color-mix(in srgb, var(--ember) 10%, var(--surface)); }
 [data-bg='custom'] { --sec-bg: var(--sec-bg-custom, var(--surface)); }
 
+/* ── A photograph behind the section ──────────────────────────────────────── */
+
+[data-bg='image'] {
+  /* The section's own root would otherwise paint its colour straight over the
+     photograph — every one of them reads --sec-bg, so one line turns them all
+     transparent. */
+  --sec-bg: transparent;
+
+  /* Two layers in one declaration rather than a pseudo-element: the wrapper's
+     two pseudo-elements are already spoken for in the editor (the click target
+     and the outline), and a third stacking context around every section is a
+     lot to pay for a dark wash. */
+  background-image:
+    linear-gradient(rgb(0 0 0 / var(--sec-bg-dim, 0%)), rgb(0 0 0 / var(--sec-bg-dim, 0%))),
+    var(--sec-bg-image, none);
+  background-size: cover, cover;
+  background-position: center, var(--sec-bg-anchor, 50% 50%);
+  background-repeat: no-repeat, no-repeat;
+}
+
+[data-bg-pos='top']    { --sec-bg-anchor: 50% 0%; }
+[data-bg-pos='bottom'] { --sec-bg-anchor: 50% 100%; }
+
+/* A photograph does not change the text colour on its own, and the site's ink
+   is nearly always too dark to read on one — so the words switch with it.
+   `color` has to be re-stated here rather than left to --ink alone: text
+   inherits a COMPUTED colour from the body, so redefining the token further
+   down the tree would change everything that reads --ink by name and nothing
+   that simply inherited. */
+[data-bg='image'][data-ink='light'] {
+  --ink: #faf9f6;
+  --ink-soft: rgba(250, 249, 246, 0.82);
+  --ink-mute: rgba(250, 249, 246, 0.64);
+  --line: rgba(250, 249, 246, 0.3);
+  color: var(--ink);
+}
+
+/* `display: contents` has no box to paint on, so THIS is the one case where
+   the live wrapper becomes a real element. A column rather than a block, so a
+   section that grows on a full-height page still can (PageBody passes the
+   growth on to match). */
+.sec-wrap[data-bg='image'] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Width ────────────────────────────────────────────────────────────────── */
+/* The same bargain as the spacing above: each section's inner element reads
+   --sec-measure with ITS OWN old max-width as the fallback, so Default is
+   not "the site's width" imposed on everything — it is exactly what that
+   section always had. (The galleries grid sits at 1400px and the homepage's
+   blocks at the site's measure; forcing them to agree would have moved the
+   live site the day this shipped.)
+
+   Edge to edge also drops the side gutter, which each section ROOT reads as
+   --sec-pad-x, again with its own old value as the fallback. */
+
+[data-width='narrow'] { --sec-measure: 760px; }
+[data-width='wide']   { --sec-measure: 1600px; }
+[data-width='full']   { --sec-measure: 100%; --sec-pad-x: 0px; }
+
 /* ── Where it shows. 760px is the same line the hero switches crops on. ────── */
 
 @media (max-width: 760px) {

@@ -7,6 +7,7 @@ import type { LoadedSection } from '@/lib/sections/load'
 import type { SiteSettings } from '@/lib/site'
 import { findPage, sanitizeCustomPages } from '@/lib/sections/pages'
 import { pageFrame } from '@/lib/sections/frame'
+import { photoUrl } from '@/lib/images'
 // Every section's stylesheet, loaded wherever sections are drawn — so a hero
 // added to the About page brings its styles with it. app/page.tsx and the
 // preview route import the same files; Next includes each once.
@@ -50,24 +51,49 @@ function frameAttrs(settings: Record<string, unknown>): {
     return typeof v === 'string' && allowed.includes(v) ? v : fallback
   }
   const space = ['default', 'none', 's', 'm', 'l', 'xl']
-  const bg = pick('background', ['default', 'page', 'alt', 'tint', 'custom'], 'default')
+  const bg = pick('background', ['default', 'page', 'alt', 'tint', 'custom', 'image'], 'default')
   const color = typeof settings.bg_color === 'string' && /^#[0-9a-f]{6}$/i.test(settings.bg_color)
     ? settings.bg_color
     : null
+
+  // A storage key on its way into a url(). Everything this site writes is
+  // `t/<uuid>/…/<size>.webp`, so anything with a quote, a bracket or a space
+  // in it did not come from here and is not put into a stylesheet.
+  const key = settings.bg_image
+  const image =
+    bg === 'image' && typeof key === 'string' && /^[A-Za-z0-9/_.-]+$/.test(key) && !key.includes('..')
+      ? `url("${photoUrl(key)}")`
+      : null
+
+  const dim = typeof settings.bg_dim === 'number' ? Math.min(80, Math.max(0, settings.bg_dim)) : 30
+
+  const style: Record<string, string> = {}
+  if (color) style['--sec-bg-custom'] = color
+  if (image) {
+    style['--sec-bg-image'] = image
+    style['--sec-bg-dim'] = `${dim}%`
+  }
 
   return {
     attrs: {
       'data-space-top': pick('space_top', space, 'default'),
       'data-space-bottom': pick('space_bottom', space, 'default'),
-      'data-bg': bg,
+      // Only claim a photograph once there is actually one to draw, or a
+      // section set to "a photograph" with none chosen yet would turn its own
+      // background off and show nothing at all.
+      'data-bg': bg === 'image' && !image ? 'default' : bg,
+      'data-bg-pos': pick('bg_position', ['center', 'top', 'bottom'], 'center'),
+      'data-ink': pick('bg_text', ['light', 'dark'], 'light'),
+      'data-width': pick('width', ['default', 'narrow', 'wide', 'full'], 'default'),
       'data-hide': pick('hide_on', ['none', 'mobile', 'desktop'], 'none'),
     },
-    style: color ? ({ '--sec-bg-custom': color } as React.CSSProperties) : {},
+    style: style as React.CSSProperties,
   }
 }
 
 /** The fields whose value the editor can paint onto the wrapper as it changes. */
-const WRAPPER_LIVE = 'space_top space_bottom background bg_color hide_on'
+const WRAPPER_LIVE =
+  'space_top space_bottom background bg_color bg_position bg_text bg_dim width hide_on'
 
 const FILL: React.CSSProperties = { minHeight: '100vh', display: 'flex', flexDirection: 'column' }
 
@@ -140,8 +166,20 @@ export default async function PageBody({
           </div>
         ) : (
           // display: contents — no box, no layout change; it only carries the
-          // attributes and custom property the section reads.
-          <div key={section.id} className="sec-wrap" {...wrap.attrs} style={wrap.style}>
+          // attributes and custom properties the section reads. The exception
+          // is a section with a photograph behind it: `display: contents` has
+          // nothing to paint on, so sections-common.css gives that one a real
+          // box — and on a full-height page a real box has to pass the spare
+          // height on, which is what GROW is for.
+          <div
+            key={section.id}
+            className="sec-wrap"
+            {...wrap.attrs}
+            style={{
+              ...(wrap.attrs['data-bg'] === 'image' && fill && section.def.grows ? GROW : {}),
+              ...wrap.style,
+            }}
+          >
             {renderSection(section, ctx)}
           </div>
         )

@@ -207,9 +207,12 @@
   /* Spacing and background from the section's own settings (sections-common.css) */
   padding-top: var(--sec-pad-top, calc(clamp(3.5rem, 9vw, 7rem) * var(--rhythm, 1)));
   padding-bottom: var(--sec-pad-bottom, calc(clamp(3.5rem, 9vw, 7rem) * var(--rhythm, 1)));
+  /* Edge to edge drops the gutter; anything else keeps this one. */
+  padding-left: var(--sec-pad-x, clamp(1.25rem, 4vw, 3rem));
+  padding-right: var(--sec-pad-x, clamp(1.25rem, 4vw, 3rem));
   background-color: var(--sec-bg, transparent);
 }
-.home-inner { max-width: var(--container, 1240px); margin: 0 auto; }
+.home-inner { max-width: var(--sec-measure, var(--container, 1240px)); margin: 0 auto; }
 
 .intro-grid {
   display: grid;
@@ -262,7 +265,7 @@
 }
 
 .carousel-head {
-  max-width: var(--container, 1240px);
+  max-width: var(--sec-measure, var(--container, 1240px));
   margin: 0 auto clamp(1.5rem, 3vw, 2.5rem);
   padding: 0 clamp(1.25rem, 4vw, 3rem);
   display: flex;
@@ -370,7 +373,7 @@
 }
 
 .carousel-controls {
-  max-width: var(--container, 1240px);
+  max-width: var(--sec-measure, var(--container, 1240px));
   margin: clamp(1.25rem, 3vw, 2rem) auto 0;
   padding: 0 clamp(1.25rem, 4vw, 3rem);
   display: flex;

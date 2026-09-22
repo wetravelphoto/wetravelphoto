@@ -13,6 +13,8 @@ import { replaceSections, mirrorPage } from '@/lib/sections/store'
 import { recordHistory } from '@/lib/templates/history'
 import { TOKENS_VERSION } from '@/lib/styles/tokens'
 import { sanitizePageSeo, sanitizeSeoMap, type PageSeo, type PageSeoMap } from '@/lib/seo'
+import { isPage, sanitizeCustomPages, type CustomPage } from '@/lib/sections/pages'
+import { sanitizeMenu, type MenuItem } from '@/lib/menu'
 import {
   clearSteps,
   describeChange,
@@ -77,6 +79,13 @@ export type SiteDraft = {
    * settings on the first change. Null: this draft has not touched it.
    */
   page_seo: PageSeoMap | null
+  /**
+   * The photographer's own pages (lib/sections/pages.ts), and the menu
+   * (lib/menu.ts). Null: this draft has not touched them. A page created in the
+   * editor exists only here until Publish.
+   */
+  custom_pages: CustomPage[] | null
+  menu: MenuItem[] | null
   updatedAt: string | null
 }
 
@@ -124,6 +133,8 @@ export async function readDraft(): Promise<DraftState> {
       global_styles: (data.global_styles ?? null) as DraftGlobalStyles | null,
       type_styles: (data.type_styles ?? null) as DraftTypeStyles | null,
       page_seo: data.page_seo ? sanitizeSeoMap(data.page_seo) : null,
+      custom_pages: Array.isArray(data.custom_pages) ? sanitizeCustomPages(data.custom_pages) : null,
+      menu: sanitizeMenu(data.menu),
       updatedAt: (data.updated_at as string) ?? null,
     },
     missing: false,
@@ -137,6 +148,7 @@ export async function draftStatus(): Promise<{
   pages: string[]
   stylesTouched: boolean
   seoTouched: boolean
+  siteTouched: boolean
   updatedAt: string | null
 }> {
   const { draft, missing } = await readDraft()
@@ -147,6 +159,7 @@ export async function draftStatus(): Promise<{
     pages: draft ? Object.keys(draft.pages) : [],
     stylesTouched: !!draft && (draft.global_styles !== null || draft.type_styles !== null),
     seoTouched: !!draft && draft.page_seo !== null,
+    siteTouched: !!draft && (draft.custom_pages !== null || draft.menu !== null),
     updatedAt: draft?.updatedAt ?? null,
   }
 }
@@ -172,6 +185,8 @@ export async function loadDraftPage(page = 'home'): Promise<PageSections & { isD
     ...(draft.global_styles !== null ? { global_styles: draft.global_styles } : {}),
     ...(draft.type_styles !== null ? { type_styles: draft.type_styles } : {}),
     ...(draft.page_seo !== null ? { page_seo: draft.page_seo } : {}),
+    ...(draft.custom_pages !== null ? { custom_pages: draft.custom_pages } : {}),
+    ...(draft.menu !== null ? { menu: draft.menu } : {}),
   }
 
   const rows = draft.pages[page]
@@ -234,6 +249,8 @@ export async function ensureDraft(page = 'home'): Promise<SiteDraft> {
     global_styles: draft?.global_styles ?? null,
     type_styles: draft?.type_styles ?? null,
     page_seo: draft?.page_seo ?? null,
+    custom_pages: draft?.custom_pages ?? null,
+    menu: draft?.menu ?? null,
     updatedAt: null,
   }
 
@@ -256,7 +273,7 @@ type WriteKind =
   | { kind: 'jump' }
 
 /** Columns added after the draft table, which a save can do without. */
-const OPTIONAL_COLUMNS = ['edit_label', 'page_seo'] as const
+const OPTIONAL_COLUMNS = ['edit_label', 'page_seo', 'custom_pages', 'menu'] as const
 
 async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
   const supabase = await createClient()
@@ -279,6 +296,8 @@ async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
     global_styles: draft.global_styles,
     type_styles: draft.type_styles,
     page_seo: draft.page_seo ?? null,
+    custom_pages: draft.custom_pages ?? null,
+    menu: draft.menu ?? null,
     updated_by: user?.id ?? null,
   }
   // Omitted on a seed, so the upsert leaves the column as it was.
@@ -356,7 +375,68 @@ export async function writeDraftStyles(
 }
 
 function emptyDraft(): SiteDraft {
-  return { pages: {}, global_styles: null, type_styles: null, page_seo: null, updatedAt: null }
+  return {
+    pages: {},
+    global_styles: null,
+    type_styles: null,
+    page_seo: null,
+    custom_pages: null,
+    menu: null,
+    updatedAt: null,
+  }
+}
+
+/**
+ * The photographer's pages as the editor should see them: the draft's list if
+ * it has touched pages, the live one if not.
+ */
+export async function currentCustomPages(): Promise<CustomPage[]> {
+  const { draft } = await readDraft()
+  if (draft?.custom_pages) return draft.custom_pages
+  return sanitizeCustomPages((await getSiteSettings()).custom_pages)
+}
+
+/** The menu as the editor should see it (null: never set). */
+export async function currentMenu(): Promise<MenuItem[] | null> {
+  const { draft } = await readDraft()
+  if (draft?.menu) return draft.menu
+  return sanitizeMenu((await getSiteSettings()).menu)
+}
+
+/**
+ * Changes the site's structure in the draft: the list of pages, the menu, and
+ * whatever has to move with them in the same step (a new page's first
+ * sections; a deleted page's sections and search settings). One write, so it
+ * undoes as one step.
+ *
+ * `change` receives the draft as it stands, with the pages list and menu
+ * filled in from the live site if the draft has not touched them yet, and
+ * returns the new draft.
+ */
+export async function writeDraftSite(
+  change: (draft: SiteDraft & { custom_pages: CustomPage[] }) => SiteDraft,
+  label: string
+): Promise<void> {
+  const { draft, missing } = await readDraft()
+  if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
+
+  const base: SiteDraft = draft ?? emptyDraft()
+  const live = base.custom_pages === null || base.menu === null ? await getSiteSettings() : null
+  const filled = {
+    ...base,
+    custom_pages: base.custom_pages ?? sanitizeCustomPages(live?.custom_pages),
+    menu: base.menu ?? sanitizeMenu(live?.menu),
+  }
+
+  const next = change(filled)
+  await upsertDraft(
+    {
+      ...next,
+      custom_pages: sanitizeCustomPages(next.custom_pages),
+      menu: next.menu === null ? null : sanitizeMenu(next.menu),
+    },
+    { kind: 'edit', before: base, label }
+  )
 }
 
 /**
@@ -422,11 +502,22 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
   if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
   if (!draft) throw new Error('There is nothing waiting to be published.')
 
-  const pages = Object.keys(draft.pages)
   const styles = draft.global_styles !== null || draft.type_styles !== null
   const seo = draft.page_seo !== null
+  const site = draft.custom_pages !== null || draft.menu !== null
 
-  if (pages.length === 0 && !styles && !seo) {
+  // The photographer's pages after this publish, and the ones it removes.
+  const live = await getSiteSettings()
+  const liveCustom = sanitizeCustomPages(live.custom_pages)
+  const finalCustom = draft.custom_pages ?? liveCustom
+  const removed = liveCustom.filter((p) => !finalCustom.some((f) => f.key === p.key)).map((p) => p.key)
+
+  // Only pages that still exist are written; a page deleted in the draft is
+  // cleared below instead.
+  const exists = (key: string) => isPage(key) || finalCustom.some((p) => p.key === key)
+  const pages = Object.keys(draft.pages).filter(exists)
+
+  if (pages.length === 0 && !styles && !seo && !site) {
     throw new Error('There is nothing waiting to be published.')
   }
 
@@ -436,7 +527,7 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
     templateSlug: null,
     templateName: null,
     version: null,
-    note: describeDraft(pages, styles, seo),
+    note: describeDraft(pages, styles, seo, site),
   })
 
   for (const page of pages) {
@@ -460,7 +551,23 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
     })
   }
 
-  if (seo) await patchSiteSettings({ page_seo: draft.page_seo })
+  // Search settings of removed pages go with them.
+  const seoMap = draft.page_seo ?? (removed.length ? sanitizeSeoMap(live.page_seo) : null)
+  if (seoMap) {
+    for (const key of removed) delete seoMap[key]
+    await patchSiteSettings({ page_seo: seoMap })
+  }
+
+  if (site) {
+    await patchSiteSettings({
+      ...(draft.custom_pages !== null ? { custom_pages: draft.custom_pages } : {}),
+      ...(draft.menu !== null ? { menu: draft.menu } : {}),
+    })
+  }
+
+  // A deleted page's sections are removed from the live table, not left
+  // behind for a page nobody can reach.
+  for (const key of removed) await replaceSections(key, [])
 
   // Keep the old site_settings columns in step with what was just published —
   // the way back for pages the canvas owns, and the live contract for pages it
@@ -489,8 +596,9 @@ async function deleteDraft(): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
-function describeDraft(pages: string[], styles: boolean, seo: boolean): string {
+function describeDraft(pages: string[], styles: boolean, seo: boolean, site: boolean): string {
   const parts: string[] = []
+  if (site) parts.push('pages and menu')
   if (pages.length) parts.push(pages.length === 1 ? `the ${pages[0]} page` : `${pages.length} pages`)
   if (styles) parts.push('site style')
   if (seo) parts.push('search and sharing settings')

@@ -5,7 +5,7 @@ import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import type { LoadedSection } from '@/lib/sections/load'
 import type { SiteSettings } from '@/lib/site'
-import { PAGES, isPage } from '@/lib/sections/pages'
+import { findPage, sanitizeCustomPages } from '@/lib/sections/pages'
 import { pageFrame } from '@/lib/sections/frame'
 // Every section's stylesheet, loaded wherever sections are drawn — so a hero
 // added to the About page brings its styles with it. app/page.tsx and the
@@ -96,7 +96,7 @@ export default async function PageBody({
 }) {
   const visible = sections.filter((s) => s.visible)
   const ctx = await buildContext(visible, settings, { editable: selectable, query })
-  const fill = isPage(page) && PAGES[page].fill
+  const fill = findPage(page, sanitizeCustomPages(settings.custom_pages))?.fill ?? false
   const frame = pageFrame(page, settings)
 
   // The header goes transparent only when something full-bleed is actually
@@ -107,7 +107,9 @@ export default async function PageBody({
   return (
     <main className={frame.className} style={{ ...(fill ? FILL : {}), ...frame.style }}>
       {frame.head}
-      <SiteHeader overHero={overHero} />
+      {/* The settings this page was drawn with, so the preview's menu is the
+          draft's menu — new pages, new order — and not the live one. */}
+      <SiteHeader overHero={overHero} settings={settings} />
 
       {visible.map((section) => {
         const wrap = frameAttrs(section.settings)
@@ -147,7 +149,7 @@ export default async function PageBody({
 
       {frame.after}
 
-      <SiteFooter />
+      <SiteFooter settings={settings} />
     </main>
   )
 }

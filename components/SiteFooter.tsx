@@ -1,13 +1,23 @@
 import Link from 'next/link'
-import { getSiteSettings } from '@/lib/site'
+import { getSiteSettings, type SiteSettings } from '@/lib/site'
+import { resolveMenu, sanitizeMenu } from '@/lib/menu'
+import { sanitizeCustomPages } from '@/lib/sections/pages'
 import { photoUrl } from '@/lib/images'
 import NewsletterForm from '@/components/NewsletterForm'
 import Icon from '@/components/SocialIcons'
 import Logo from '@/components/Logo'
 import { getFont } from '@/lib/fonts'
 
-export default async function SiteFooter() {
-  const settings = await getSiteSettings()
+export default async function SiteFooter({ settings: given }: { settings?: SiteSettings } = {}) {
+  // PageBody passes its own settings (the draft's, in the editor's preview).
+  const settings = given ?? (await getSiteSettings())
+
+  // The same menu as the header, folders opened out: one flat list of links.
+  const links = resolveMenu(
+    sanitizeMenu(settings.menu),
+    settings,
+    sanitizeCustomPages(settings.custom_pages)
+  ).flatMap((link) => link.children ?? [link])
 
   const year = new Date().getFullYear()
   const owner = settings.owner_name || settings.site_title
@@ -64,13 +74,23 @@ export default async function SiteFooter() {
 
         <nav className="footer-links">
           <p className="footer-col-head">Explore</p>
-          <Link href="/">Home</Link>
-          <Link href="/trips">{settings.nav_galleries_label || 'Galleries'}</Link>
-          <Link href="/journal">{settings.nav_journal_label || 'Journal'}</Link>
-          {settings.show_about !== false && (
-            <Link href="/about">{settings.nav_about_label || 'About'}</Link>
+          {!links.some((l) => l.href === '/') && <Link href="/">Home</Link>}
+          {links.map((link) =>
+            link.external ? (
+              <a
+                key={link.id}
+                href={link.href}
+                {...(link.newTab ? { target: '_blank' } : {})}
+                rel="noopener noreferrer"
+              >
+                {link.label}
+              </a>
+            ) : (
+              <Link key={link.id} href={link.href}>
+                {link.label}
+              </Link>
+            )
           )}
-          <Link href="/contact">{settings.nav_contact_label || 'Contact'}</Link>
         </nav>
 
         {settings.show_newsletter !== false && (

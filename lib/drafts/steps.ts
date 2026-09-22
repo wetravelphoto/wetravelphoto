@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { currentEditor } from '@/lib/auth'
-import { PAGES, isPage } from '@/lib/sections/pages'
+import { PAGES, isPage, type CustomPage } from '@/lib/sections/pages'
 import { sectionDef } from '@/lib/sections/registry'
 import type { SiteDraft } from '@/lib/drafts/store'
 
@@ -23,7 +23,10 @@ import type { SiteDraft } from '@/lib/drafts/store'
  */
 
 /** The part of a draft a step holds. */
-export type DraftSnapshot = Pick<SiteDraft, 'pages' | 'global_styles' | 'type_styles' | 'page_seo'>
+export type DraftSnapshot = Pick<
+  SiteDraft,
+  'pages' | 'global_styles' | 'type_styles' | 'page_seo' | 'custom_pages' | 'menu'
+>
 
 export type StepsState = {
   /** What Undo would take back, or null when there is nothing to undo. */
@@ -39,6 +42,8 @@ export type StepResult = {
   pages: string[]
   /** Whether the site style changed. */
   styles: boolean
+  /** Whether the list of pages or the menu changed. */
+  site: boolean
 }
 
 const MISSING_HINT = 'Run db/migrations/2026-09-22_draft_steps.sql in Supabase for undo and redo.'
@@ -50,6 +55,8 @@ export function snapshotOf(draft: DraftSnapshot): DraftSnapshot {
     type_styles: draft.type_styles ?? null,
     // Steps kept before search settings existed have none: null, "untouched".
     page_seo: draft.page_seo ?? null,
+    custom_pages: draft.custom_pages ?? null,
+    menu: draft.menu ?? null,
   }
 }
 
@@ -69,8 +76,13 @@ function stable(value: unknown): string {
 
 const same = (a: unknown, b: unknown) => stable(a) === stable(b)
 
-function pageName(slug: string): string {
-  return isPage(slug) ? PAGES[slug].label : slug
+function pageName(slug: string, ...lists: (CustomPage[] | null)[]): string {
+  if (isPage(slug)) return PAGES[slug].label
+  for (const list of lists) {
+    const page = list?.find((p) => p.key === slug)
+    if (page) return page.title
+  }
+  return 'a page'
 }
 
 /**
@@ -80,7 +92,7 @@ function pageName(slug: string): string {
 export function diffDrafts(
   a: DraftSnapshot,
   b: DraftSnapshot
-): { pages: string[]; styles: boolean; seo: string[] } {
+): { pages: string[]; styles: boolean; seo: string[]; site: boolean } {
   const slugs = new Set([...Object.keys(a.pages ?? {}), ...Object.keys(b.pages ?? {})])
   const seoSlugs = new Set([...Object.keys(a.page_seo ?? {}), ...Object.keys(b.page_seo ?? {})])
   return {
@@ -90,6 +102,10 @@ export function diffDrafts(
     // change against the live values, so this only has to be exact about
     // WHICH pages moved when undoing.
     seo: [...seoSlugs].filter((slug) => !same(a.page_seo?.[slug], b.page_seo?.[slug])),
+    // The list of pages or the menu. Null ("untouched") differs from a list
+    // only when writeDraftSite has actually changed something, and it names
+    // its own steps.
+    site: !same(a.custom_pages, b.custom_pages) || !same(a.menu, b.menu),
   }
 }
 
@@ -104,18 +120,20 @@ export function diffDrafts(
  * Null when nothing changed, which keeps no step.
  */
 export function describeChange(before: DraftSnapshot, after: DraftSnapshot): string | null {
-  const { pages, styles, seo } = diffDrafts(before, after)
+  const { pages, styles, seo, site } = diffDrafts(before, after)
+  const name = (slug: string) => pageName(slug, after.custom_pages, before.custom_pages)
 
+  if (site) return 'Pages & menu'
   if (seo.length) {
     return pages.length === 0 && !styles && seo.length === 1
-      ? `Search & sharing · ${pageName(seo[0])}`
+      ? `Search & sharing · ${name(seo[0])}`
       : 'Several changes'
   }
   if (pages.length === 0) return styles ? 'Site style' : null
   if (pages.length > 1 || styles) return 'Several changes'
 
   const slug = pages[0]
-  const where = pageName(slug)
+  const where = name(slug)
   const was = before.pages?.[slug] ?? []
   const now = after.pages?.[slug] ?? []
   const label = (type: string) => sectionDef(type)?.label ?? 'Section'
@@ -237,7 +255,12 @@ export async function moveStep(
   await supabase.from('site_draft_steps').delete().eq('id', step.id as number)
 
   const moved = diffDrafts(current, target)
-  return { label, pages: [...new Set([...moved.pages, ...moved.seo])], styles: moved.styles }
+  return {
+    label,
+    pages: [...new Set([...moved.pages, ...moved.seo])],
+    styles: moved.styles,
+    site: moved.site,
+  }
 }
 
 /** Publish and Discard end the draft, and its steps with it. */

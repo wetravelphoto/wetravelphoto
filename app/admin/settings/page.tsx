@@ -155,8 +155,9 @@ export default async function SettingsPage() {
         <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
           <h2 className="admin-h2">Menu</h2>
           <p className="admin-meta" style={{ margin: '0 0 0.85rem', lineHeight: 1.6 }}>
-            What each link in the header and footer is called. Leave one blank to use the name
-            shown in grey.
+            What each built-in page is called in the header and footer. Leave one blank to use
+            the name shown in grey. The menu&apos;s order, dropdowns, your own pages and links to
+            other sites are arranged in the editor, under <strong>Pages &amp; menu</strong>.
           </p>
 
           <div

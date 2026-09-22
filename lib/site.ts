@@ -95,6 +95,10 @@ export type SiteSettings = {
    * from the page itself.
    */
   page_seo: Record<string, unknown>
+  /** The photographer's own pages (lib/sections/pages.ts): [{ key, slug, title }]. */
+  custom_pages: unknown[]
+  /** The menu (lib/menu.ts). Null: never set, so the menu is built as it always was. */
+  menu: unknown[] | null
 
   show_newsletter: boolean
   newsletter_heading: string | null
@@ -240,6 +244,8 @@ const FALLBACK: SiteSettings = {
   contact_image_path: null,
   type_styles: {},
   page_seo: {},
+  custom_pages: [],
+  menu: null,
   show_newsletter: true,
   newsletter_heading: null,
   newsletter_body: null,

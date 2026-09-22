@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { getSiteSettings, siteUrl } from '@/lib/site'
 import { readPageSeo } from '@/lib/seo'
-import { PAGES, type PageSlug } from '@/lib/sections/pages'
+import { PAGES, sanitizeCustomPages, type PageSlug } from '@/lib/sections/pages'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl()
@@ -40,8 +40,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority,
     }))
 
+  // The photographer's own pages, unless hidden from search.
+  const ownPages: MetadataRoute.Sitemap = sanitizeCustomPages(settings.custom_pages)
+    .filter((p) => !readPageSeo(settings, p.key).noindex)
+    .map((p) => ({ url: `${base}/${p.slug}`, changeFrequency: 'monthly' as const, priority: 0.6 }))
+
   return [
     ...staticPages,
+    ...ownPages,
     ...(albums ?? []).map((a) => ({
       url: `${base}/trips/${a.slug}`,
       lastModified: a.updated_at ? new Date(a.updated_at) : undefined,

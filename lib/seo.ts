@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { PAGES, isPage } from '@/lib/sections/pages'
+import { findPage, isPageKey, sanitizeCustomPages } from '@/lib/sections/pages'
 import { str } from '@/lib/sections/registry'
 import type { LoadedSection } from '@/lib/sections/load'
 import type { SiteSettings } from '@/lib/site'
@@ -84,7 +84,7 @@ export function sanitizeSeoMap(input: unknown): PageSeoMap {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
   const out: PageSeoMap = {}
   for (const [page, value] of Object.entries(input as Record<string, unknown>)) {
-    if (!isPage(page)) continue
+    if (!isPageKey(page)) continue
     const clean = sanitizePageSeo(value)
     if (Object.keys(clean).length) out[page] = clean
   }
@@ -118,10 +118,16 @@ function mainSection(page: string, sections: LoadedSection[]): LoadedSection | u
   return type ? sections.find((s) => s.type === type && s.visible) : undefined
 }
 
-/** The page's title before the " — Site name" part. Empty for the homepage. */
-function autoTitle(page: string, sections: LoadedSection[]): string {
+/**
+ * The page's title before the " — Site name" part. Empty for the homepage.
+ * One of the photographer's own pages is titled by its name.
+ */
+function autoTitle(page: string, sections: LoadedSection[], settings: SiteSettings): string {
+  if (!MAIN[page]) {
+    return sanitizeCustomPages(settings.custom_pages).find((p) => p.key === page)?.title ?? ''
+  }
   const main = mainSection(page, sections)
-  return (main && str(main.settings, 'heading')) || MAIN[page]?.fallback || ''
+  return (main && str(main.settings, 'heading')) || MAIN[page].fallback
 }
 
 function autoDescription(page: string, sections: LoadedSection[], settings: SiteSettings): string {
@@ -190,7 +196,7 @@ export function resolveSeo(
   const own = readPageSeo(settings, page)
   const site = settings.site_title
 
-  const baseTitle = autoTitle(page, sections)
+  const baseTitle = autoTitle(page, sections, settings)
   const autoFull = page === 'home' || !baseTitle ? site : `${baseTitle} — ${site}`
   // A title typed for the page is used as typed, with the site's name after it
   // — except on the homepage, where the name usually IS the title.
@@ -236,7 +242,7 @@ export function pageMetadata(
   settings: SiteSettings
 ): Metadata {
   const seo = resolveSeo(page, sections, settings)
-  const path = isPage(page) ? PAGES[page].path : '/'
+  const path = findPage(page, sanitizeCustomPages(settings.custom_pages))?.path ?? '/'
   const images = seo.image ? [{ url: photoUrl(seo.image) }] : undefined
 
   return {

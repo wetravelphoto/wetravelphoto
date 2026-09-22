@@ -1,8 +1,14 @@
 import { PLATFORM } from '@/lib/platform'
-import { PAGES, isPage } from '@/lib/sections/pages'
+import { CUSTOM_KEY, findPage, isPage, sitePages } from '@/lib/sections/pages'
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { loadDraftPage, draftStatus, draftStyleSettings } from '@/lib/drafts/store'
+import {
+  currentCustomPages,
+  draftStatus,
+  draftStyleSettings,
+  loadDraftPage,
+} from '@/lib/drafts/store'
+import { defaultPageLabel, legacyMenu, sanitizeMenu } from '@/lib/menu'
 import { readSteps } from '@/lib/drafts/steps'
 import { readPageSeo, resolveSeo } from '@/lib/seo'
 import { siteUrl } from '@/lib/site'
@@ -45,7 +51,7 @@ export default async function EditPage({
 }) {
   const { page } = await params
   const { mode } = await searchParams
-  if (!isPage(page)) notFound()
+  if (!isPage(page) && !CUSTOM_KEY.test(page)) notFound()
 
   const supabase = await createClient()
   const {
@@ -53,6 +59,13 @@ export default async function EditPage({
   } = await supabase.auth.getUser()
 
   if (!user) redirect('/admin/login')
+
+  // One of the photographer's own pages, as the draft has them. A page deleted
+  // (or undone out of existence) while it was open sends the editor home
+  // rather than to a "not found".
+  const customPages = await currentCustomPages()
+  const current = findPage(page, customPages)
+  if (!current) redirect('/edit/home')
 
   const [{ sections, legacy, settings }, status, style, steps] = await Promise.all([
     loadDraftPage(page),
@@ -98,7 +111,18 @@ export default async function EditPage({
 
       <Canvas
       page={page}
-      title={PAGES[page].label}
+      title={current.label}
+      pagePath={current.path}
+      pages={sitePages(customPages)}
+      customPages={customPages}
+      menu={sanitizeMenu(settings.menu) ?? legacyMenu()}
+      menuLabels={Object.fromEntries(
+        sitePages(customPages).map((p) => [p.key, defaultPageLabel(p.key, settings, customPages)])
+      )}
+      pagesOff={[
+        ...(settings.show_about === false ? ['about'] : []),
+        ...(settings.show_shop ? [] : ['shop']),
+      ]}
       sections={rows}
       legacy={legacy}
       missing={status.missing}

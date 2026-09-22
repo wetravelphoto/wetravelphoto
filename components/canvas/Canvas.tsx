@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
-import { PAGES, PAGE_SLUGS } from '@/lib/sections/pages'
+import type { CustomPage, SitePage } from '@/lib/sections/pages'
+import type { MenuItem } from '@/lib/menu'
 import {
   addDraftSection,
   duplicateDraftSection,
@@ -32,6 +33,7 @@ import PresetRail from '@/components/canvas/PresetRail'
 import StyleMode from '@/components/canvas/StyleMode'
 import PanelResizer from '@/components/canvas/PanelResizer'
 import PageSettings from '@/components/canvas/PageSettings'
+import PagesMenu from '@/components/canvas/PagesMenu'
 import type { PageSeo, ResolvedSeo } from '@/lib/seo'
 import type { StoryOption } from '@/components/canvas/editors/HeroStories'
 
@@ -72,6 +74,12 @@ const FRAME_INSET = 44
 export default function Canvas({
   page,
   title,
+  pagePath,
+  pages,
+  customPages,
+  menu,
+  menuLabels,
+  pagesOff,
   sections,
   legacy,
   missing,
@@ -90,6 +98,17 @@ export default function Canvas({
 }: {
   page: string
   title: string
+  /** This page's public address. */
+  pagePath: string
+  /** Every page the editor can open, built-in and the photographer's own. */
+  pages: SitePage[]
+  customPages: CustomPage[]
+  /** The menu as the draft has it (or the usual one, never set). */
+  menu: MenuItem[]
+  /** What each page is called in the menu when no label is typed. */
+  menuLabels: Record<string, string>
+  /** Built-in pages switched off in Settings, which the menu leaves out. */
+  pagesOff: string[]
   sections: CanvasSection[]
   legacy: boolean
   missing: boolean
@@ -150,6 +169,8 @@ export default function Canvas({
   const [picking, setPicking] = useState<{ after: string | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  /** The Pages & menu window. */
+  const [managing, setManaging] = useState(false)
 
   /**
    * A drag should move the row under the cursor now, not after a round trip —
@@ -415,13 +436,21 @@ export default function Canvas({
                 router.push(`/edit/${e.target.value}${mode === 'style' ? '?mode=style' : ''}`)
               }
             >
-              {PAGE_SLUGS.map((slug) => (
-                <option key={slug} value={slug}>
-                  {PAGES[slug].label}
+              {pages.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
                 </option>
               ))}
             </select>
           </label>
+          <button
+            type="button"
+            className="cv-btn cv-btn-ghost cv-pages-btn"
+            onClick={() => setManaging(true)}
+            title="Add pages, rename them, and arrange the menu"
+          >
+            Pages &amp; menu
+          </button>
           <div className="cv-history" role="group" aria-label="Undo and redo">
             <button
               type="button"
@@ -666,7 +695,7 @@ export default function Canvas({
               resizer={<PanelResizer />}
               page={page}
               pageLabel={title}
-              path={PAGES[page as keyof typeof PAGES]?.path ?? '/'}
+              path={pagePath}
               seo={seo}
               resolved={seoResolved}
               siteTitle={siteTitle}
@@ -677,6 +706,26 @@ export default function Canvas({
           )
         )}
       </div>
+
+      {managing && (
+        <PagesMenu
+          currentPage={page}
+          pages={pages}
+          customPages={customPages}
+          menu={menu}
+          menuLabels={menuLabels}
+          pagesOff={pagesOff}
+          onClose={() => setManaging(false)}
+          onChanged={() => {
+            tell({ type: 'refresh' })
+            router.refresh()
+          }}
+          onOpen={(key) => {
+            setManaging(false)
+            router.push(`/edit/${key}`)
+          }}
+        />
+      )}
 
       {picking && (
         <AddSectionModal

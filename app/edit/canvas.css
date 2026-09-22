@@ -1022,6 +1022,254 @@
   color: var(--cv-soft);
 }
 
+/* ── Pages & menu ────────────────────────────────────────────────────────── */
+
+.cv-pages-btn {
+  height: 26px;
+  padding: 0 0.55rem;
+  font-size: 0.72rem;
+}
+
+.cv-btn-bad:hover:not(:disabled) {
+  color: #ffc9cb;
+  border-color: rgba(224, 87, 91, 0.5);
+}
+
+.cv-pm {
+  width: min(1040px, 100%);
+}
+
+.cv-pm-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 0;
+  min-height: 0;
+  overflow-y: auto;
+  transition: opacity 0.12s ease;
+}
+
+.cv-pm-body[data-busy='true'] {
+  opacity: 0.75;
+}
+
+@media (max-width: 800px) {
+  .cv-pm-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cv-pm-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem 1.2rem;
+  min-width: 0;
+}
+
+.cv-pm-col + .cv-pm-col {
+  border-left: 1px solid var(--cv-line);
+}
+
+.cv-pm-col input[type='text'],
+.cv-pm-col select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.38rem 0.5rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 4px;
+  background: var(--cv-bg);
+  color: var(--cv-ink);
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.cv-pm-col input[type='text']:focus,
+.cv-pm-col select:focus {
+  outline: none;
+  border-color: var(--cv-accent);
+}
+
+.cv-pm-col input::placeholder {
+  color: var(--cv-mute);
+}
+
+.cv-pm-pages,
+.cv-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cv-pm-page {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.5rem 0.45rem 0.65rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 5px;
+  background: var(--cv-panel-2);
+}
+
+.cv-pm-page[data-on='true'] {
+  border-color: rgba(76, 141, 255, 0.5);
+}
+
+.cv-pm-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.cv-pm-path {
+  font-size: 0.66rem;
+  font-weight: 400;
+  color: var(--cv-mute);
+}
+
+.cv-pm-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.cv-pm-actions .cv-btn {
+  height: 24px;
+  padding: 0 0.5rem;
+  font-size: 0.7rem;
+}
+
+.cv-pm-tag {
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cv-mute);
+}
+
+.cv-pm-edit,
+.cv-pm-new {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.cv-pm-new {
+  margin-top: 0.6rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--cv-line);
+}
+
+.cv-pm-new .cv-btn {
+  align-self: flex-start;
+}
+
+.cv-pm-slug {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--cv-mute);
+}
+
+.cv-pm-hint {
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--cv-mute);
+}
+
+.cv-menu-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.45rem 0.5rem 0.5rem;
+  border: 1px solid var(--cv-line);
+  border-radius: 5px;
+  background: var(--cv-panel-2);
+}
+
+.cv-menu-folder {
+  background: rgba(76, 141, 255, 0.06);
+}
+
+.cv-menu-children {
+  margin: 0.2rem 0 0 1.4rem;
+}
+
+.cv-menu-children .cv-menu-row {
+  background: var(--cv-panel);
+}
+
+.cv-menu-main {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.cv-menu-arrows,
+.cv-menu-tools {
+  flex: 0 0 auto;
+  display: flex;
+}
+
+.cv-menu-label {
+  flex: 1 1 auto;
+}
+
+.cv-menu-meta {
+  margin: 0 0 0 46px;
+  font-size: 0.66rem;
+  color: var(--cv-mute);
+}
+
+.cv-menu-warn {
+  color: #ffc46b;
+}
+
+.cv-menu-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 46px;
+}
+
+.cv-menu-link input[type='text'] {
+  flex: 1 1 12rem;
+}
+
+.cv-menu-check {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--cv-soft);
+  white-space: nowrap;
+}
+
+.cv-menu-link-warn {
+  flex-basis: 100%;
+  font-size: 0.64rem;
+  line-height: 1.45;
+}
+
+.cv-pm-add {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.cv-pm-add select {
+  flex: 1 1 auto;
+}
+
 /* ── Add a section ───────────────────────────────────────────────────────── */
 
 .cv-modal {

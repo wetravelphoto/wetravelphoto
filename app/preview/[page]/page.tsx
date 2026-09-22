@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { loadDraftPage } from '@/lib/drafts/store'
+import { currentCustomPages, loadDraftPage } from '@/lib/drafts/store'
 import { cssVariables, fontsToLoad, resolveTokens } from '@/lib/styles/tokens'
 import { fontHref } from '@/lib/fonts'
 import PageBody from '@/components/PageBody'
@@ -45,7 +45,9 @@ export const metadata = {
 
 export default async function PreviewPage({ params }: { params: Promise<{ page: string }> }) {
   const { page } = await params
-  if (!isPage(page)) notFound()
+  // A built-in page, or one of the photographer's — as the draft has them, so
+  // a page created a moment ago can be previewed before it is published.
+  if (!isPage(page) && !(await currentCustomPages()).some((p) => p.key === page)) notFound()
 
   const supabase = await createClient()
   const {

@@ -13,6 +13,7 @@ import {
   writeDraftPage,
   writeDraftStyles,
   writeDraftSeo,
+  currentCustomPages,
   type DraftSection,
 } from '@/lib/drafts/store'
 import { getSiteSettings } from '@/lib/site'
@@ -56,8 +57,12 @@ const requireEditor = requireSiteEditor
  * could create a draft for "/anything", which Publish would then write into
  * page_sections as a page nobody can see or remove.
  */
-function requirePage(page: string): void {
-  if (!isPage(page)) throw new Error(`There is no page called "${page}".`)
+async function requirePage(page: string): Promise<void> {
+  if (isPage(page)) return
+  // One of the photographer's own pages — as the draft has them, so a page
+  // created a moment ago can be edited before it is published.
+  const custom = await currentCustomPages()
+  if (!custom.some((p) => p.key === page)) throw new Error('That page no longer exists.')
 }
 
 /**
@@ -75,7 +80,7 @@ function done(page: string) {
 /** Starts a draft if there is not one, and returns the page's sections. */
 export async function beginEditing(page: string): Promise<DraftSection[]> {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
   const draft = await ensureDraft(page)
   return draft.pages[page] ?? []
 }
@@ -88,7 +93,7 @@ export async function beginEditing(page: string): Promise<DraftSection[]> {
  */
 export async function reorderDraft(page: string, orderedIds: string[]) {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
   const byId = new Map(rows.map((r) => [r.id, r]))
@@ -107,7 +112,7 @@ export async function reorderDraft(page: string, orderedIds: string[]) {
 
 export async function setDraftVisible(page: string, id: string, visible: boolean) {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
 
@@ -121,7 +126,7 @@ export async function setDraftVisible(page: string, id: string, visible: boolean
 
 export async function addDraftSection(page: string, type: string, afterId?: string) {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
 
   const def = sectionDef(type)
   if (!def) throw new Error(`Unknown section type: ${type}`)
@@ -162,7 +167,7 @@ export async function addDraftSection(page: string, type: string, afterId?: stri
  */
 export async function duplicateDraftSection(page: string, id: string) {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
 
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
@@ -192,7 +197,7 @@ export async function duplicateDraftSection(page: string, id: string) {
 
 export async function removeDraftSection(page: string, id: string) {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
 
@@ -212,7 +217,7 @@ export async function removeDraftSection(page: string, id: string) {
 
 export async function updateDraftSection(page: string, id: string, formData: FormData) {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
 
@@ -291,7 +296,7 @@ export async function updateDraftSectionValues(
   values: Record<string, unknown>
 ) {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
 
@@ -415,7 +420,7 @@ export async function resetDraftStyles() {
  */
 export async function updateDraftPageSeo(page: string, values: unknown) {
   await requireEditor()
-  requirePage(page)
+  await requirePage(page)
   await writeDraftSeo(page, sanitizePageSeo(values))
   done(page)
 }
@@ -440,9 +445,12 @@ async function step(direction: 'undo' | 'redo') {
   const result = await stepDraft(direction)
   if (!result) return null
 
-  for (const page of result.pages) if (isPage(page)) done(page)
-  // A style change shows on every page.
-  if (result.styles) for (const page of PAGE_SLUGS) done(page)
+  for (const page of result.pages) done(page)
+  // A style change shows on every page, and so do the menu and the page list.
+  if (result.styles || result.site) {
+    revalidatePath('/edit', 'layout')
+    revalidatePath('/preview', 'layout')
+  }
 
   return result
 }
@@ -466,6 +474,7 @@ export async function publish() {
 export async function discard() {
   await requireEditor()
   await discardDraft()
-  revalidatePath('/edit/home')
-  revalidatePath('/preview/home')
+  // Every editor page: a discarded draft can take pages and menu entries with it.
+  revalidatePath('/edit', 'layout')
+  revalidatePath('/preview', 'layout')
 }

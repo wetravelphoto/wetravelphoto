@@ -1,4 +1,6 @@
-import { getSiteSettings } from '@/lib/site'
+import { getSiteSettings, type SiteSettings } from '@/lib/site'
+import { resolveMenu, sanitizeMenu } from '@/lib/menu'
+import { sanitizeCustomPages } from '@/lib/sections/pages'
 import { photoUrl } from '@/lib/images'
 import HeaderNav from '@/components/HeaderNav'
 import { getFont } from '@/lib/fonts'
@@ -7,8 +9,26 @@ import { getFont } from '@/lib/fonts'
  * Server wrapper so every page picks up the site's own name and logo without
  * each one having to fetch settings itself.
  */
-export default async function SiteHeader({ overHero = false }: { overHero?: boolean }) {
-  const settings = await getSiteSettings()
+export default async function SiteHeader({
+  overHero = false,
+  settings: given,
+}: {
+  overHero?: boolean
+  /**
+   * The settings to draw with. PageBody passes its own, which in the editor's
+   * preview are the draft's; everywhere else the live settings are read here.
+   */
+  settings?: SiteSettings
+}) {
+  const settings = given ?? (await getSiteSettings())
+
+  // The menu built in the editor (lib/menu.ts), or the one every site had
+  // before it could be edited.
+  const links = resolveMenu(
+    sanitizeMenu(settings.menu),
+    settings,
+    sanitizeCustomPages(settings.custom_pages)
+  )
 
   const nav = getFont(settings.header_nav_font || 'Oswald')
 
@@ -19,15 +39,7 @@ export default async function SiteHeader({ overHero = false }: { overHero?: bool
       logoUrl={settings.logo_header_path ? photoUrl(settings.logo_header_path) : null}
       logoHeight={settings.logo_header_height ?? 34}
       align={settings.header_align || 'split'}
-      showAbout={settings.show_about !== false}
-      showShop={settings.show_shop === true}
-      labels={{
-        galleries: settings.nav_galleries_label || 'Galleries',
-        journal: settings.nav_journal_label || 'Journal',
-        about: settings.nav_about_label || 'About',
-        contact: settings.nav_contact_label || 'Contact',
-        shop: settings.nav_shop_label || 'Prints',
-      }}
+      links={links}
       navStyle={{
         ['--nav-font' as string]: nav.stack,
         ['--nav-weight' as string]: nav.weight,

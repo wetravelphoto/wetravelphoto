@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Logo from '@/components/Logo'
+import type { NavLink } from '@/lib/menu'
 
 export default function HeaderNav({
   overHero = false,
@@ -12,9 +13,7 @@ export default function HeaderNav({
   logoHeight,
   align = 'split',
   navStyle,
-  labels,
-  showAbout = true,
-  showShop = false,
+  links,
 }: {
   overHero?: boolean
   siteTitle: string
@@ -22,9 +21,8 @@ export default function HeaderNav({
   logoHeight: number
   align?: string
   navStyle?: React.CSSProperties
-  labels: { galleries: string; journal: string; about: string; contact: string; shop: string }
-  showAbout?: boolean
-  showShop?: boolean
+  /** The menu, resolved (lib/menu.ts). Folders carry `children`. */
+  links: NavLink[]
 }) {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -47,13 +45,12 @@ export default function HeaderNav({
     }
   }, [menuOpen])
 
-  const links = [
-    { href: '/trips', label: labels.galleries },
-    { href: '/journal', label: labels.journal },
-    ...(showShop ? [{ href: '/shop', label: labels.shop }] : []),
-    ...(showAbout ? [{ href: '/about', label: labels.about }] : []),
-    { href: '/contact', label: labels.contact },
-  ]
+  // The homepage is only "active" on itself, not on every address.
+  const isActive = (href: string) =>
+    !!href && !href.startsWith('http') && (href === '/' ? pathname === '/' : pathname.startsWith(href))
+
+  // The phone menu always offers the way home, unless the menu already does.
+  const hasHome = links.some((l) => l.href === '/' || l.children?.some((c) => c.href === '/'))
 
   const mode = overHero && !scrolled ? 'over' : 'solid'
 
@@ -72,11 +69,29 @@ export default function HeaderNav({
         </Link>
 
         <nav className="site-nav">
-          {links.map((link) => (
-            <Link key={link.href} href={link.href} data-active={pathname.startsWith(link.href)}>
-              {link.label}
-            </Link>
-          ))}
+          {links.map((link) =>
+            link.children ? (
+              // A folder: its heading opens the list on hover and on focus
+              // (keyboard), with no script — see .site-nav-folder in home.css.
+              <div key={link.id} className="site-nav-folder">
+                <button
+                  type="button"
+                  className="site-nav-folder-label"
+                  aria-haspopup="true"
+                  data-active={link.children.some((c) => isActive(c.href))}
+                >
+                  {link.label}
+                </button>
+                <div className="site-nav-dropdown">
+                  {link.children.map((child) => (
+                    <MenuLink key={child.id} link={child} active={isActive(child.href)} />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <MenuLink key={link.id} link={link} active={isActive(link.href)} />
+            )
+          )}
         </nav>
 
         <button className="menu-toggle" onClick={() => setMenuOpen(true)} aria-label="Open menu">
@@ -91,16 +106,54 @@ export default function HeaderNav({
           <button className="mobile-menu-close" onClick={() => setMenuOpen(false)} aria-label="Close menu">
             &times;
           </button>
-          <Link href="/" onClick={() => setMenuOpen(false)}>
-            Home
-          </Link>
-          {links.map((link) => (
-            <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)}>
-              {link.label}
+          {!hasHome && (
+            <Link href="/" onClick={() => setMenuOpen(false)}>
+              Home
             </Link>
-          ))}
+          )}
+          {links.map((link) =>
+            link.children ? (
+              <div key={link.id} className="mobile-menu-folder">
+                <span className="mobile-menu-folder-label">{link.label}</span>
+                {link.children.map((child) => (
+                  <MenuLink key={child.id} link={child} onClick={() => setMenuOpen(false)} />
+                ))}
+              </div>
+            ) : (
+              <MenuLink key={link.id} link={link} onClick={() => setMenuOpen(false)} />
+            )
+          )}
         </div>
       )}
     </>
+  )
+}
+
+/** One menu entry: a page on this site, or a link elsewhere. */
+function MenuLink({
+  link,
+  active,
+  onClick,
+}: {
+  link: NavLink
+  active?: boolean
+  onClick?: () => void
+}) {
+  if (link.external) {
+    return (
+      <a
+        href={link.href}
+        onClick={onClick}
+        {...(link.newTab ? { target: '_blank' } : {})}
+        rel="noopener noreferrer"
+      >
+        {link.label}
+      </a>
+    )
+  }
+  return (
+    <Link href={link.href} data-active={active} onClick={onClick}>
+      {link.label}
+    </Link>
   )
 }

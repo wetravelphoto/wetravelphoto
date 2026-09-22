@@ -16,6 +16,7 @@ import { sanitizePageSeo, sanitizeSeoMap, type PageSeo, type PageSeoMap } from '
 import { isPage, sanitizeCustomPages, type CustomPage } from '@/lib/sections/pages'
 import { sanitizeMenu, type MenuItem } from '@/lib/menu'
 import { chromeLabel, sanitizeChrome, type ChromeValues } from '@/lib/chrome'
+import { hasVersions, recordVersion } from '@/lib/drafts/versions'
 import {
   clearSteps,
   describeChange,
@@ -125,26 +126,32 @@ export async function readDraft(): Promise<DraftState> {
 
   if (!data) return { draft: null, missing: false }
 
+  return { draft: parseDraftRow(data), missing: false }
+}
+
+/**
+ * A site_draft row as the rest of the app uses it, every part cleaned. Shared
+ * by the editor's own read and the review link's (lib/drafts/review.ts), which
+ * reads the row a different way but must see exactly the same draft.
+ */
+export function parseDraftRow(data: Record<string, unknown>): SiteDraft {
   return {
-    draft: {
-      // Retired section types are read as their replacements here too, so a
-      // draft written before a rename can still be edited: every canvas action
-      // looks the row's type up in the registry.
-      pages: Object.fromEntries(
-        Object.entries((data.pages ?? {}) as Record<string, DraftSection[]>).map(([page, rows]) => [
-          page,
-          Array.isArray(rows) ? rows.map(normalizeRow) : [],
-        ])
-      ),
-      global_styles: (data.global_styles ?? null) as DraftGlobalStyles | null,
-      type_styles: (data.type_styles ?? null) as DraftTypeStyles | null,
-      page_seo: data.page_seo ? sanitizeSeoMap(data.page_seo) : null,
-      custom_pages: Array.isArray(data.custom_pages) ? sanitizeCustomPages(data.custom_pages) : null,
-      menu: sanitizeMenu(data.menu),
-      chrome: data.chrome ? sanitizeChrome(data.chrome) : null,
-      updatedAt: (data.updated_at as string) ?? null,
-    },
-    missing: false,
+    // Retired section types are read as their replacements here too, so a
+    // draft written before a rename can still be edited: every canvas action
+    // looks the row's type up in the registry.
+    pages: Object.fromEntries(
+      Object.entries((data.pages ?? {}) as Record<string, DraftSection[]>).map(([page, rows]) => [
+        page,
+        Array.isArray(rows) ? rows.map(normalizeRow) : [],
+      ])
+    ),
+    global_styles: (data.global_styles ?? null) as DraftGlobalStyles | null,
+    type_styles: (data.type_styles ?? null) as DraftTypeStyles | null,
+    page_seo: data.page_seo ? sanitizeSeoMap(data.page_seo) : null,
+    custom_pages: Array.isArray(data.custom_pages) ? sanitizeCustomPages(data.custom_pages) : null,
+    menu: sanitizeMenu(data.menu),
+    chrome: data.chrome ? sanitizeChrome(data.chrome) : null,
+    updatedAt: (data.updated_at as string) ?? null,
   }
 }
 
@@ -181,7 +188,19 @@ export async function draftStatus(): Promise<{
  * then honest by construction rather than by diligence.
  */
 export async function loadDraftPage(page = 'home'): Promise<PageSections & { isDraft: boolean }> {
-  const [{ draft }, live] = await Promise.all([readDraft(), loadPageSections(page)])
+  const { draft } = await readDraft()
+  return composeDraftPage(draft, page)
+}
+
+/**
+ * One page of a given draft laid over the live site. The editor passes its own
+ * draft; a review link passes the draft it was given access to.
+ */
+export async function composeDraftPage(
+  draft: SiteDraft | null,
+  page: string
+): Promise<PageSections & { isDraft: boolean }> {
+  const live = await loadPageSections(page)
   if (!draft) return { ...live, isDraft: false }
 
   // Draft style and search settings sit on top of the live settings object,
@@ -499,6 +518,21 @@ export async function writeDraftSeo(page: string, values: PageSeo): Promise<void
   await upsertDraft({ ...base, page_seo: next }, { kind: 'edit', before: base, label })
 }
 
+// ── Restoring a version ──────────────────────────────────────────────────────
+
+/**
+ * Makes a kept version (lib/drafts/versions.ts) the draft. The live site does
+ * not change: the photographer looks at it in the editor and publishes it, or
+ * undoes it — it is one Undo step, like any other edit.
+ */
+export async function restoreDraftFrom(snapshot: DraftSnapshot, label: string): Promise<void> {
+  const { draft, missing } = await readDraft()
+  if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
+
+  const base: SiteDraft = draft ?? emptyDraft()
+  await upsertDraft({ ...base, ...snapshot }, { kind: 'edit', before: base, label })
+}
+
 // ── Undo and redo ────────────────────────────────────────────────────────────
 
 /**
@@ -553,6 +587,12 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
 
   if (pages.length === 0 && !styles && !seo && !site && !chrome) {
     throw new Error('There is nothing waiting to be published.')
+  }
+
+  // The first publish also keeps the site as it was before it, so the version
+  // history always has a starting point to go back to. Best effort.
+  if (!(await hasVersions())) {
+    await recordVersion('baseline', 'The site before its first publish from the editor.')
   }
 
   await recordHistory({
@@ -610,6 +650,9 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
   // the way back for pages the canvas owns, and the live contract for pages it
   // does not (each print's page reads the shop_* columns). See MIRRORED.
   for (const page of pages) await mirrorPage(page)
+
+  // What is live now, kept as a version (lib/drafts/versions.ts). Best effort.
+  await recordVersion('publish', describeDraft(pages, styles, seo, site || chrome))
 
   await deleteDraft()
   await clearSteps()

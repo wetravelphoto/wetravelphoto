@@ -35,6 +35,8 @@ import PanelResizer from '@/components/canvas/PanelResizer'
 import PageSettings from '@/components/canvas/PageSettings'
 import PagesMenu from '@/components/canvas/PagesMenu'
 import ChromePanel from '@/components/canvas/ChromePanel'
+import HistoryModal from '@/components/canvas/HistoryModal'
+import ShareModal from '@/components/canvas/ShareModal'
 import type { ChromeKey } from '@/lib/chrome'
 import type { PageSeo, ResolvedSeo } from '@/lib/seo'
 import type { StoryOption } from '@/components/canvas/editors/HeroStories'
@@ -178,6 +180,8 @@ export default function Canvas({
   const [note, setNote] = useState<string | null>(null)
   /** The Pages & menu window. */
   const [managing, setManaging] = useState(false)
+  /** The version history and share-a-preview windows. */
+  const [dialog, setDialog] = useState<'history' | 'share' | null>(null)
 
   /**
    * A drag should move the row under the cursor now, not after a round trip —
@@ -531,6 +535,22 @@ export default function Canvas({
         </div>
 
         <div className="cv-top-right">
+          <button
+            type="button"
+            className="cv-btn cv-btn-ghost"
+            onClick={() => setDialog('history')}
+            title="Every Publish, kept; restore any of them into the draft"
+          >
+            History
+          </button>
+          <button
+            type="button"
+            className="cv-btn cv-btn-ghost"
+            onClick={() => setDialog('share')}
+            title="A private link to these unpublished changes"
+          >
+            Share
+          </button>
           <a href={`/preview/${page}`} target="_blank" rel="noreferrer" className="cv-btn cv-btn-ghost">
             Open preview ↗
           </a>
@@ -738,6 +758,24 @@ export default function Canvas({
           )
         )}
       </div>
+
+      {dialog === 'history' && (
+        <HistoryModal
+          hasDraft={hasDraft}
+          onClose={() => setDialog(null)}
+          onRestored={(label) => {
+            setDialog(null)
+            setSelected(null)
+            setRemountArmed(true)
+            setNote(label)
+            tell({ type: 'settle' })
+            tell({ type: 'refresh' })
+            router.refresh()
+          }}
+        />
+      )}
+
+      {dialog === 'share' && <ShareModal onClose={() => setDialog(null)} />}
 
       {managing && (
         <PagesMenu

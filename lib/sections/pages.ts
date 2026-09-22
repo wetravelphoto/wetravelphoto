@@ -81,7 +81,7 @@ const RESERVED = new Set([
   'sitemap', 'sitemap.xml', 'robots', 'robots.txt', 'favicon', 'favicon.ico',
   'static', 'public', 'assets', 'images', 'img', 'media', 'files', 'cdn',
   'index', 'search', 'feed', 'rss', 'blog', 'cart', 'checkout', 'order', 'orders',
-  'well-known', '_next', 'auth', 'g', 's', 'share', 'lensgrid',
+  'well-known', '_next', 'auth', 'g', 's', 'share', 'lensgrid', 'review',
 ])
 
 /** A title turned into an address: "Weddings & Elopements" → "weddings-elopements". */

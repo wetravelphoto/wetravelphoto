@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { sendMessage } from '@/app/actions/contact'
+import Turnstile from '@/components/Turnstile'
 
 export default function ContactForm({
   note,
@@ -60,6 +61,9 @@ export default function ContactForm({
         style={{ position: 'absolute', left: '-9999px' }}
         aria-hidden="true"
       />
+
+      {/* Spam check; invisible for most visitors, absent when not configured. */}
+      {!editable && <Turnstile />}
 
       {error && <p className="contact-error">{error}</p>}
 

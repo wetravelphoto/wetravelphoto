@@ -5,6 +5,11 @@ import { updateIdentity, updateMenu } from '@/app/actions/site'
 import { updateBranding } from '@/app/actions/branding'
 import { saveInstagramToken } from '@/app/actions/instagram'
 import InstagramPanel from '@/components/admin/InstagramPanel'
+import ContactEmailPanel from '@/components/admin/ContactEmailPanel'
+import NewsletterPanel from '@/components/admin/NewsletterPanel'
+import { emailConfigured } from '@/lib/email'
+import { providerInfo } from '@/lib/newsletter/providers'
+import { readConnection } from '@/lib/newsletter/connection'
 import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
 import BackfillPanel from '@/components/admin/BackfillPanel'
@@ -22,6 +27,17 @@ export default async function SettingsPage() {
     .from('newsletter_signups')
     .select('id', { count: 'exact', head: true })
 
+  // Sign-ups not yet sent to the connected mailing service, and how many of
+  // those failed. (Both read 0 before the columns exist.)
+  const { count: waitingCount } = await supabase
+    .from('newsletter_signups')
+    .select('id', { count: 'exact', head: true })
+    .is('synced_at', null)
+  const { count: failedCount } = await supabase
+    .from('newsletter_signups')
+    .select('id', { count: 'exact', head: true })
+    .not('sync_error', 'is', null)
+
   const { count: igCount } = await supabase
     .from('instagram_media')
     .select('id', { count: 'exact', head: true })
@@ -36,6 +52,10 @@ export default async function SettingsPage() {
   const instagramConnected = editor
     ? await hasInstagramToken({ db: supabase, tenantId: editor.tenantId })
     : false
+
+  // The newsletter connection, WITHOUT its key: only the service and list go
+  // to the page.
+  const newsletter = editor ? await readConnection(supabase, editor.tenantId) : null
 
   return (
     <div style={{ maxWidth: 760 }}>
@@ -118,6 +138,16 @@ export default async function SettingsPage() {
           <SaveBar label="Save contact details" />
         </div>
       </form>
+
+      <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
+        <h2 className="admin-h2">Contact form messages</h2>
+        <ContactEmailPanel
+          notify={settings.contact_notify !== false}
+          address={settings.contact_notify_email ?? null}
+          publicEmail={settings.email_public ?? null}
+          emailReady={emailConfigured()}
+        />
+      </div>
 
       {/* The site's navigation, in one place. Each link used to be named on its
           own page's form; the header belongs to the site, not to a page. */}
@@ -248,11 +278,24 @@ export default async function SettingsPage() {
 
       <div className="admin-panel" style={{ marginBottom: '1.25rem' }}>
         <h2 className="admin-h2">Newsletter</h2>
-        <p className="admin-meta" style={{ margin: 0, lineHeight: 1.6 }}>
-          {signupCount ?? 0} signup{signupCount === 1 ? '' : 's'}. Stored in your database, not yet
-          connected to a mailing service. The signup block in the footer (whether it shows, its
-          heading and text) is edited in the editor: click the footer.
-        </p>
+        <NewsletterPanel
+          providers={providerInfo()}
+          connection={
+            newsletter
+              ? {
+                  provider: newsletter.provider,
+                  listId: newsletter.listId,
+                  listName: newsletter.listName,
+                  doubleOptIn: newsletter.doubleOptIn,
+                }
+              : null
+          }
+          counts={{
+            total: signupCount ?? 0,
+            waiting: newsletter ? (waitingCount ?? 0) : 0,
+            failed: newsletter ? (failedCount ?? 0) : 0,
+          }}
+        />
       </div>
 
       {/* Only shown when there's actually something to process. New uploads

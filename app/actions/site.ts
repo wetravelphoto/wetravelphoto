@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { patchSiteSettings } from '@/lib/site-patch'
 import { requireEditor } from '@/lib/auth'
+import { getSiteSettings } from '@/lib/site'
+import { EMAIL_PATTERN, emailConfigured, sendEmail } from '@/lib/email'
 
 /**
  * Settings are split by page so each form only writes its own fields —
@@ -116,4 +118,42 @@ export async function updateShopSettings(formData: FormData) {
     },
     ['/shop', '/admin/shop/settings']
   )
+}
+
+/**
+ * Contact-form messages: whether each one is emailed to the photographer, and
+ * to which address (empty: the public email). See lib/contact-notify.ts.
+ */
+export async function updateContactEmail(
+  notify: boolean,
+  address: string
+): Promise<{ ok: boolean; message: string }> {
+  const clean = address.trim() || null
+  if (clean && (clean.length > 200 || !EMAIL_PATTERN.test(clean))) {
+    return { ok: false, message: 'That email address doesn’t look right.' }
+  }
+  await patch({ contact_notify: notify === true, contact_notify_email: clean }, [])
+  return { ok: true, message: 'Saved.' }
+}
+
+/** Sends a test email to the address messages go to, so the photographer can see it arrive. */
+export async function sendTestEmail(): Promise<{ ok: boolean; message: string }> {
+  await requireEditor()
+  if (!emailConfigured()) {
+    return { ok: false, message: 'Email sending is not set up on the server yet (RESEND_API_KEY and MAIL_FROM_ADDRESS).' }
+  }
+  const settings = await getSiteSettings()
+  const to = settings.contact_notify_email || settings.email_public
+  if (!to) return { ok: false, message: 'Add an address to send messages to first, and save.' }
+
+  const site = settings.site_title || 'your website'
+  const result = await sendEmail({
+    to,
+    fromName: site,
+    subject: `Test: contact messages from ${site} reach you`,
+    text: `This is a test from your website's settings.\n\nWhen someone uses the contact form on ${site}, their message will arrive here like this, and replying will answer them directly.`,
+  })
+  return result.ok
+    ? { ok: true, message: `Sent to ${to}. Check your inbox (and the spam folder, the first time).` }
+    : { ok: false, message: `Could not send: ${result.error}` }
 }

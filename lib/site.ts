@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 
 export type SiteSettings = {
+  /** The site this row belongs to. Present on every stored row; absent on the built-in fallback. */
+  tenant_id?: string
   site_title: string
   owner_name: string | null
 
@@ -49,6 +51,10 @@ export type SiteSettings = {
   facebook_url: string | null
   youtube_url: string | null
   email_public: string | null
+  /** Email each contact-form message to the photographer (lib/contact-notify.ts). */
+  contact_notify: boolean
+  /** Where those emails go. Empty: the public email address. */
+  contact_notify_email: string | null
 
   featured_post_ids: string[]
   hero_titles: Record<string, string>
@@ -208,6 +214,8 @@ const FALLBACK: SiteSettings = {
   facebook_url: null,
   youtube_url: null,
   email_public: null,
+  contact_notify: true,
+  contact_notify_email: null,
   featured_post_ids: [],
   hero_titles: {},
   hero_subtitles: {},

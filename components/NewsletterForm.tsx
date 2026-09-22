@@ -28,6 +28,15 @@ export default function NewsletterForm({ variant = 'default' }: { variant?: 'def
     <form action={handle}>
       <div className={className}>
         <input type="email" name="email" placeholder="you@example.com" required aria-label="Email address" />
+        {/* Hidden from people, tempting to bots */}
+        <input
+          type="text"
+          name="company"
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          style={{ position: 'absolute', left: '-9999px' }}
+        />
         <button type="submit" disabled={status === 'sending'}>
           {status === 'sending' ? '…' : 'Join'}
         </button>

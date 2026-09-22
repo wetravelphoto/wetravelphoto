@@ -100,3 +100,11 @@
 
 .admin-nav-label { font-size: 0.66rem !important; }
 .admin-nav a { font-size: 0.95rem; }
+
+/* A quieter box inside a panel: a connection's status, a step in a setup. */
+.admin-subpanel {
+  padding: 0.85rem 0.95rem;
+  border: 0.5px solid var(--admin-line);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.018);
+}

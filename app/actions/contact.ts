@@ -3,6 +3,10 @@
 import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
+import { randomUUID } from 'crypto'
+import { verifyTurnstile } from '@/lib/turnstile'
+import { notifyMessage } from '@/lib/contact-notify'
 
 export async function sendMessage(formData: FormData) {
   const name = (formData.get('name') as string)?.trim()
@@ -28,8 +32,18 @@ export async function sendMessage(formData: FormData) {
     return { ok: false, error: 'That message is a bit too long.' }
   }
 
+  // The spam check (Cloudflare Turnstile), when it is configured.
+  const ip = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
+  const human = await verifyTurnstile((formData.get('cf-turnstile-response') as string) || null, ip)
+  if (!human) {
+    return { ok: false, error: 'Please wait a moment for the spam check, then send again.' }
+  }
+
+  // The id is made here, because a visitor may add a message but not read one
+  // back — and the email step below needs to say which message it reported on.
+  const id = randomUUID()
   const supabase = await createClient()
-  const { error } = await supabase.from('contact_messages').insert({ name, email, subject, message })
+  const { error } = await supabase.from('contact_messages').insert({ id, name, email, subject, message })
 
   if (error) {
     // The visitor gets a plain sentence; the real reason goes to the server
@@ -38,6 +52,9 @@ export async function sendMessage(formData: FormData) {
     console.error('[contact] could not save a message:', error.message)
     return { ok: false, error: 'Something went wrong sending that. Try again, or email directly.' }
   }
+
+  // Tell the photographer by email. Stored first, so a failed email loses nothing.
+  await notifyMessage({ id, name, email, subject, body: message })
 
   return { ok: true }
 }

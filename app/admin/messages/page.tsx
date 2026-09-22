@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { markRead, deleteMessage } from '@/app/actions/contact'
 import ConfirmButton from '@/components/admin/ConfirmButton'
@@ -19,7 +20,11 @@ export default async function MessagesPage() {
         Messages
       </h1>
       <p className="admin-meta" style={{ margin: '0 0 1.5rem' }}>
-        {messages?.length ?? 0} total · {unread} unread
+        {messages?.length ?? 0} total · {unread} unread · Where messages are emailed is set in{' '}
+        <Link href="/admin/settings" style={{ borderBottom: '0.5px solid currentColor' }}>
+          Settings
+        </Link>
+        .
       </p>
 
       {messages && messages.length > 0 ? (
@@ -62,6 +67,13 @@ export default async function MessagesPage() {
               >
                 {msg.message}
               </p>
+
+              {/* Whether this message was also emailed (lib/contact-notify.ts). */}
+              {(msg.notified_at || msg.notify_error) && (
+                <p className="admin-meta" style={{ margin: '0 0 0.7rem', color: msg.notify_error ? '#b3261e' : undefined }}>
+                  {msg.notified_at ? 'Emailed to you.' : `Not emailed: ${msg.notify_error}`}
+                </p>
+              )}
 
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <form action={markRead.bind(null, msg.id, !msg.is_read)}>

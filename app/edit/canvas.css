@@ -143,6 +143,20 @@
   border-color: var(--cv-line);
 }
 
+/* Undo and redo */
+
+.cv-history {
+  display: flex;
+  gap: 1px;
+  margin-left: 0.15rem;
+}
+
+.cv-history-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 0.95rem;
+}
+
 /* Device widths */
 
 .cv-devices {

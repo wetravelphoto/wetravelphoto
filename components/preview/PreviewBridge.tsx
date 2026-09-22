@@ -58,6 +58,8 @@ type Outbound =
   | { source: 'wtp-preview'; type: 'clear' }
   /** "+ Add a section below" was clicked under the section with this id. */
   | { source: 'wtp-preview'; type: 'add-after'; id: string }
+  /** Ctrl/⌘+Z or Ctrl/⌘+Shift+Z / Ctrl+Y pressed while the preview had focus. */
+  | { source: 'wtp-preview'; type: 'undo' | 'redo' }
 
 type Inbound = {
   source?: string
@@ -259,8 +261,10 @@ export default function PreviewBridge({ page }: { page: string }) {
       if (data.type === 'settle') {
         // The save holding these values has landed and its re-render is on the
         // way, so the server is the source of truth for them again.
+        // Without an id, every section: Undo replaces the whole draft, so
+        // nothing painted on ahead of the server is still true.
         for (const [key, entry] of pending) {
-          if (data.id && entry.section === data.id) {
+          if (!data.id || entry.section === data.id) {
             pending.delete(key)
           }
         }
@@ -307,9 +311,23 @@ export default function PreviewBridge({ page }: { page: string }) {
       }
     }
 
+    // Undo and redo keys pressed with the preview focused belong to the
+    // editor, which is a different document and would never hear them. A
+    // form field in the page (the contact form) keeps its own text undo.
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key !== 'z' && key !== 'y') return
+      const el = event.target as HTMLElement | null
+      if (el?.closest('input, textarea, select, [contenteditable="true"]')) return
+      event.preventDefault()
+      send({ source: 'wtp-preview', type: key === 'y' || event.shiftKey ? 'redo' : 'undo' })
+    }
+
     // Capture phase, so a section that stops propagation on its own clicks
     // (the lightbox, the carousel arrows) cannot swallow the selection.
     document.addEventListener('click', onClick, true)
+    document.addEventListener('keydown', onKey)
     window.addEventListener('message', onMessage)
 
     // router.refresh() replaces the rendered sections with fresh elements,
@@ -343,6 +361,7 @@ export default function PreviewBridge({ page }: { page: string }) {
 
     return () => {
       document.removeEventListener('click', onClick, true)
+      document.removeEventListener('keydown', onKey)
       window.removeEventListener('message', onMessage)
       observer.disconnect()
       if (queued) cancelAnimationFrame(queued)

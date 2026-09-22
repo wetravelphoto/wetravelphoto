@@ -62,6 +62,7 @@ export default function Inspector({
   onSaved,
   onSettled,
   onClose,
+  flushRef,
 }: {
   /** The drag handle on this panel's left edge. */
   resizer: React.ReactNode
@@ -97,6 +98,12 @@ export default function Inspector({
    */
   onSettled: (sectionId: string) => void
   onClose: () => void
+  /**
+   * Filled in by this panel: writes anything still waiting on a debounce and
+   * resolves once it is saved. Undo calls it first, so a half-second-old
+   * keystroke cannot land AFTER the undo and quietly re-apply itself.
+   */
+  flushRef?: React.MutableRefObject<(() => Promise<void>) | null>
 }) {
   const form = useRef<HTMLFormElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -133,6 +140,21 @@ export default function Inspector({
   const valueTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const valueQueue = useRef<{ id: string; values: Record<string, unknown> } | null>(null)
 
+  /**
+   * Saves that have been sent and not yet answered. Clicking Undo takes focus
+   * out of a text box, and the blur sends that box's edit — so flushNow has to
+   * wait for saves already on their way, not only the ones still queued.
+   */
+  const inflight = useRef(new Set<Promise<unknown>>())
+  const track = <T,>(work: Promise<T>): Promise<T> => {
+    inflight.current.add(work)
+    work.then(
+      () => inflight.current.delete(work),
+      () => inflight.current.delete(work)
+    )
+    return work
+  }
+
   const sendValues = () => {
     if (valueTimer.current) {
       clearTimeout(valueTimer.current)
@@ -145,7 +167,7 @@ export default function Inspector({
     setError(null)
     startTransition(async () => {
       try {
-        await updateDraftSectionValues(page, batch.id, batch.values)
+        await track(updateDraftSectionValues(page, batch.id, batch.values))
         setSavedAt(Date.now())
         onSaved()
         if (!valueQueue.current) onSettled(batch.id)
@@ -171,7 +193,7 @@ export default function Inspector({
     setError(null)
     startTransition(async () => {
       try {
-        await updateDraftSection(page, target.id, target.data)
+        await track(updateDraftSection(page, target.id, target.data))
         setSavedAt(Date.now())
         onSaved()
         if (!queued.current) onSettled(target.id)
@@ -218,6 +240,40 @@ export default function Inspector({
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(flush, DEBOUNCE_MS)
   }
+
+  /** Everything waiting, written now, and awaited. See flushRef. */
+  const flushNow = async () => {
+    if (timer.current) {
+      clearTimeout(timer.current)
+      timer.current = null
+    }
+    if (valueTimer.current) {
+      clearTimeout(valueTimer.current)
+      valueTimer.current = null
+    }
+    const pendingValues = valueQueue.current
+    valueQueue.current = null
+    const pendingEdit = queued.current
+    queued.current = null
+
+    if (pendingEdit) {
+      await updateDraftSection(page, pendingEdit.id, pendingEdit.data)
+      onSettled(pendingEdit.id)
+    }
+    if (pendingValues) {
+      await updateDraftSectionValues(page, pendingValues.id, pendingValues.values)
+      onSettled(pendingValues.id)
+    }
+    await Promise.allSettled([...inflight.current])
+  }
+
+  useEffect(() => {
+    if (!flushRef) return
+    flushRef.current = flushNow
+    return () => {
+      flushRef.current = null
+    }
+  })
 
   // A setting clicked in the page: bring its input into view and put the cursor
   // in it, so clicking a heading on the page is the same gesture as clicking

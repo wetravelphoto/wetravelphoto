@@ -9,6 +9,7 @@ import {
   ensureDraft,
   publishDraft,
   readDraft,
+  stepDraft,
   writeDraftPage,
   writeDraftStyles,
   type DraftSection,
@@ -368,8 +369,11 @@ export async function applyDraftPalette(id: string) {
 export async function clearDraftSectionTypes() {
   await requireEditor()
 
+  // One name for every write below, so the whole clear-out undoes as one step.
+  const label = 'Every section follows the site'
+
   // The old shared group overrides...
-  await writeDraftStyles({ type_styles: {} })
+  await writeDraftStyles({ type_styles: {} }, label)
 
   // ...and every section's own. Each page is brought into the draft so this is
   // published — and discardable — like any other edit.
@@ -381,7 +385,8 @@ export async function clearDraftSectionTypes() {
     await writeDraftPage(
       page,
       rows.map((r) => (r.settings?.type ? { ...r, settings: { ...r.settings, type: null } } : r)),
-      draft
+      draft,
+      label
     )
     done(page)
   }
@@ -397,6 +402,33 @@ export async function resetDraftStyles() {
 
   revalidatePath('/edit/home')
   revalidatePath('/preview/home')
+}
+
+// ── Undo and redo ────────────────────────────────────────────────────────────
+
+/**
+ * One step back or forward through the draft's history (lib/drafts/steps.ts).
+ * Returns what moved, so the editor can say so — and open the page it was on
+ * when that is not the page on screen. Null when there was nothing to move.
+ */
+export async function undoDraft() {
+  return step('undo')
+}
+
+export async function redoDraft() {
+  return step('redo')
+}
+
+async function step(direction: 'undo' | 'redo') {
+  await requireEditor()
+  const result = await stepDraft(direction)
+  if (!result) return null
+
+  for (const page of result.pages) if (isPage(page)) done(page)
+  // A style change shows on every page.
+  if (result.styles) for (const page of PAGE_SLUGS) done(page)
+
+  return result
 }
 
 // ── Going live, and not ──────────────────────────────────────────────────────

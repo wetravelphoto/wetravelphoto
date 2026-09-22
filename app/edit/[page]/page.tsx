@@ -3,6 +3,7 @@ import { PAGES, isPage } from '@/lib/sections/pages'
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadDraftPage, draftStatus, draftStyleSettings } from '@/lib/drafts/store'
+import { readSteps } from '@/lib/drafts/steps'
 import { resolveTokens } from '@/lib/styles/tokens'
 import type { TypeStyles } from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
@@ -51,12 +52,14 @@ export default async function EditPage({
 
   if (!user) redirect('/admin/login')
 
-  const [{ sections, legacy }, status, style] = await Promise.all([
+  const [{ sections, legacy }, status, style, steps] = await Promise.all([
     loadDraftPage(page),
     draftStatus(),
     // The draft's tokens if it has any, otherwise the live site's — so opening
     // Style shows what is actually on screen rather than the saved defaults.
     draftStyleSettings(),
+    // What Undo and Redo would do, for the buttons and their tooltips.
+    readSteps(),
   ])
 
   // Published stories, for the hero's story picker. Fetched here rather than in
@@ -99,6 +102,7 @@ export default async function EditPage({
       missing={status.missing}
       hasDraft={status.hasDraft}
       draftUpdatedAt={status.updatedAt}
+      steps={steps}
       publicUrl={process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''}
       tokens={resolveTokens(style.global_styles, style.global_styles_version)}
       typeStyles={(style.type_styles ?? {}) as TypeStyles}

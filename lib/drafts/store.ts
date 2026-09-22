@@ -12,6 +12,14 @@ import {
 import { replaceSections, mirrorPage } from '@/lib/sections/store'
 import { recordHistory } from '@/lib/templates/history'
 import { TOKENS_VERSION } from '@/lib/styles/tokens'
+import {
+  clearSteps,
+  describeChange,
+  moveStep,
+  pushStep,
+  type DraftSnapshot,
+  type StepResult,
+} from '@/lib/drafts/steps'
 
 /**
  * THE DRAFT LAYER
@@ -36,6 +44,10 @@ import { TOKENS_VERSION } from '@/lib/styles/tokens'
  *   Publish        → undo point, then replaceSections + patchSiteSettings,
  *                    then the row is deleted. Back to nothing.
  *   Discard        → the row is deleted. Back to nothing.
+ *
+ * Every edit keeps the draft as it was as an Undo step first
+ * (lib/drafts/steps.ts). Seeding a page does not: it adds nothing the live
+ * site does not already show. Publish and Discard clear the steps.
  *
  * Publish deliberately reuses the same two write functions that applying a
  * look uses. There is one way for section rows to change and one way for
@@ -208,25 +220,57 @@ export async function ensureDraft(page = 'home'): Promise<SiteDraft> {
     updatedAt: null,
   }
 
-  await upsertDraft(next)
+  await upsertDraft(next, { kind: 'seed' })
   return next
 }
 
-async function upsertDraft(draft: SiteDraft): Promise<void> {
+/**
+ * How a write relates to Undo.
+ *   edit — an edit: `before` is kept as a step first. `label` names the edit
+ *          when the caller knows better than a diff does (an action that
+ *          writes several times and should undo as one).
+ *   seed — a page copied in from the live site. Changes nothing visible, so
+ *          no step, and the last edit's name is left alone.
+ *   jump — Undo or Redo itself, which manage the steps on their own.
+ */
+type WriteKind =
+  | { kind: 'edit'; before: DraftSnapshot; label?: string }
+  | { kind: 'seed' }
+  | { kind: 'jump' }
+
+async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
   const supabase = await createClient()
   // currentUser() is request-cached, so this rides on the check the action has
   // already done rather than making a second round trip to the auth server.
   const user = await currentUser()
 
-  const { error } = await supabase.from('site_draft').upsert(
-    {
-      pages: draft.pages,
-      global_styles: draft.global_styles,
-      type_styles: draft.type_styles,
-      updated_by: user?.id ?? null,
-    },
-    { onConflict: 'tenant_id' }
-  )
+  let editLabel: string | null | undefined
+  if (how.kind === 'edit') {
+    const label = how.label ?? describeChange(how.before, draft)
+    // Saving exactly what is already there is not an edit, and keeps no step.
+    if (label) await pushStep(how.before, label)
+    editLabel = label ?? undefined
+  } else if (how.kind === 'jump') {
+    editLabel = null
+  }
+
+  const row: Record<string, unknown> = {
+    pages: draft.pages,
+    global_styles: draft.global_styles,
+    type_styles: draft.type_styles,
+    updated_by: user?.id ?? null,
+  }
+  // Omitted on a seed, so the upsert leaves the column as it was.
+  if (editLabel !== undefined) row.edit_label = editLabel
+
+  let { error } = await supabase.from('site_draft').upsert(row, { onConflict: 'tenant_id' })
+
+  // Deployed before db/migrations/2026-09-22_draft_steps.sql was run: save the
+  // edit anyway, without the column Undo uses.
+  if (error && 'edit_label' in row && /edit_label/.test(error.message)) {
+    delete row.edit_label
+    ;({ error } = await supabase.from('site_draft').upsert(row, { onConflict: 'tenant_id' }))
+  }
 
   if (error) throw new Error(`Could not save the draft. (${error.message})`)
 }
@@ -242,27 +286,36 @@ async function upsertDraft(draft: SiteDraft): Promise<void> {
 export async function writeDraftPage(
   page: string,
   sections: DraftSection[],
-  known?: SiteDraft
+  known?: SiteDraft,
+  /** Names the edit for Undo; by default it is worked out from what changed. */
+  label?: string
 ): Promise<void> {
   const draft = known ?? (await ensureDraft(page))
 
-  await upsertDraft({
-    ...draft,
-    pages: {
-      ...draft.pages,
-      // Positions are rewritten here rather than trusted from the caller, so a
-      // drag that reorders the array is enough — the client never has to keep
-      // a position field in step.
-      [page]: sections.map((s, position) => ({ ...s, position })),
+  await upsertDraft(
+    {
+      ...draft,
+      pages: {
+        ...draft.pages,
+        // Positions are rewritten here rather than trusted from the caller, so a
+        // drag that reorders the array is enough — the client never has to keep
+        // a position field in step.
+        [page]: sections.map((s, position) => ({ ...s, position })),
+      },
     },
-  })
+    { kind: 'edit', before: draft, label }
+  )
 }
 
 /** Sets the draft's style halves. Pass null for a half to leave it untouched. */
-export async function writeDraftStyles(values: {
-  global_styles?: DraftGlobalStyles
-  type_styles?: DraftTypeStyles
-}): Promise<void> {
+export async function writeDraftStyles(
+  values: {
+    global_styles?: DraftGlobalStyles
+    type_styles?: DraftTypeStyles
+  },
+  /** Names the edit for Undo; by default it is worked out from what changed. */
+  label?: string
+): Promise<void> {
   const { draft, missing } = await readDraft()
   if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
 
@@ -273,11 +326,31 @@ export async function writeDraftStyles(values: {
     updatedAt: null,
   }
 
-  await upsertDraft({
-    ...base,
-    global_styles: values.global_styles ?? base.global_styles,
-    type_styles: values.type_styles ?? base.type_styles,
-  })
+  await upsertDraft(
+    {
+      ...base,
+      global_styles: values.global_styles ?? base.global_styles,
+      type_styles: values.type_styles ?? base.type_styles,
+    },
+    { kind: 'edit', before: base, label }
+  )
+}
+
+// ── Undo and redo ────────────────────────────────────────────────────────────
+
+/**
+ * One step back (or forward). Null when there is nothing to undo or redo —
+ * including when there is no draft at all, since Publish and Discard clear the
+ * steps with it.
+ */
+export async function stepDraft(direction: 'undo' | 'redo'): Promise<StepResult | null> {
+  const { draft, missing } = await readDraft()
+  if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
+  if (!draft) return null
+
+  return moveStep(direction, draft, (snapshot) =>
+    upsertDraft({ ...draft, ...snapshot }, { kind: 'jump' })
+  )
 }
 
 // ── Publishing and discarding ────────────────────────────────────────────────
@@ -342,6 +415,7 @@ export async function publishDraft(): Promise<{ pages: string[]; styles: boolean
   for (const page of pages) await mirrorPage(page)
 
   await deleteDraft()
+  await clearSteps()
 
   return { pages, styles }
 }
@@ -350,6 +424,7 @@ export async function discardDraft(): Promise<void> {
   const { missing } = await readDraft()
   if (missing) throw new Error(`The draft table is missing. ${MISSING_HINT}`)
   await deleteDraft()
+  await clearSteps()
 }
 
 async function deleteDraft(): Promise<void> {

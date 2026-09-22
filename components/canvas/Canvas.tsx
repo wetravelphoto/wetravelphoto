@@ -18,7 +18,10 @@ import {
   setDraftVisible,
   clearDraftSectionTypes,
   updateDraftStyles,
+  undoDraft,
+  redoDraft,
 } from '@/app/actions/canvas'
+import type { StepsState } from '@/lib/drafts/steps'
 import { cssVariables, fontsToLoad, type StyleTokens } from '@/lib/styles/tokens'
 import { hasOwnType, type TypeStyles } from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
@@ -72,6 +75,7 @@ export default function Canvas({
   missing,
   hasDraft,
   draftUpdatedAt,
+  steps,
   publicUrl,
   tokens,
   typeStyles,
@@ -85,6 +89,8 @@ export default function Canvas({
   missing: boolean
   hasDraft: boolean
   draftUpdatedAt: string | null
+  /** What Undo and Redo would do right now (null: nothing). */
+  steps: StepsState
   publicUrl: string
   /** The draft's style if it has any, otherwise the live site's. */
   tokens: StyleTokens
@@ -199,6 +205,92 @@ export default function Canvas({
     [router, tell]
   )
 
+  /**
+   * UNDO AND REDO
+   *
+   * Three things have to happen in order. Anything still waiting on a panel's
+   * debounce is saved first, or it would land after the undo and put the
+   * change straight back. Then the step is taken on the server. Then the
+   * panels are rebuilt (`revision`), because their inputs hold what was typed
+   * and would otherwise go on showing the value that was just undone.
+   */
+  const inspectorFlush = useRef<(() => Promise<void>) | null>(null)
+  const styleFlush = useRef<(() => Promise<void>) | null>(null)
+  const [revision, setRevision] = useState(0)
+  const [remountArmed, setRemountArmed] = useState(false)
+  const [seenSections, setSeenSections] = useState(sections)
+
+  // The panels are rebuilt when the refreshed sections actually ARRIVE, not
+  // when the undo returns — rebuilt any earlier, they would read the old ones.
+  // ("Adjusting state during render", as StyleMode does for its tokens.)
+  if (sections !== seenSections) {
+    setSeenSections(sections)
+    if (remountArmed) {
+      setRemountArmed(false)
+      setRevision((r) => r + 1)
+    }
+  }
+
+  const history = useCallback(
+    (direction: 'undo' | 'redo') => {
+      setError(null)
+      startTransition(async () => {
+        try {
+          await inspectorFlush.current?.()
+          await styleFlush.current?.()
+          // Nothing painted on ahead of the server is true after this.
+          tell({ type: 'settle' })
+
+          const result = direction === 'undo' ? await undoDraft() : await redoDraft()
+          if (!result) {
+            setNote(direction === 'undo' ? 'Nothing to undo.' : 'Nothing to redo.')
+            router.refresh()
+            return
+          }
+
+          setDragOrder(null)
+          setRemountArmed(true)
+          setNote(`${direction === 'undo' ? 'Undone' : 'Redone'}: ${result.label}`)
+
+          // The step was on another page: go and show it, rather than
+          // appearing to do nothing.
+          const elsewhere = !result.styles && result.pages.length > 0 && !result.pages.includes(page)
+          if (elsewhere) {
+            router.push(`/edit/${result.pages[0]}${mode === 'style' ? '?mode=style' : ''}`)
+          } else {
+            tell({ type: 'refresh' })
+            router.refresh()
+          }
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Something went wrong.')
+        }
+      })
+    },
+    [mode, page, router, tell]
+  )
+
+  // Ctrl/⌘+Z and Ctrl/⌘+Shift+Z (or Ctrl+Y), anywhere in the editor except a
+  // text field, which keeps its own typing undo. The preview forwards the same
+  // keys when it has focus (PreviewBridge).
+  const historyRef = useRef(history)
+  useEffect(() => {
+    historyRef.current = history
+  }, [history])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key !== 'z' && key !== 'y') return
+      const el = event.target as HTMLElement | null
+      if (el?.closest('input, textarea, select, [contenteditable="true"]')) return
+      event.preventDefault()
+      historyRef.current(key === 'y' || event.shiftKey ? 'redo' : 'undo')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Clicks inside the preview.
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -224,6 +316,11 @@ export default function Canvas({
       // "Add section below" on a section in the page itself.
       if (data.type === 'add-after' && data.id) {
         setPicking({ after: data.id })
+      }
+
+      // Undo/redo keys pressed while the preview had focus.
+      if (data.type === 'undo' || data.type === 'redo') {
+        historyRef.current(data.type)
       }
     }
 
@@ -310,6 +407,28 @@ export default function Canvas({
               ))}
             </select>
           </label>
+          <div className="cv-history" role="group" aria-label="Undo and redo">
+            <button
+              type="button"
+              className="cv-ico cv-history-btn"
+              disabled={!steps.undo || pending}
+              onClick={() => history('undo')}
+              aria-label={steps.undo ? `Undo ${steps.undo}` : 'Undo'}
+              title={steps.undo ? `Undo: ${steps.undo}  (Ctrl/⌘ Z)` : 'Nothing to undo'}
+            >
+              ↶
+            </button>
+            <button
+              type="button"
+              className="cv-ico cv-history-btn"
+              disabled={!steps.redo || pending}
+              onClick={() => history('redo')}
+              aria-label={steps.redo ? `Redo ${steps.redo}` : 'Redo'}
+              title={steps.redo ? `Redo: ${steps.redo}  (Ctrl/⌘ Shift Z)` : 'Nothing to redo'}
+            >
+              ↷
+            </button>
+          </div>
           {hasDraft && (
             <span className="cv-flag" title={draftUpdatedAt ?? undefined}>
               Unpublished changes
@@ -468,6 +587,8 @@ export default function Canvas({
 
         {mode === 'style' ? (
           <StyleMode
+            key={`style-${revision}`}
+            flushRef={styleFlush}
             resizer={<PanelResizer />}
             tokens={tokens}
             overridden={order
@@ -484,6 +605,10 @@ export default function Canvas({
           />
         ) : (
           <Inspector
+            // Rebuilt after an undo or redo, so its inputs show the restored
+            // values rather than what was typed into them. See `revision`.
+            key={`inspector-${revision}`}
+            flushRef={inspectorFlush}
             resizer={<PanelResizer />}
             page={page}
             section={current}

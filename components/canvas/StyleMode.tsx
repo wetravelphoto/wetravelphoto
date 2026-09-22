@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { FONT_NAMES, type StyleTokens } from '@/lib/styles/tokens'
+import { updateDraftStyles } from '@/app/actions/canvas'
 
 /**
  * The right rail in Style mode: the individual values, for when someone knows
@@ -22,6 +23,7 @@ export default function StyleMode({
   onPreview,
   onCommit,
   pending,
+  flushRef,
 }: {
   /** The drag handle on this panel's left edge. */
   resizer: React.ReactNode
@@ -34,6 +36,8 @@ export default function StyleMode({
   /** The settled value, for writing to the draft. */
   onCommit: (changes: Partial<StyleTokens>) => void
   pending: boolean
+  /** Filled in here: saves anything still on the debounce, awaited. For Undo. */
+  flushRef?: React.MutableRefObject<(() => Promise<void>) | null>
 }) {
   const [values, setValues] = useState<StyleTokens>(tokens)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -67,6 +71,22 @@ export default function StyleMode({
     queued.current = {}
     if (Object.keys(changes).length) startTransition(() => onCommit(changes))
   }
+
+  useEffect(() => {
+    if (!flushRef) return
+    flushRef.current = async () => {
+      if (timer.current) {
+        clearTimeout(timer.current)
+        timer.current = null
+      }
+      const changes = queued.current
+      queued.current = {}
+      if (Object.keys(changes).length) await updateDraftStyles(changes)
+    }
+    return () => {
+      flushRef.current = null
+    }
+  }, [flushRef])
 
   useEffect(() => {
     return () => {

@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f5f4f1;">
+    <div style="max-width:520px;margin:0 auto;padding:40px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#1a1715;">
+
+      <p style="margin:0 0 28px;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#6b645d;">
+        Lens Grid
+      </p>
+
+      <p style="margin:0 0 16px;">Hello,</p>
+
+      <p style="margin:0 0 16px;">
+        Gonzalo has made you a photography site on Lens Grid and asked us to send you the keys.
+        It is yours to fill — your galleries, your words, your name on it.
+      </p>
+
+      <p style="margin:0 0 16px;">
+        Open the link below to choose a password. Nobody else ever sees it, including Gonzalo.
+      </p>
+
+      <p style="margin:0 0 28px;">
+        <a href="{{ .ConfirmationURL }}" style="color:#1a1715;font-weight:600;border-bottom:1px solid #1a1715;text-decoration:none;">
+          Choose your password and open your site
+        </a>
+      </p>
+
+      <p style="margin:0 0 28px;color:#6b645d;font-size:14px;">
+        If the link has already been used by the time you get to it, the same page has a
+        <strong>Send me a new link</strong> button. You can also sign in with this code:
+        <strong style="letter-spacing:0.15em;color:#1a1715;">{{ .Token }}</strong>
+      </p>
+
+      <p style="margin:0 0 8px;color:#6b645d;font-size:13px;">
+        This was sent to {{ .Email }} because a site was made for you on Lens Grid.
+        If that means nothing to you, ignore it — nothing happens until someone opens the link,
+        and it stops working after 24 hours.
+      </p>
+
+      <p style="margin:24px 0 0;color:#9a938b;font-size:12px;">
+        Lens Grid · lensgrid.co
+      </p>
+    </div>
+  </body>
+</html>

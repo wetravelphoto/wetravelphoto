@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { photoUrl } from '@/lib/images'
 import { srcSetFromPath } from '@/lib/srcset'
 import { toQuad, type Quad } from '@/lib/perspective'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 /**
  * Room scenes: a photograph of a room and the four corners of the wall space
@@ -87,12 +88,16 @@ const asRow = (data: unknown): Row => data as unknown as Row
 const isMissingColumn = (message: string | undefined) => !!message && /has_frame/i.test(message)
 
 export async function getRoomScenes(includeInactive = false): Promise<RoomSceneRecord[]> {
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return []
+
   const supabase = await createClient()
 
   const run = (select: string) => {
     const query = supabase
       .from('room_scenes')
       .select(select)
+      .eq('tenant_id', tenantId)
       .order('sort_order', { ascending: true })
 
     return includeInactive ? query : query.eq('is_active', true)
@@ -115,10 +120,13 @@ export async function getRoomScenes(includeInactive = false): Promise<RoomSceneR
 }
 
 export async function getRoomScene(id: string): Promise<RoomSceneRecord | null> {
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return null
+
   const supabase = await createClient()
 
   const run = (select: string) =>
-    supabase.from('room_scenes').select(select).eq('id', id).maybeSingle()
+    supabase.from('room_scenes').select(select).eq('tenant_id', tenantId).eq('id', id).maybeSingle()
 
   let { data, error } = await run(COLS)
 

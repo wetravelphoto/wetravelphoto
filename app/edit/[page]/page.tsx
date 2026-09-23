@@ -81,9 +81,13 @@ export default async function EditPage({
   // Published stories, for the hero's story picker. Fetched here rather than in
   // the editor because the editor is a client component and this is a table it
   // has no business reaching into.
+  // blog_posts carries a "anyone reads published stories" policy as well as
+  // the tenant one, and policies OR together — so the editor has to say which
+  // site's stories it means.
   const { data: postRows } = await supabase
     .from('blog_posts')
     .select('id, title, featured_custom_path')
+    .eq('tenant_id', settings.tenant_id ?? '')
     .eq('status', 'published')
     .order('published_at', { ascending: false })
 

@@ -12,14 +12,22 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import '../journal.css'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 export const revalidate = 60
 
 async function getPost(slug: string) {
+  // Slugs are unique per SITE, not globally: two photographers may both have
+  // written about Iceland. Without this, /journal/iceland serves whichever row
+  // the database happens to hand back first.
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return null
+
   const supabase = await createClient()
   const { data } = await supabase
     .from('blog_posts')
     .select('*, albums(title, slug)')
+    .eq('tenant_id', tenantId)
     .eq('slug', slug)
     .eq('status', 'published')
     .maybeSingle()
@@ -64,6 +72,7 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
   const { data: related } = await supabase
     .from('blog_posts')
     .select('id, slug, title, category, excerpt, featured_custom_path')
+    .eq('tenant_id', post.tenant_id)
     .eq('status', 'published')
     .neq('id', post.id)
     .order('published_at', { ascending: false })

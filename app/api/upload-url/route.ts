@@ -43,7 +43,12 @@ export async function POST(request: NextRequest) {
   // that — or the upload would sit under another site's gallery id.
   if (albumId) {
     const supabase = await createClient()
-    const { data: album } = await supabase.from('albums').select('id').eq('id', albumId).maybeSingle()
+    const { data: album } = await supabase
+      .from('albums')
+      .select('id')
+      .eq('tenant_id', editor.tenantId)
+      .eq('id', albumId)
+      .maybeSingle()
     if (!album) return NextResponse.json({ error: 'No such gallery' }, { status: 404 })
   }
 

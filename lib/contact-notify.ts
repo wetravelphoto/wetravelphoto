@@ -24,16 +24,21 @@ export async function notifyMessage(message: {
   body: string
 }): Promise<void> {
   const admin = createAdminClientOrNull()
+  // The settings are read first because the tenant on them is what scopes the
+  // write below. This client holds the service-role key and ignores row-level
+  // security, so naming the site is the only thing keeping it to one.
+  const settings = await getSiteSettings()
+
   const record = async (error: string | null) => {
-    if (!admin) return
+    if (!admin || !settings.tenant_id) return
     await admin
       .from('contact_messages')
       .update(error ? { notify_error: error.slice(0, 300) } : { notified_at: new Date().toISOString(), notify_error: null })
+      .eq('tenant_id', settings.tenant_id)
       .eq('id', message.id)
   }
 
   try {
-    const settings = await getSiteSettings()
     if (settings.contact_notify === false) return
 
     const to = settings.contact_notify_email || settings.email_public

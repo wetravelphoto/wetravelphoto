@@ -61,14 +61,20 @@ function withoutHash(row: Record<string, unknown>): PublicAlbum {
  * than two behaviours spread across this file and the page.
  */
 export async function albumBySlug(slug: string): Promise<PublicAlbum | null> {
+  // A slug is unique per site, not globally. No site, no album — this used to
+  // read "no tenant, no filter", which was right while there was one site and
+  // is a cross-site read as soon as there are two.
   const tenantId = await currentSiteTenantId()
+  if (!tenantId) return null
 
   // Public albums: the anon key and RLS, same as every other public page.
   const anon = await createClient()
-  const openQuery = anon.from('albums').select('*').eq('slug', slug)
-  const { data: open } = await (
-    tenantId ? openQuery.eq('tenant_id', tenantId) : openQuery
-  ).maybeSingle()
+  const { data: open } = await anon
+    .from('albums')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('slug', slug)
+    .maybeSingle()
 
   if (open) return withoutHash(open as Record<string, unknown>)
 
@@ -76,8 +82,12 @@ export async function albumBySlug(slug: string): Promise<PublicAlbum | null> {
   const admin = createAdminClientOrNull()
   if (!admin) return null
 
-  const query = admin.from('albums').select('*').eq('slug', slug)
-  const { data } = await (tenantId ? query.eq('tenant_id', tenantId) : query).maybeSingle()
+  const { data } = await admin
+    .from('albums')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('slug', slug)
+    .maybeSingle()
 
   if (!data) return null
   return withoutHash(data as Record<string, unknown>)
@@ -127,11 +137,17 @@ export async function verifyAlbumPassword(
   const supabase = createAdminClientOrNull()
   if (!supabase) return null
 
+  // The service-role key ignores row-level security, so the scoping here IS
+  // the security: a password typed on one site must never open another's.
   const tenantId = await currentSiteTenantId()
-  const query = supabase.from('albums').select('id, password_hash').eq('slug', slug)
-  const { data: album } = await (
-    tenantId ? query.eq('tenant_id', tenantId) : query
-  ).maybeSingle()
+  if (!tenantId) return null
+
+  const { data: album } = await supabase
+    .from('albums')
+    .select('id, password_hash')
+    .eq('tenant_id', tenantId)
+    .eq('slug', slug)
+    .maybeSingle()
 
   if (!album?.password_hash) return null
 
@@ -145,12 +161,17 @@ export async function verifyAlbumPassword(
 
 /** Whether a zip of this album is allowed without a share token. */
 export async function albumAllowsPublicDownload(albumId: string) {
+  // The id comes from the address bar, so it is scoped like a slug would be.
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return null
+
   // Only ever true for a public album, which the anon key can read.
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('albums')
     .select('id, title, slug, privacy_type, allow_downloads')
+    .eq('tenant_id', tenantId)
     .eq('id', albumId)
     .maybeSingle()
 

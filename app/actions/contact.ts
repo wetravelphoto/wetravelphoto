@@ -7,6 +7,7 @@ import { headers } from 'next/headers'
 import { randomUUID } from 'crypto'
 import { verifyTurnstile } from '@/lib/turnstile'
 import { notifyMessage } from '@/lib/contact-notify'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 export async function sendMessage(formData: FormData) {
   const name = (formData.get('name') as string)?.trim()
@@ -41,9 +42,22 @@ export async function sendMessage(formData: FormData) {
 
   // The id is made here, because a visitor may add a message but not read one
   // back — and the email step below needs to say which message it reported on.
+  // WHICH SITE THIS MESSAGE IS FOR.
+  //
+  // The column has a default, and that default resolves to the FIRST tenant —
+  // so leaving it out does not mean "work it out", it means "send it to
+  // whoever signed up first". A message typed on one photographer's contact
+  // form would land in another's inbox, quietly and for ever.
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) {
+    return { ok: false, error: 'This address is not set up to take messages yet.' }
+  }
+
   const id = randomUUID()
   const supabase = await createClient()
-  const { error } = await supabase.from('contact_messages').insert({ id, name, email, subject, message })
+  const { error } = await supabase
+    .from('contact_messages')
+    .insert({ id, tenant_id: tenantId, name, email, subject, message })
 
   if (error) {
     // The visitor gets a plain sentence; the real reason goes to the server

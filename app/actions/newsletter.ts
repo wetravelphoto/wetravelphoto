@@ -6,6 +6,7 @@ import { requireEditor } from '@/lib/auth'
 import { EMAIL_PATTERN } from '@/lib/email'
 import { PROVIDERS, isProviderId, type ListOption } from '@/lib/newsletter/providers'
 import { forwardSignup, readConnection, syncPending } from '@/lib/newsletter/connection'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 /**
  * THE NEWSLETTER
@@ -27,8 +28,16 @@ export async function subscribe(formData: FormData) {
     return { ok: false, message: 'That email doesn’t look right.' }
   }
 
+  // Whose list this is. Left out, the column default hands the sign-up to the
+  // first tenant — so somebody subscribing on one site would join another
+  // photographer's mailing list. See the note in app/actions/contact.ts.
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return { ok: false, message: 'This address is not taking sign-ups yet.' }
+
   const supabase = await createClient()
-  const { error } = await supabase.from('newsletter_signups').insert({ email })
+  const { error } = await supabase
+    .from('newsletter_signups')
+    .insert({ email, tenant_id: tenantId })
 
   // A duplicate just means they're already subscribed — not an error worth showing
   if (error && error.code !== '23505') {

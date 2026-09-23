@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireEditor } from '@/lib/auth'
 import { getSiteSettings } from '@/lib/site'
 import { patchSiteSettings } from '@/lib/site-patch'
 import { MIRRORED, legacyColumns, legacyPageSections } from '@/lib/sections/legacy'
@@ -9,6 +10,17 @@ import type { StoredSection } from '@/lib/sections/load'
  * Writes against page_sections, shared by the section actions and the
  * template engine. Plain functions rather than server actions: an action is a
  * public endpoint, and none of this should be callable from a browser.
+ *
+ * EVERY QUERY HERE NAMES ITS SITE, and the delete below is why.
+ * `replaceSections` used to say `.delete().eq('page', page)` and nothing else.
+ * For an ordinary editor row-level security narrowed that to their own rows
+ * and no harm came of it — but a PLATFORM ADMIN's session passes every tenant
+ * check, so the same line would have deleted every photographer's sections for
+ * that page the first time a look was applied. Nothing would have errored.
+ *
+ * The tenant comes from `requireEditor()`, which the callers have already
+ * passed and which is cached per request, so asking again is free. It also
+ * checks the editor's site is the one whose address this is (lib/auth.ts).
  */
 
 /**
@@ -21,11 +33,13 @@ import type { StoredSection } from '@/lib/sections/load'
  * Returns the mapping from synthetic id to real id.
  */
 export async function materializeSections(page = 'home'): Promise<Map<string, string>> {
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('page_sections')
     .select('id, type')
+    .eq('tenant_id', tenantId)
     .eq('page', page)
 
   if (error) {
@@ -49,9 +63,12 @@ export async function materializeSections(page = 'home'): Promise<Map<string, st
       settings: row.settings,
     }))
 
+    // The tenant is attached here rather than in `seeded` above so the
+    // statement says whose rows these are where anyone reading it will look —
+    // which is also what scripts/check-tenant-scoping.mjs checks.
     const { data: inserted, error: insertError } = await supabase
       .from('page_sections')
-      .insert(seeded)
+      .insert(seeded.map((row) => ({ ...row, tenant_id: tenantId })))
       .select('id, type')
 
     if (insertError) throw new Error(insertError.message)
@@ -65,11 +82,13 @@ export async function materializeSections(page = 'home'): Promise<Map<string, st
 /** Reads a page's rows as stored, after materializing. */
 export async function readSections(page = 'home'): Promise<StoredSection[]> {
   await materializeSections(page)
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('page_sections')
     .select('id, type, position, visible, version, settings')
+    .eq('tenant_id', tenantId)
     .eq('page', page)
     .order('position', { ascending: true })
 
@@ -89,15 +108,21 @@ export async function replaceSections(
   page: string,
   sections: { type: string; visible: boolean; version: number; settings: SectionSettings }[]
 ): Promise<void> {
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { error: deleteError } = await supabase.from('page_sections').delete().eq('page', page)
+  const { error: deleteError } = await supabase
+    .from('page_sections')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('page', page)
   if (deleteError) throw new Error(deleteError.message)
 
   if (sections.length === 0) return
 
   const { error } = await supabase.from('page_sections').insert(
     sections.map((s, position) => ({
+      tenant_id: tenantId,
       page,
       type: s.type,
       position,
@@ -132,11 +157,13 @@ export async function mirrorSection(
 }
 
 export async function mirrorSectionById(id: string): Promise<void> {
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('page_sections')
     .select('page, type, visible, version, settings')
+    .eq('tenant_id', tenantId)
     .eq('id', id)
     .maybeSingle()
 
@@ -156,15 +183,17 @@ export async function mirrorSectionById(id: string): Promise<void> {
 
 /** Re-mirrors a whole page, after a change that touched every section. */
 export async function mirrorPage(page = 'home'): Promise<void> {
-  const supabase = await createClient()
-
   // Only the sections the old columns described on this page — see MIRRORED.
   const mirrored = new Set(MIRRORED[page] ?? [])
   if (mirrored.size === 0) return
 
+  const { tenantId } = await requireEditor()
+  const supabase = await createClient()
+
   const { data } = await supabase
     .from('page_sections')
     .select('type, visible, version, settings')
+    .eq('tenant_id', tenantId)
     .eq('page', page)
     .order('position', { ascending: true })
 

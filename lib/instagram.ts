@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 export type InstagramPost = {
   id: string
@@ -162,11 +163,17 @@ export async function hasInstagramToken(target: InstagramTarget): Promise<boolea
 }
 
 export async function getInstagramFeed(limit = 9): Promise<InstagramPost[]> {
+  // Only the feed the visitor came to see. (The nightly sync takes its tenant
+  // explicitly instead — it runs on a cron with no address to read.)
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return []
+
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('instagram_media')
     .select('id, media_url, thumbnail_url, permalink, caption, media_type, posted_at')
+    .eq('tenant_id', tenantId)
     .order('sort_order', { ascending: true })
     .limit(limit)
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 export type PrintOption = {
   id: string
@@ -69,11 +70,15 @@ export function slugifyCategory(input: string): string {
 }
 
 export async function getPrintOptions(includeInactive = false): Promise<PrintOption[]> {
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return []
+
   const supabase = await createClient()
 
   let query = supabase
     .from('print_options')
     .select('id, label, kind, price_cents, sort_order, is_active')
+    .eq('tenant_id', tenantId)
     .order('sort_order', { ascending: true })
 
   if (!includeInactive) query = query.eq('is_active', true)
@@ -83,11 +88,15 @@ export async function getPrintOptions(includeInactive = false): Promise<PrintOpt
 }
 
 export async function getShopCategories(): Promise<ShopCategory[]> {
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return []
+
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('shop_categories')
     .select('id, name, slug, sort_order')
+    .eq('tenant_id', tenantId)
     .order('sort_order', { ascending: true })
 
   return (data ?? []) as ShopCategory[]
@@ -95,11 +104,15 @@ export async function getShopCategories(): Promise<ShopCategory[]> {
 
 /** How many photos are currently listed for sale. */
 export async function countPhotosForSale(): Promise<number> {
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return 0
+
   const supabase = await createClient()
 
   const { count } = await supabase
     .from('photos')
     .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
     .eq('is_for_sale', true)
 
   return count ?? 0

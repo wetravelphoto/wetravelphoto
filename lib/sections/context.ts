@@ -7,6 +7,7 @@ import type { SiteSettings } from '@/lib/site'
 import type { TypeStyles } from '@/lib/type-styles'
 import { getShopCategories, type ShopCategory } from '@/lib/shop'
 import { getPublishedCatalogResult, type CatalogEntry } from '@/lib/catalog'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 export type PostRow = {
   id: string
@@ -89,6 +90,10 @@ export async function buildContext(
   } = {}
 ): Promise<SectionContext> {
   const needs = neededData(sections)
+  // Whose stories and galleries these are. Both tables are readable by anyone
+  // when the row is published or public, so this is the only thing standing
+  // between two photographers' work appearing on the same page.
+  const tenantId = await currentSiteTenantId()
   const supabase = await createClient()
 
   const instagramCount = Math.max(
@@ -99,20 +104,22 @@ export async function buildContext(
   )
 
   const [postResult, albumResult, instagram] = await Promise.all([
-    needs.has('posts')
+    needs.has('posts') && tenantId
       ? supabase
           .from('blog_posts')
           .select('id, slug, title, category, excerpt, featured_custom_path, published_at, byline')
+          .eq('tenant_id', tenantId)
           .eq('status', 'published')
           .order('published_at', { ascending: false })
       : Promise.resolve({ data: [], error: null }),
 
-    needs.has('albums')
+    needs.has('albums') && tenantId
       ? // No photo embed here. Fetching every photo of every gallery to pick
         // one cover each is what made this page time out and 502.
         supabase
           .from('albums')
           .select('*')
+          .eq('tenant_id', tenantId)
           .eq('privacy_type', 'public')
           // Same order as /trips and the admin grid — set by dragging in
           // /admin/trips

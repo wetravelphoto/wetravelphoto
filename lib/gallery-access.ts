@@ -55,10 +55,18 @@ export async function accessForToken(token: string): Promise<ShareAccess | null>
   const supabase = createAdminClientOrNull()
   if (!supabase) return null
 
+  // A share link belongs to the site that minted it. Without this a token
+  // from one photographer's gallery would open on another's address — the
+  // service-role key below ignores row-level security, so this IS the check.
   const tenantId = await currentSiteTenantId()
+  if (!tenantId) return null
 
-  const query = supabase.from('clients').select('id, name').eq('access_token', token)
-  const { data: client } = await (tenantId ? query.eq('tenant_id', tenantId) : query).maybeSingle()
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id, name')
+    .eq('tenant_id', tenantId)
+    .eq('access_token', token)
+    .maybeSingle()
 
   if (!client) return null
 

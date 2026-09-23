@@ -8,6 +8,7 @@ import {
   type SectionNeed,
   type SectionSettings,
 } from '@/lib/sections/registry'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 /** A row as it sits in the database, or as the legacy adapter fakes one. */
 export type StoredSection = {
@@ -51,13 +52,21 @@ export type PageSections = {
  */
 export async function loadPageSections(page = 'home'): Promise<PageSections> {
   const settings = await getSiteSettings()
+  const tenantId = await currentSiteTenantId()
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('page_sections')
-    .select('id, type, position, visible, version, settings')
-    .eq('page', page)
-    .order('position', { ascending: true })
+  // Scoped to THIS site. The table's public read policy is `using (true)` —
+  // a signed-out visitor has no tenant for row-level security to compare
+  // against — so the filter has to be here, and a missing tenant has to mean
+  // "nothing", never "everything".
+  const { data, error } = tenantId
+    ? await supabase
+        .from('page_sections')
+        .select('id, type, position, visible, version, settings')
+        .eq('tenant_id', tenantId)
+        .eq('page', page)
+        .order('position', { ascending: true })
+    : { data: [] as StoredSection[], error: null }
 
   if (error) {
     // Missing table reads as an error from PostgREST. Anything else is worth

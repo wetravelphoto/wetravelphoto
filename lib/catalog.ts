@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Derivatives } from '@/lib/image-sizes'
+import { currentSiteTenantId } from '@/lib/tenant'
 
 export type CatalogItem = {
   id: string
@@ -122,12 +123,16 @@ function isMissingColumn(message: string | undefined): boolean {
 
 /** Every photograph marked for sale, with its catalogue entry and prices. */
 export async function getCatalog(): Promise<CatalogEntry[]> {
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return []
+
   const supabase = await createClient()
 
   const run = (select: string) =>
     supabase
       .from('photos')
       .select(select)
+      .eq('tenant_id', tenantId)
       .eq('is_for_sale', true)
       .order('created_at', { ascending: false })
 
@@ -180,10 +185,13 @@ export async function getCatalog(): Promise<CatalogEntry[]> {
 
 /** One catalogue entry, for the editor. */
 export async function getCatalogEntry(photoId: string): Promise<CatalogEntry | null> {
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return null
+
   const supabase = await createClient()
 
   const run = (select: string) =>
-    supabase.from('photos').select(select).eq('id', photoId).maybeSingle()
+    supabase.from('photos').select(select).eq('tenant_id', tenantId).eq('id', photoId).maybeSingle()
 
   let { data, error } = await run(adminSelect(CATALOG_COLS))
 
@@ -293,12 +301,16 @@ export type CatalogResult = {
 export async function getPublishedCatalogResult(
   categoryId?: string | null
 ): Promise<CatalogResult> {
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return { entries: [], failed: false }
+
   const supabase = await createClient()
 
   const run = (select: string) =>
     supabase
       .from('photos')
       .select(select)
+      .eq('tenant_id', tenantId)
       .eq('is_for_sale', true)
       .eq('catalog_items.is_published', true)
       .order('created_at', { ascending: false })
@@ -333,12 +345,19 @@ export async function getPublishedCatalog(categoryId?: string | null): Promise<C
 
 /** One published print. Returns null when it isn't for sale or isn't published. */
 export async function getPublishedEntry(photoId: string): Promise<CatalogEntry | null> {
+  // The id comes from the address bar. Without the tenant it would fetch any
+  // site's print — including one that is for sale on a shop this visitor is
+  // not looking at.
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return null
+
   const supabase = await createClient()
 
   const run = (select: string) =>
     supabase
       .from('photos')
       .select(select)
+      .eq('tenant_id', tenantId)
       .eq('id', photoId)
       .eq('is_for_sale', true)
       .eq('catalog_items.is_published', true)

@@ -4,6 +4,7 @@ import BlockEditor from '@/components/admin/BlockEditor'
 import PostMetaFields from '@/components/admin/PostMetaFields'
 import PostActions from '@/components/admin/PostActions'
 import SeoFields from '@/components/admin/SeoFields'
+import { siteUrl } from '@/lib/site'
 import ConfirmButton from '@/components/admin/ConfirmButton'
 import type { Block } from '@/lib/blocks'
 import Link from 'next/link'
@@ -71,6 +72,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
           fallbackTitle={post?.title ?? ''}
           fallbackDescription={post?.excerpt ?? ''}
           slug={post?.slug ?? ''}
+          host={(await siteUrl()).replace(/^https?:\/\//, '')}
         />
       </form>
 

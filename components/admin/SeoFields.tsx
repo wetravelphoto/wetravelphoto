@@ -12,6 +12,7 @@ export default function SeoFields({
   fallbackTitle,
   fallbackDescription,
   slug,
+  host,
 }: {
   seoTitle: string
   seoDescription: string
@@ -19,6 +20,8 @@ export default function SeoFields({
   fallbackTitle: string
   fallbackDescription: string
   slug: string
+  /** This site's own address, so the preview shows theirs and not somebody else's. */
+  host: string
 }) {
   const [title, setTitle] = useState(seoTitle)
   const [desc, setDesc] = useState(seoDescription)
@@ -45,7 +48,7 @@ export default function SeoFields({
       {/* Rough preview of how the result reads in Google */}
       <div style={{ border: '0.5px solid var(--admin-line)', padding: '0.85rem', marginBottom: '1rem', background: 'var(--admin-bg)' }}>
         <p style={{ margin: 0, fontSize: '0.7rem', color: '#3a7d3a' }}>
-          wetravelphoto.com › journal › {slug}
+          {host} › journal › {slug}
         </p>
         <p style={{ margin: '0.2rem 0', fontSize: '1rem', color: '#1a0dab', lineHeight: 1.3 }}>
           {shownTitle.slice(0, 70) || 'Page title'}

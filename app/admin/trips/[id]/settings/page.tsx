@@ -179,7 +179,7 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
  */
 async function requestOrigin(): Promise<string> {
   const host = (await headers()).get('host')
-  if (!host) return siteUrl()
+  if (!host) return await siteUrl()
 
   const scheme = host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https'
   return `${scheme}://${host}`

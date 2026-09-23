@@ -31,7 +31,7 @@ const on = (formData: FormData, key: string) => formData.get(key) === 'on'
 export async function updateIdentity(formData: FormData) {
   await patch(
     {
-      site_title: text(formData, 'site_title') ?? 'WeTravelPhoto',
+      site_title: text(formData, 'site_title') ?? 'Untitled site',
       tagline: text(formData, 'tagline'),
       email_public: text(formData, 'email_public'),
       instagram_url: text(formData, 'instagram_url'),

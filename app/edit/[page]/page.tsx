@@ -139,7 +139,7 @@ export default async function EditPage({
       siteTitle={settings.site_title}
       chrome={chromeFrom(settings)}
       ownerName={settings.owner_name ?? null}
-      siteHost={siteUrl().replace(/^https?:\/\//, '')}
+      siteHost={(await siteUrl()).replace(/^https?:\/\//, '')}
       initialMode={mode === 'style' ? 'style' : 'content'}
       />
     </>

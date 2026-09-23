@@ -5,7 +5,7 @@ import { readPageSeo } from '@/lib/seo'
 import { PAGES, sanitizeCustomPages, type PageSlug } from '@/lib/sections/pages'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = siteUrl()
+  const base = await siteUrl()
   const supabase = await createClient()
 
   const { data: albums } = await supabase

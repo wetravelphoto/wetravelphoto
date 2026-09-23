@@ -4,6 +4,10 @@ import { getSiteSettings, siteUrl } from '@/lib/site'
 import { cssVariables, fontsToLoad, resolveTokens } from '@/lib/styles/tokens'
 import { fontHref } from '@/lib/fonts'
 import { photoUrl } from '@/lib/images'
+import { headers } from 'next/headers'
+import { currentSite, hostFromHeader } from '@/lib/tenant'
+import NoSiteHere from '@/components/NoSiteHere'
+import { PLATFORM } from '@/lib/platform'
 import './globals.css'
 import './home.css'
 import './contact-footer.css'
@@ -27,6 +31,9 @@ const body = Karla({
  * for a particular photographer.
  */
 export async function generateMetadata(): Promise<Metadata> {
+  const site = await currentSite()
+  if (!site) return { title: PLATFORM.name, robots: { index: false, follow: false } }
+
   const settings = await getSiteSettings()
 
   // The site icon, uploaded in Settings → Site icon. Its address changes
@@ -39,7 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     // Share images and canonical addresses are written as paths; this is what
     // they are resolved against.
-    metadataBase: new URL(siteUrl()),
+    metadataBase: new URL(await siteUrl()),
     title: settings.site_title,
     description: settings.tagline ?? `Photographs by ${settings.site_title}.`,
     openGraph: { siteName: settings.site_title, type: 'website' },
@@ -48,6 +55,20 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Which site this is, decided by the address (lib/tenant.ts). Nothing
+  // matches: the request is for an address nobody has connected a site to, and
+  // that gets an explanation rather than whichever site is first in the table.
+  const site = await currentSite()
+  if (!site) {
+    return (
+      <html lang="en">
+        <body>
+          <NoSiteHere host={hostFromHeader((await headers()).get('host'))} />
+        </body>
+      </html>
+    )
+  }
+
   const settings = await getSiteSettings()
   const tokens = resolveTokens(settings.global_styles, settings.global_styles_version)
 

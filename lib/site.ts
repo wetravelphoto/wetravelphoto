@@ -1,4 +1,6 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { currentSite } from '@/lib/tenant'
 
 export type SiteSettings = {
   /** The site this row belongs to. Present on every stored row; absent on the built-in fallback. */
@@ -169,8 +171,17 @@ export type SiteSettings = {
   global_styles_version: number
 }
 
+/**
+ * What a site looks like before it has said anything about itself — a brand
+ * new tenant whose settings row has not been written yet, or an address with
+ * no site behind it.
+ *
+ * Deliberately NOT named after any one photographer. It used to say
+ * "WeTravelPhoto", which was harmless with one site and is a bug with two:
+ * the first thing a new photographer would have seen is somebody else's name.
+ */
 const FALLBACK: SiteSettings = {
-  site_title: 'WeTravelPhoto',
+  site_title: 'A photography site',
   owner_name: null,
   logo_header_path: null,
   logo_footer_path: null,
@@ -200,7 +211,7 @@ const FALLBACK: SiteSettings = {
   journal_show_date: false,
   journal_show_byline: false,
   journal_title_scale: 1,
-  tagline: 'Travel photography and field notes',
+  tagline: null,
   about_heading: 'About',
   about_body: null,
   about_eyebrow: null,
@@ -305,12 +316,53 @@ const FALLBACK: SiteSettings = {
   global_styles_version: 1,
 }
 
-export async function getSiteSettings(): Promise<SiteSettings> {
+/**
+ * This site's settings — the name, the palette, the typefaces, the menu, the
+ * favicon. Every public page and every editor screen goes through here.
+ *
+ * It used to read `.eq('id', 1)`: one row, the same one for everybody. That
+ * single line was the whole of "there is only one site", and replacing it is
+ * most of what made a second one possible. The site now comes from the
+ * address (lib/tenant.ts), and an address with nothing behind it gets the
+ * neutral fallback rather than the first row in the table.
+ *
+ * Cached per request: the layout, the page, the sitemap and a dozen loaders
+ * all ask, and without this that is a database round trip each.
+ */
+export const getSiteSettings = cache(async (): Promise<SiteSettings> => {
+  const site = await currentSite()
+  if (!site) return FALLBACK
+
   const supabase = await createClient()
-  const { data } = await supabase.from('site_settings').select('*').eq('id', 1).maybeSingle()
+  const { data } = await supabase
+    .from('site_settings')
+    .select('*')
+    .eq('tenant_id', site.tenantId)
+    .maybeSingle()
+
   return (data as SiteSettings) ?? FALLBACK
+})
+
+/**
+ * This site's own address, with the scheme — for canonical URLs, Open Graph
+ * tags, the sitemap and share links.
+ *
+ * A site answers to every address in `tenant_domains`, but it only CALLS one
+ * of them home, and that is the one that belongs in a canonical tag. Falls
+ * back to the configured platform address when the site has no primary yet
+ * (a tester in their first ten minutes), and to localhost when there is no
+ * configuration at all.
+ */
+export async function siteUrl(): Promise<string> {
+  const site = await currentSite()
+  if (site?.primaryHost) {
+    const scheme = site.primaryHost.startsWith('localhost') || site.primaryHost.startsWith('127.') ? 'http' : 'https'
+    return `${scheme}://${site.primaryHost}`
+  }
+  return platformUrl()
 }
 
-export function siteUrl(): string {
+/** The address this deployment was configured for. Not a site's own address. */
+export function platformUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ?? 'http://localhost:3000'
 }

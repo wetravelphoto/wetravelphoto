@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { currentSite } from '@/lib/tenant'
 
 /**
  * WHO IS ASKING — once per request.
@@ -91,5 +92,28 @@ export async function requireEditor(): Promise<Editor> {
   if (!editor.platformAdmin && !EDIT_ROLES.includes(editor.role)) {
     throw new Error('This account can view this site but not change it.')
   }
+
+  /**
+   * YOU EDIT THE SITE YOU ARE ON.
+   *
+   * The address decides which site a page shows (lib/tenant.ts); the session
+   * decides who is writing. When those two disagree — someone signed in to
+   * their own site opens another photographer's address — every screen would
+   * show one site and every save would land in the other. Nothing would break
+   * loudly; it would just quietly write the wrong site's copy into yours.
+   *
+   * Only refused when the address is a CLAIMED one. A laptop, a preview build
+   * or the address this deployment was configured for resolve by assumption
+   * rather than by a row, and blocking on a guess would lock people out of
+   * their own editor for no gain. A platform admin passes either way — that is
+   * what supporting somebody else's site means.
+   */
+  const site = await currentSite()
+  if (site && !site.assumed && !editor.platformAdmin && site.tenantId !== editor.tenantId) {
+    throw new Error(
+      `This is not your site. You are signed in to a different one — open your own address to edit it.`
+    )
+  }
+
   return editor
 }

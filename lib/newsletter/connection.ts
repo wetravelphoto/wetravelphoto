@@ -42,7 +42,7 @@ export async function pushOne(connection: Connection, email: string): Promise<vo
   if (!connection.listId) throw new Error('No list chosen yet in Settings → Newsletter.')
   await PROVIDERS[connection.provider].add(connection.key, connection.listId, email, {
     doubleOptIn: connection.doubleOptIn,
-    referrer: siteUrl(),
+    referrer: await siteUrl(),
   })
 }
 

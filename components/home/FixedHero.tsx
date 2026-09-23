@@ -81,7 +81,7 @@ export default function FixedHero({
 
       {showMark && (
         <div className="hero-mark">
-          <Logo variant="word" src={logoUrl} alt={siteTitle} tone="light" height={0} className="hero-wordmark" />
+          <Logo src={logoUrl} text={siteTitle} alt={siteTitle} tone="light" height={0} className="hero-wordmark" />
         </div>
       )}
 

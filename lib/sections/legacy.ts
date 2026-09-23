@@ -47,10 +47,15 @@ export function legacyHomeSections(s: SiteSettings): StoredSection[] {
       // uploaded its own used the built-in file, so that is what it keeps.
       id: 'legacy-mark',
       type: 'mark',
-      visible: s.show_bird !== false,
+      // No mark unless this site has one. It used to fall back to
+      // WeTravelPhoto's bird, which was that site's own logo appearing on
+      // somebody else's homepage. WeTravelPhoto's row now names the file
+      // explicitly (db/migrations/2026-09-23_own_marks.sql), so nothing
+      // changes there.
+      visible: s.show_bird !== false && Boolean(s.logo_bird_path),
       version: 1,
       settings: {
-        image_path: s.logo_bird_path ?? '/logos/we-travel-photo-bird.svg',
+        image_path: s.logo_bird_path ?? '',
         align: 'center',
         size: s.logo_bird_size ?? 64,
       },

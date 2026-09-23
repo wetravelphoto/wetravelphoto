@@ -66,8 +66,8 @@ export default function HeaderNav({
       >
         <Link href="/" aria-label={siteTitle}>
           <Logo
-            variant="word"
             src={logoUrl}
+            text={siteTitle}
             alt={siteTitle}
             tone={mode === 'over' ? 'light' : 'dark'}
             height={0}

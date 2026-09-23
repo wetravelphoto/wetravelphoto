@@ -46,8 +46,8 @@ export default async function SiteFooter({ settings: given }: { settings?: SiteS
       <div className="footer-grid">
         <div className="footer-brand-col">
           <Logo
-            variant="full"
             src={settings.logo_footer_path ? photoUrl(settings.logo_footer_path) : null}
+            text={settings.site_title}
             alt={settings.site_title}
             tone="light"
             height={0}

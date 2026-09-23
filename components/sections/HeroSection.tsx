@@ -78,6 +78,8 @@ export default function HeroSection({
           overlaySubtitle={str(settings, 'subtitle')}
           ctaLabel={str(settings, 'cta_label')}
           ctaHref={str(settings, 'cta_href')}
+          logoUrl={ctx.settings.logo_header_path ? photoUrl(ctx.settings.logo_header_path) : null}
+          siteTitle={ctx.settings.site_title}
           styleVars={vars}
           editable={ctx.editable}
         />

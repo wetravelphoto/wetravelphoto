@@ -28,6 +28,8 @@ export default function HomeHero({
   overlaySubtitle,
   ctaLabel,
   ctaHref,
+  logoUrl,
+  siteTitle,
   styleVars,
   editable = false,
 }: {
@@ -39,6 +41,9 @@ export default function HomeHero({
   overlaySubtitle?: string | null
   ctaLabel?: string | null
   ctaHref?: string | null
+  /** An uploaded logo, or null — in which case the site's name is set as type. */
+  logoUrl?: string | null
+  siteTitle?: string | null
   /**
    * True only inside the editor's preview: tags the overlay title, subtitle and
    * button so each can be hovered and selected on its own. The story titles
@@ -138,7 +143,7 @@ export default function HomeHero({
       {/* The site's own mark carries the image; the story is named below */}
       {showMark && (
         <div className="hero-mark">
-          <Logo variant="word" tone="light" height={0} className="hero-wordmark" />
+          <Logo src={logoUrl} text={siteTitle} alt={siteTitle ?? ''} tone="light" height={0} className="hero-wordmark" />
         </div>
       )}
 

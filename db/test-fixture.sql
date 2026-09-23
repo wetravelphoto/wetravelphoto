@@ -195,8 +195,22 @@ create table room_scenes (
   tenant_id uuid                                        -- nullable, no default
 );
 
+-- NOTE, 2026-09-23. This fixture is written by hand from what production is
+-- believed to look like, and on 2026-09-23 that belief was wrong: the real
+-- site_settings still carried `constraint single_row check (id = 1)` from the
+-- single-site era, which this file had never mentioned. Every local test of
+-- the create-a-site screen therefore passed, and the first real attempt failed
+-- against the live database. The constraint is gone now
+-- (db/migrations/2026-09-23_site_settings_per_site.sql) and the shape below
+-- matches production again — id defaulted from a sequence, one row per site
+-- enforced by the unique index on tenant_id.
+--
+-- The lesson worth keeping: a fixture proves the code agrees with THIS FILE.
+-- When something fails only in production, suspect the file first.
+create sequence site_settings_id_seq;
+
 create table site_settings (
-  id            int primary key,
+  id            int primary key default nextval('site_settings_id_seq'),
   site_title    text not null default 'WeTravelPhoto',
   hero_album_id uuid references albums(id),
   type_styles   jsonb not null default '{}'::jsonb,
@@ -375,3 +389,4 @@ select ac.album_id, ac.client_id, p.id
   from album_clients ac join photos p on p.album_id = ac.album_id;
 insert into room_scenes (is_active) values (true), (true);   -- null tenant_id on purpose
 insert into site_settings (id) values (1);
+select setval('site_settings_id_seq', 1);

@@ -120,22 +120,27 @@ export async function createSite(formData: FormData): Promise<NewSite> {
   if (domainError) return undo(`The address could not be saved: ${domainError.message}`)
 
   // ── 3. its settings ───────────────────────────────────────────────────────
-  // site_settings.id is an integer with no default, so it has to be chosen.
-  // Racing two creations would collide here; with one person making sites by
-  // hand that is not a race worth locking for, and the insert would fail
-  // loudly rather than quietly.
-  const { data: highest } = await db
-    .from('site_settings')
-    .select('id')
-    .order('id', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
+  // No id is given. site_settings.id used to be chosen here — read the highest
+  // and add one — which was a race if two sites were ever made at the same
+  // moment, and which is now the database's own job:
+  // db/migrations/2026-09-23_site_settings_per_site.sql gave the column a
+  // sequence, and took away the constraint from the single-site era that made
+  // a second row impossible at all.
+  //
+  // The rule that still holds is tenant_id's unique index: one settings row
+  // per site, counted per site rather than in total.
   const { error: settingsError } = await db
     .from('site_settings')
-    .insert({ id: ((highest?.id as number) ?? 0) + 1, tenant_id: tenantId, ...starterSettings(name) })
+    .insert({ tenant_id: tenantId, ...starterSettings(name) })
 
-  if (settingsError) return undo(`The site's settings could not be saved: ${settingsError.message}`)
+  if (settingsError) {
+    return undo(
+      settingsError.message.includes('single_row') ||
+        settingsError.message.includes('null value in column "id"')
+        ? 'The database has not been migrated yet — run db/migrations/2026-09-23_site_settings_per_site.sql, then try again.'
+        : `The site's settings could not be saved: ${settingsError.message}`
+    )
+  }
 
   // ── 4. the photographer ───────────────────────────────────────────────────
   // An invitation rather than a password: they set their own, and no password

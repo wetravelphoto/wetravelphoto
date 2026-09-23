@@ -2,14 +2,17 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { markRead, deleteMessage } from '@/app/actions/contact'
 import ConfirmButton from '@/components/admin/ConfirmButton'
+import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function MessagesPage() {
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
   const { data: messages } = await supabase
     .from('contact_messages')
     .select('*')
+    .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
 
   const unread = messages?.filter((m) => !m.is_read).length ?? 0

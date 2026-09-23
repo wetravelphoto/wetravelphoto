@@ -75,16 +75,20 @@ export async function sendMessage(formData: FormData) {
 
 export async function markRead(id: string, isRead: boolean) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
-  await supabase.from('contact_messages').update({ is_read: isRead }).eq('id', id)
+  await supabase
+    .from('contact_messages')
+    .update({ is_read: isRead })
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
   revalidatePath('/admin/messages')
 }
 
 export async function deleteMessage(id: string) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
-  await supabase.from('contact_messages').delete().eq('id', id)
+  await supabase.from('contact_messages').delete().eq('tenant_id', tenantId).eq('id', id)
   revalidatePath('/admin/messages')
 }

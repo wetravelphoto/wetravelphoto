@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { attachCovers, photoCounts } from '@/lib/album-covers'
 import GalleryGrid from '@/components/admin/GalleryGrid'
 import Link from 'next/link'
+import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,7 @@ export default async function GalleriesPage({
   const { sort } = await searchParams
   const sortKey = (sort ?? 'manual') as SortKey
 
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   // Covers and counts come from bounded queries. Embedding every photo row of
@@ -22,6 +24,7 @@ export default async function GalleriesPage({
   const { data: albumData, error } = await supabase
     .from('albums')
     .select('*')
+    .eq('tenant_id', tenantId)
     // display_order is the gallery's position. albums.sort_order is text and
     // means the photo sort mode inside the album — don't order by it here.
     .order('display_order', { ascending: true })

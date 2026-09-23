@@ -19,11 +19,11 @@ function slugify(input: string): string {
   )
 }
 
-async function uniqueSlug(supabase: SupabaseClient, base: string, excludeId?: string): Promise<string> {
+async function uniqueSlug(supabase: SupabaseClient, tenantId: string, base: string, excludeId?: string): Promise<string> {
   const root = slugify(base)
   for (let attempt = 0; attempt < 50; attempt++) {
     const candidate = attempt === 0 ? root : `${root}-${attempt + 1}`
-    let query = supabase.from('albums').select('id').eq('slug', candidate)
+    let query = supabase.from('albums').select('id').eq('tenant_id', tenantId).eq('slug', candidate)
     if (excludeId) query = query.neq('id', excludeId)
     const { data } = await query.maybeSingle()
     if (!data) return candidate
@@ -33,15 +33,15 @@ async function uniqueSlug(supabase: SupabaseClient, base: string, excludeId?: st
 
 export async function createAlbum(formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const title = formData.get('title') as string
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const slug = await uniqueSlug(supabase, title)
+  const slug = await uniqueSlug(supabase, tenantId, title)
 
   const { data, error } = await supabase
     .from('albums')
-    .insert({ title, slug, created_by: user?.id })
+    .insert({ title, slug, created_by: user?.id, tenant_id: tenantId })
     .select()
     .single()
 
@@ -54,7 +54,7 @@ export async function createAlbum(formData: FormData) {
 
 export async function updateAlbumSettings(albumId: string, formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const get = (k: string) => formData.get(k) as string
   const num = (k: string, fallback: number) => {
     const v = parseFloat(formData.get(k) as string)
@@ -63,7 +63,7 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
 
   const title = get('title')
   const supabase = await createClient()
-  const slug = await uniqueSlug(supabase, get('slug') || title, albumId)
+  const slug = await uniqueSlug(supabase, tenantId, get('slug') || title, albumId)
 
   const updates: Record<string, unknown> = {
     title,
@@ -106,7 +106,11 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
     updates.password_hash = hashPassword(password)
   }
 
-  const { error } = await supabase.from('albums').update(updates).eq('id', albumId)
+  const { error } = await supabase
+    .from('albums')
+    .update(updates)
+    .eq('tenant_id', tenantId)
+    .eq('id', albumId)
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin')
@@ -118,9 +122,13 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
 
 export async function updateLayoutStyle(albumId: string, layoutStyle: string) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
-  const { error } = await supabase.from('albums').update({ layout_style: layoutStyle }).eq('id', albumId)
+  const { error } = await supabase
+    .from('albums')
+    .update({ layout_style: layoutStyle })
+    .eq('tenant_id', tenantId)
+    .eq('id', albumId)
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/trips/${albumId}`)
 }
@@ -145,6 +153,7 @@ export async function uploadCustomCover(albumId: string, formData: FormData) {
   const { error } = await supabase
     .from('albums')
     .update({ cover_custom_path: processed.displayPath, cover_photo_id: null })
+    .eq('tenant_id', tenantId)
     .eq('id', albumId)
 
   if (error) throw new Error(error.message)
@@ -156,9 +165,13 @@ export async function uploadCustomCover(albumId: string, formData: FormData) {
 
 export async function clearCustomCover(albumId: string) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
-  const { error } = await supabase.from('albums').update({ cover_custom_path: null }).eq('id', albumId)
+  const { error } = await supabase
+    .from('albums')
+    .update({ cover_custom_path: null })
+    .eq('tenant_id', tenantId)
+    .eq('id', albumId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin')
   revalidatePath(`/admin/trips/${albumId}/settings`)
@@ -185,7 +198,11 @@ export async function uploadCoverVideo(albumId: string, formData: FormData) {
   )
 
   const supabase = await createClient()
-  const { error } = await supabase.from('albums').update({ cover_video_path: key }).eq('id', albumId)
+  const { error } = await supabase
+    .from('albums')
+    .update({ cover_video_path: key })
+    .eq('tenant_id', tenantId)
+    .eq('id', albumId)
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin')
@@ -194,9 +211,13 @@ export async function uploadCoverVideo(albumId: string, formData: FormData) {
 
 export async function clearCoverVideo(albumId: string) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
-  const { error } = await supabase.from('albums').update({ cover_video_path: null }).eq('id', albumId)
+  const { error } = await supabase
+    .from('albums')
+    .update({ cover_video_path: null })
+    .eq('tenant_id', tenantId)
+    .eq('id', albumId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin')
   revalidatePath(`/admin/trips/${albumId}/settings`)

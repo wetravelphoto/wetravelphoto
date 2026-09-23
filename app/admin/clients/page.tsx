@@ -1,13 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { createContact, deleteContact } from '@/app/actions/clients'
 import ConfirmButton from '@/components/admin/ConfirmButton'
+import { requireEditor } from '@/lib/auth'
 
 export default async function ClientsPage() {
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data: clients } = await supabase
     .from('clients')
     .select('*')
+    .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
 
   const { data: downloads } = await supabase.from('downloads').select('client_id')

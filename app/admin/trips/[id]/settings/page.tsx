@@ -8,21 +8,33 @@ import { formatTripDate } from '@/lib/dates'
 import { siteUrl } from '@/lib/site'
 import { headers } from 'next/headers'
 import Link from 'next/link'
+import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AlbumSettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { data: album } = await supabase.from('albums').select('*').eq('id', id).single()
+  const { data: album } = await supabase
+    .from('albums')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
+    .single()
   const { data: photos } = await supabase
     .from('photos')
     .select('id, storage_path, taken_at')
+    .eq('tenant_id', tenantId)
     .eq('album_id', id)
     .order('sort_order', { ascending: true })
 
-  const { data: allClients } = await supabase.from('clients').select('*').order('name')
+  const { data: allClients } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('name')
   const { data: sharedWith } = await supabase
     .from('album_clients')
     // access_token so the settings page can show the link that actually opens
@@ -36,7 +48,7 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
   const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''
 
   // Collect tags already used across albums so they can be reused
-  const { data: allAlbums } = await supabase.from('albums').select('tags')
+  const { data: allAlbums } = await supabase.from('albums').select('tags').eq('tenant_id', tenantId)
   const tagSuggestions = Array.from(
     new Set((allAlbums ?? []).flatMap((a) => (a.tags as string[] | null) ?? []))
   ).sort()

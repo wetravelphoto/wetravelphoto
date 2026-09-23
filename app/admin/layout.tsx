@@ -47,6 +47,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { count } = await supabase
     .from('contact_messages')
     .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', editor?.tenantId ?? '')
     .eq('is_read', false)
 
   return (

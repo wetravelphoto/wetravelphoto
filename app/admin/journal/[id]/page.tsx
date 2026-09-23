@@ -9,17 +9,31 @@ import ConfirmButton from '@/components/admin/ConfirmButton'
 import type { Block } from '@/lib/blocks'
 import Link from 'next/link'
 import '@/app/journal/journal.css'
+import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { data: post } = await supabase.from('blog_posts').select('*').eq('id', id).single()
-  const { data: albums } = await supabase.from('albums').select('id, title').order('title')
+  const { data: post } = await supabase
+    .from('blog_posts')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
+    .single()
+  const { data: albums } = await supabase
+    .from('albums')
+    .select('id, title')
+    .eq('tenant_id', tenantId)
+    .order('title')
 
-  const { data: allPosts } = await supabase.from('blog_posts').select('category, tags')
+  const { data: allPosts } = await supabase
+    .from('blog_posts')
+    .select('category, tags')
+    .eq('tenant_id', tenantId)
   const categories = Array.from(
     new Set((allPosts ?? []).map((p) => p.category).filter(Boolean) as string[])
   ).sort()

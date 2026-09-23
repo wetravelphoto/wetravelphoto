@@ -1,13 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AlbumStatsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { data: album } = await supabase.from('albums').select('title').eq('id', id).single()
+  const { data: album } = await supabase
+    .from('albums')
+    .select('title')
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
+    .single()
 
   const since = new Date()
   since.setDate(since.getDate() - 29)
@@ -18,7 +25,11 @@ export default async function AlbumStatsPage({ params }: { params: Promise<{ id:
     .eq('album_id', id)
     .gte('viewed_at', since.toISOString())
 
-  const { data: photos } = await supabase.from('photos').select('id').eq('album_id', id)
+  const { data: photos } = await supabase
+    .from('photos')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('album_id', id)
   const photoIds = photos?.map((p) => p.id) ?? []
 
   const { data: downloads } = photoIds.length

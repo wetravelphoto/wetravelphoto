@@ -1,15 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import JournalTable from '@/components/admin/JournalTable'
 import Link from 'next/link'
+import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function BlogListPage() {
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('blog_posts')
     .select('*, profiles(display_name, email)')
+    .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
 
   const posts = (data ?? []).map((post) => {

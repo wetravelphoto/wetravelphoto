@@ -2,17 +2,25 @@ import { createClient } from '@/lib/supabase/server'
 import PhotoUploader from '@/components/admin/PhotoUploader'
 import PhotoGrid from '@/components/admin/PhotoGrid'
 import Link from 'next/link'
+import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AlbumPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { data: album } = await supabase.from('albums').select('*').eq('id', id).single()
+  const { data: album } = await supabase
+    .from('albums')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
+    .single()
   const { data: photos } = await supabase
     .from('photos')
     .select('*')
+    .eq('tenant_id', tenantId)
     .eq('album_id', id)
     .order('sort_order', { ascending: true })
 

@@ -15,33 +15,38 @@ import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
 import BackfillPanel from '@/components/admin/BackfillPanel'
 import { countUnprocessed } from '@/app/actions/backfill'
-import { currentEditor } from '@/lib/auth'
+import { currentEditor, requireEditor } from '@/lib/auth'
 import { hasInstagramToken } from '@/lib/instagram'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
+  const { tenantId } = await requireEditor()
   const settings = await getSiteSettings()
   const supabase = await createClient()
 
   const { count: signupCount } = await supabase
     .from('newsletter_signups')
     .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
 
   // Sign-ups not yet sent to the connected mailing service, and how many of
   // those failed. (Both read 0 before the columns exist.)
   const { count: waitingCount } = await supabase
     .from('newsletter_signups')
     .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
     .is('synced_at', null)
   const { count: failedCount } = await supabase
     .from('newsletter_signups')
     .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
     .not('sync_error', 'is', null)
 
   const { count: igCount } = await supabase
     .from('instagram_media')
     .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
 
   const { data: team } = await supabase.from('profiles').select('id, email, display_name, role')
 

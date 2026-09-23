@@ -16,7 +16,7 @@ import { redirect } from 'next/navigation'
  */
 export async function saveCatalogItem(photoId: string, formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const text = (key: string) => (formData.get(key) as string)?.trim() || null
@@ -30,6 +30,7 @@ export async function saveCatalogItem(photoId: string, formData: FormData) {
   // ── The entry itself ──────────────────────────────────────────────────────
   const { error: itemError } = await supabase.from('catalog_items').upsert(
     {
+      tenant_id: tenantId,
       photo_id: photoId,
       title: text('title'),
       description: text('description'),
@@ -64,7 +65,11 @@ export async function saveCatalogItem(photoId: string, formData: FormData) {
   const keepers = ids.filter((id) => !removals.includes(id))
 
   if (removals.length > 0) {
-    const { error } = await supabase.from('products').delete().in('id', removals)
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .in('id', removals)
     if (error) throw new Error(error.message)
   }
 
@@ -83,7 +88,7 @@ export async function saveCatalogItem(photoId: string, formData: FormData) {
       if (label) updates.size_label = label
       if (priceCents !== null) updates.price_cents = priceCents
 
-      return supabase.from('products').update(updates).eq('id', id)
+      return supabase.from('products').update(updates).eq('tenant_id', tenantId).eq('id', id)
     })
   )
 
@@ -93,6 +98,7 @@ export async function saveCatalogItem(photoId: string, formData: FormData) {
 
   if (newLabel && newPrice !== null) {
     const { error } = await supabase.from('products').insert({
+      tenant_id: tenantId,
       photo_id: photoId,
       size_label: newLabel,
       type: text('new_kind') ?? 'print',
@@ -115,13 +121,18 @@ export async function saveCatalogItem(photoId: string, formData: FormData) {
  */
 export async function setCatalogPublished(photoId: string, publish: boolean) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { error } = await supabase
     .from('catalog_items')
     .upsert(
-      { photo_id: photoId, is_published: publish, updated_at: new Date().toISOString() },
+      {
+        tenant_id: tenantId,
+        photo_id: photoId,
+        is_published: publish,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: 'photo_id' }
     )
 

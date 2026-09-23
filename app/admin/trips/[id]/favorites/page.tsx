@@ -1,11 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { requireEditor } from '@/lib/auth'
 
 export default async function AlbumFavoritesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { data: album } = await supabase.from('albums').select('title').eq('id', id).single()
+  const { data: album } = await supabase
+    .from('albums')
+    .select('title')
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
+    .single()
 
   const { data: favorites } = await supabase
     .from('favorites')

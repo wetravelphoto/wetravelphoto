@@ -24,10 +24,15 @@ export async function deleteAlbum(albumId: string) {
   const { data: album } = await supabase
     .from('albums')
     .select('cover_custom_path, cover_video_path')
+    .eq('tenant_id', tenantId)
     .eq('id', albumId)
     .maybeSingle()
 
-  const { data: photos } = await supabase.from('photos').select('storage_path').eq('album_id', albumId)
+  const { data: photos } = await supabase
+    .from('photos')
+    .select('storage_path')
+    .eq('tenant_id', tenantId)
+    .eq('album_id', albumId)
 
   const candidates = [
     ...(photos ?? []).map((p) => p.storage_path),
@@ -41,6 +46,7 @@ export async function deleteAlbum(albumId: string) {
   const { data: posts } = await supabase
     .from('blog_posts')
     .select('featured_custom_path, blocks')
+    .eq('tenant_id', tenantId)
     .not('featured_custom_path', 'is', null)
 
   for (const post of posts ?? []) {
@@ -49,6 +55,7 @@ export async function deleteAlbum(albumId: string) {
 
   // Images used inside post bodies count too
   const { data: allPosts } = await supabase.from('blog_posts').select('blocks')
+    .eq('tenant_id', tenantId)
   for (const post of allPosts ?? []) {
     const json = JSON.stringify(post.blocks ?? [])
     for (const path of candidates) {
@@ -80,7 +87,11 @@ export async function deleteAlbum(albumId: string) {
     }
   }
 
-  const { error } = await supabase.from('albums').delete().eq('id', albumId)
+  const { error } = await supabase
+    .from('albums')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('id', albumId)
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin/trips')
@@ -100,12 +111,16 @@ export async function deleteAlbum(albumId: string) {
  */
 export async function reorderAlbums(ids: string[]) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   await Promise.all(
     ids.map((id, index) =>
-      supabase.from('albums').update({ display_order: index + 1 }).eq('id', id)
+      supabase
+        .from('albums')
+        .update({ display_order: index + 1 })
+        .eq('tenant_id', tenantId)
+        .eq('id', id)
     )
   )
 

@@ -17,7 +17,7 @@ const text = (formData: FormData, key: string) => (formData.get(key) as string)?
 
 export async function createPrintOption(formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const label = text(formData, 'label')
   const priceCents = parseMoneyToCents(formData.get('price') as string)
 
@@ -29,10 +29,12 @@ export async function createPrintOption(formData: FormData) {
   const { data: last } = await supabase
     .from('print_options')
     .select('sort_order')
+    .eq('tenant_id', tenantId)
     .order('sort_order', { ascending: false })
     .limit(1)
 
   const { error } = await supabase.from('print_options').insert({
+    tenant_id: tenantId,
     label,
     kind: text(formData, 'kind') ?? 'print',
     price_cents: priceCents,
@@ -50,7 +52,7 @@ export async function createPrintOption(formData: FormData) {
  */
 export async function savePrintOptions(formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
   const ids = formData.getAll('option_id').map(String)
 
@@ -58,7 +60,11 @@ export async function savePrintOptions(formData: FormData) {
   const keepers = ids.filter((id) => !removals.includes(id))
 
   if (removals.length > 0) {
-    const { error } = await supabase.from('print_options').delete().in('id', removals)
+    const { error } = await supabase
+      .from('print_options')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .in('id', removals)
     if (error) throw new Error(error.message)
   }
 
@@ -77,7 +83,7 @@ export async function savePrintOptions(formData: FormData) {
       if (label) updates.label = label
       if (priceCents !== null) updates.price_cents = priceCents
 
-      return supabase.from('print_options').update(updates).eq('id', id)
+      return supabase.from('print_options').update(updates).eq('tenant_id', tenantId).eq('id', id)
     })
   )
 
@@ -88,7 +94,7 @@ export async function savePrintOptions(formData: FormData) {
 
 export async function createShopCategory(formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const name = text(formData, 'name')
   if (!name) return
 
@@ -97,10 +103,12 @@ export async function createShopCategory(formData: FormData) {
   const { data: last } = await supabase
     .from('shop_categories')
     .select('sort_order')
+    .eq('tenant_id', tenantId)
     .order('sort_order', { ascending: false })
     .limit(1)
 
   const { error } = await supabase.from('shop_categories').insert({
+    tenant_id: tenantId,
     name,
     slug: slugifyCategory(name),
     sort_order: (last?.[0]?.sort_order ?? 0) + 1,
@@ -118,7 +126,7 @@ export async function createShopCategory(formData: FormData) {
 
 export async function saveShopCategories(formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
   const ids = formData.getAll('category_id').map(String)
 
@@ -127,7 +135,11 @@ export async function saveShopCategories(formData: FormData) {
 
   // photo_shop_categories cascades, so the assignments go with the category
   if (removals.length > 0) {
-    const { error } = await supabase.from('shop_categories').delete().in('id', removals)
+    const { error } = await supabase
+      .from('shop_categories')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .in('id', removals)
     if (error) throw new Error(error.message)
   }
 
@@ -143,7 +155,7 @@ export async function saveShopCategories(formData: FormData) {
         updates.slug = slugifyCategory(name)
       }
 
-      return supabase.from('shop_categories').update(updates).eq('id', id)
+      return supabase.from('shop_categories').update(updates).eq('tenant_id', tenantId).eq('id', id)
     })
   )
 

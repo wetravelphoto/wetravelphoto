@@ -1,19 +1,36 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminDashboard() {
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const [albums, photos, posts, drafts, clients, unread, signups] = await Promise.all([
-    supabase.from('albums').select('id', { count: 'exact', head: true }),
-    supabase.from('photos').select('id', { count: 'exact', head: true }),
-    supabase.from('blog_posts').select('id', { count: 'exact', head: true }).eq('status', 'published'),
-    supabase.from('blog_posts').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
-    supabase.from('clients').select('id', { count: 'exact', head: true }),
-    supabase.from('contact_messages').select('id', { count: 'exact', head: true }).eq('is_read', false),
-    supabase.from('newsletter_signups').select('id', { count: 'exact', head: true }),
+    supabase.from('albums').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+    supabase.from('photos').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+    supabase
+      .from('blog_posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('status', 'published'),
+    supabase
+      .from('blog_posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('status', 'draft'),
+    supabase.from('clients').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+    supabase
+      .from('contact_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('is_read', false),
+    supabase
+      .from('newsletter_signups')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId),
   ])
 
   const since = new Date()
@@ -29,12 +46,14 @@ export default async function AdminDashboard() {
   const { data: recentAlbums } = await supabase
     .from('albums')
     .select('id, title, privacy_type, updated_at, photos(id)')
+    .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false })
     .limit(4)
 
   const { data: recentPosts } = await supabase
     .from('blog_posts')
     .select('id, title, status, updated_at')
+    .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false })
     .limit(4)
 

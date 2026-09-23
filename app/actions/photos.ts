@@ -77,6 +77,7 @@ export async function registerPhoto(
   const { data: existing } = await supabase
     .from('photos')
     .select('sort_order')
+    .eq('tenant_id', tenantId)
     .eq('album_id', albumId)
     .order('sort_order', { ascending: false })
     .limit(1)
@@ -84,6 +85,7 @@ export async function registerPhoto(
   const nextSortOrder = (existing?.[0]?.sort_order ?? -1) + 1
 
   const { error } = await supabase.from('photos').insert({
+    tenant_id: tenantId,
     album_id: albumId,
     storage_path: processed.displayPath,
     original_path: processed.originalPath,
@@ -105,13 +107,14 @@ export async function registerPhoto(
 
 export async function deletePhoto(albumId: string, photoId: string, storagePath: string) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   // A photo is now several files — the original plus each display size
   const { data: photo } = await supabase
     .from('photos')
     .select('original_path, derivatives')
+    .eq('tenant_id', tenantId)
     .eq('id', photoId)
     .maybeSingle()
 
@@ -131,7 +134,11 @@ export async function deletePhoto(albumId: string, photoId: string, storagePath:
     )
   )
 
-  const { error } = await supabase.from('photos').delete().eq('id', photoId)
+  const { error } = await supabase
+    .from('photos')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('id', photoId)
   if (error) throw new Error(error.message)
 
   revalidatePath(`/admin/trips/${albumId}`)
@@ -139,11 +146,15 @@ export async function deletePhoto(albumId: string, photoId: string, storagePath:
 
 export async function updateCaption(albumId: string, photoId: string, formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const caption = formData.get('caption') as string
   const supabase = await createClient()
 
-  const { error } = await supabase.from('photos').update({ caption }).eq('id', photoId)
+  const { error } = await supabase
+    .from('photos')
+    .update({ caption })
+    .eq('tenant_id', tenantId)
+    .eq('id', photoId)
   if (error) throw new Error(error.message)
 
   revalidatePath(`/admin/trips/${albumId}`)
@@ -151,11 +162,15 @@ export async function updateCaption(albumId: string, photoId: string, formData: 
 
 export async function updatePhotoTags(albumId: string, photoId: string, tags: string[]) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const clean = tags.map((t) => t.trim().toLowerCase()).filter(Boolean)
-  const { error } = await supabase.from('photos').update({ tags: clean }).eq('id', photoId)
+  const { error } = await supabase
+    .from('photos')
+    .update({ tags: clean })
+    .eq('tenant_id', tenantId)
+    .eq('id', photoId)
   if (error) throw new Error(error.message)
 
   revalidatePath(`/admin/trips/${albumId}`)
@@ -163,12 +178,13 @@ export async function updatePhotoTags(albumId: string, photoId: string, tags: st
 
 export async function toggleForSale(albumId: string, photoId: string, currentValue: boolean) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { error } = await supabase
     .from('photos')
     .update({ is_for_sale: !currentValue })
+    .eq('tenant_id', tenantId)
     .eq('id', photoId)
 
   if (error) throw new Error(error.message)
@@ -185,12 +201,16 @@ export async function toggleForSale(albumId: string, photoId: string, currentVal
 
 export async function reorderPhotos(albumId: string, orderedIds: string[]) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   await Promise.all(
     orderedIds.map((photoId, index) =>
-      supabase.from('photos').update({ sort_order: index }).eq('id', photoId)
+      supabase
+        .from('photos')
+        .update({ sort_order: index })
+        .eq('tenant_id', tenantId)
+        .eq('id', photoId)
     )
   )
 

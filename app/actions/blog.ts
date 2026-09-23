@@ -17,11 +17,11 @@ function slugify(input: string): string {
   )
 }
 
-async function uniqueSlug(supabase: SupabaseClient, base: string, excludeId?: string) {
+async function uniqueSlug(supabase: SupabaseClient, tenantId: string, base: string, excludeId?: string) {
   const root = slugify(base)
   for (let i = 0; i < 50; i++) {
     const candidate = i === 0 ? root : `${root}-${i + 1}`
-    let q = supabase.from('blog_posts').select('id').eq('slug', candidate)
+    let q = supabase.from('blog_posts').select('id').eq('tenant_id', tenantId).eq('slug', candidate)
     if (excludeId) q = q.neq('id', excludeId)
     const { data } = await q.maybeSingle()
     if (!data) return candidate
@@ -31,15 +31,15 @@ async function uniqueSlug(supabase: SupabaseClient, base: string, excludeId?: st
 
 export async function createPost(formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const title = formData.get('title') as string
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const slug = await uniqueSlug(supabase, title)
+  const slug = await uniqueSlug(supabase, tenantId, title)
 
   const { data, error } = await supabase
     .from('blog_posts')
-    .insert({ title, slug, author_id: user?.id, blocks: [] })
+    .insert({ title, slug, author_id: user?.id, blocks: [], tenant_id: tenantId })
     .select()
     .single()
 
@@ -51,7 +51,7 @@ export async function createPost(formData: FormData) {
 
 export async function updatePost(postId: string, formData: FormData) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const get = (k: string) => (formData.get(k) as string) ?? ''
 
   let blocks: Block[] = []
@@ -63,7 +63,7 @@ export async function updatePost(postId: string, formData: FormData) {
 
   const supabase = await createClient()
   const title = get('title')
-  const slug = await uniqueSlug(supabase, get('slug') || title, postId)
+  const slug = await uniqueSlug(supabase, tenantId, get('slug') || title, postId)
   const status = get('status')
 
   const updates: Record<string, unknown> = {
@@ -94,13 +94,18 @@ export async function updatePost(postId: string, formData: FormData) {
     const { data: existing } = await supabase
       .from('blog_posts')
       .select('published_at')
+      .eq('tenant_id', tenantId)
       .eq('id', postId)
       .maybeSingle()
 
     updates.published_at = existing?.published_at ?? new Date().toISOString()
   }
 
-  const { error } = await supabase.from('blog_posts').update(updates).eq('id', postId)
+  const { error } = await supabase
+    .from('blog_posts')
+    .update(updates)
+    .eq('tenant_id', tenantId)
+    .eq('id', postId)
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin/blog')
@@ -112,9 +117,13 @@ export async function updatePost(postId: string, formData: FormData) {
 
 export async function deletePost(postId: string) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
-  const { error } = await supabase.from('blog_posts').delete().eq('id', postId)
+  const { error } = await supabase
+    .from('blog_posts')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('id', postId)
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin/blog')
@@ -125,10 +134,14 @@ export async function deletePost(postId: string) {
 /** Feeds the image picker — albums list, or one album's photos. */
 export async function fetchAlbumPhotos(albumId: string | null) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { data: albums } = await supabase.from('albums').select('id, title').order('created_at', { ascending: false })
+  const { data: albums } = await supabase
+    .from('albums')
+    .select('id, title')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false })
 
   if (!albumId) {
     return { albums: albums ?? [], photos: [] }
@@ -137,6 +150,7 @@ export async function fetchAlbumPhotos(albumId: string | null) {
   const { data: photos } = await supabase
     .from('photos')
     .select('id, storage_path, caption')
+    .eq('tenant_id', tenantId)
     .eq('album_id', albumId)
     .order('sort_order')
 
@@ -171,14 +185,14 @@ export async function registerJournalImage(key: string, base: string): Promise<s
 
 export async function bulkUpdateStatus(ids: string[], status: 'draft' | 'published') {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   if (ids.length === 0) return
 
   const supabase = await createClient()
   const updates: Record<string, unknown> = { status }
   if (status === 'published') updates.published_at = new Date().toISOString()
 
-  await supabase.from('blog_posts').update(updates).in('id', ids)
+  await supabase.from('blog_posts').update(updates).eq('tenant_id', tenantId).in('id', ids)
 
   revalidatePath('/admin/blog')
   revalidatePath('/journal')
@@ -186,11 +200,11 @@ export async function bulkUpdateStatus(ids: string[], status: 'draft' | 'publish
 
 export async function bulkDelete(ids: string[]) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   if (ids.length === 0) return
 
   const supabase = await createClient()
-  await supabase.from('blog_posts').delete().in('id', ids)
+  await supabase.from('blog_posts').delete().eq('tenant_id', tenantId).in('id', ids)
 
   revalidatePath('/admin/blog')
   revalidatePath('/journal')
@@ -198,14 +212,18 @@ export async function bulkDelete(ids: string[]) {
 
 export async function duplicatePosts(ids: string[]) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   if (ids.length === 0) return
 
   const supabase = await createClient()
-  const { data: originals } = await supabase.from('blog_posts').select('*').in('id', ids)
+  const { data: originals } = await supabase
+    .from('blog_posts')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .in('id', ids)
 
   for (const original of originals ?? []) {
-    const slug = await uniqueSlug(supabase, `${original.slug}-copy`)
+    const slug = await uniqueSlug(supabase, tenantId, `${original.slug}-copy`)
 
     // Copies always start as drafts so nothing goes live by accident
     const copy = {
@@ -222,7 +240,7 @@ export async function duplicatePosts(ids: string[]) {
     delete (copy as Record<string, unknown>).created_at
     delete (copy as Record<string, unknown>).updated_at
 
-    await supabase.from('blog_posts').insert(copy)
+    await supabase.from('blog_posts').insert({ ...copy, tenant_id: tenantId })
   }
 
   revalidatePath('/admin/blog')

@@ -45,12 +45,13 @@ export type PickerSource = {
 
 /** The sources the picker offers, in the order it shows them. */
 export async function listPickerSources(): Promise<PickerSource[]> {
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data: albums } = await supabase
     .from('albums')
     .select('id, title')
+    .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
 
   return [
@@ -69,13 +70,14 @@ export async function listPickerSources(): Promise<PickerSource[]> {
  * whether this account may see it — the id is never trusted on its own.
  */
 export async function listPickerImages(source: string): Promise<PickerImage[]> {
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   if (source === 'uploads') {
     const { data } = await supabase
       .from('site_images')
       .select('id, storage_path, filename')
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
       .limit(200)
 
@@ -89,6 +91,7 @@ export async function listPickerImages(source: string): Promise<PickerImage[]> {
   const { data } = await supabase
     .from('photos')
     .select('id, storage_path, caption')
+    .eq('tenant_id', tenantId)
     .eq('album_id', source)
     .order('sort_order')
 
@@ -142,6 +145,7 @@ export async function registerSiteImage(
   const { data, error } = await supabase
     .from('site_images')
     .insert({
+      tenant_id: tenantId,
       storage_path: processed.displayPath,
       original_path: processed.originalPath,
       derivatives: processed.derivatives,
@@ -168,13 +172,17 @@ export async function registerSiteImage(
  * deleting them would turn a live page into broken images.
  */
 export async function forgetSiteImage(id: string): Promise<{ ok: boolean; message: string }> {
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   // No tenant filter needed and none wanted: row-level security decides which
   // rows this account can see, and adding a filter here would suggest it is
   // the thing keeping sites apart.
-  const { error } = await supabase.from('site_images').delete().eq('id', id)
+  const { error } = await supabase
+    .from('site_images')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
   if (error) return { ok: false, message: error.message }
 
   return { ok: true, message: 'Removed from Uploads.' }

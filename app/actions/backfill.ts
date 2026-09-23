@@ -16,12 +16,13 @@ import { revalidatePath } from 'next/cache'
  */
 export async function backfillDerivatives(limit = 10) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data: photos, error } = await supabase
     .from('photos')
     .select('id, storage_path, derivatives')
+    .eq('tenant_id', tenantId)
     .or('derivatives.is.null,derivatives.eq.{}')
     .limit(limit)
 
@@ -56,6 +57,7 @@ export async function backfillDerivatives(limit = 10) {
           width: processed.width,
           height: processed.height,
         })
+        .eq('tenant_id', tenantId)
         .eq('id', photo.id)
 
       done += 1
@@ -67,6 +69,7 @@ export async function backfillDerivatives(limit = 10) {
   const { count } = await supabase
     .from('photos')
     .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
     .or('derivatives.is.null,derivatives.eq.{}')
 
   revalidatePath('/admin/settings')
@@ -81,12 +84,13 @@ export async function backfillDerivatives(limit = 10) {
 
 export async function countUnprocessed() {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { count } = await supabase
     .from('photos')
     .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
     .or('derivatives.is.null,derivatives.eq.{}')
 
   return count ?? 0

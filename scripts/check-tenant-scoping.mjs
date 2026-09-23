@@ -12,6 +12,24 @@
  * This is the thing that notices. It walks every `.from('<table>')` in the
  * source and fails if the statement around it never mentions `tenant_id`.
  *
+ * ── The exemption that cost us, 2026-09-23 ────────────────────────────────
+ *
+ * This file once excused all of `app/actions/` ("behind requireEditor(), which
+ * returns the tenant to write with") and all of `app/admin/` ("behind a session
+ * whose tenant must match the address"). Both sentences are true. Neither is
+ * an answer to the question this checker asks.
+ *
+ * Being signed in decides WHO MAY ACT. It does not decide WHAT A QUERY
+ * RETURNS. `albums` still carries `Public can view public albums ... using
+ * (privacy_type = 'public')`, and Postgres ORs policies together, so that one
+ * alone is enough for any signed-in reader: the admin showed every site's
+ * galleries to a photographer who owned none of them. Found by the first
+ * beta tester on his first sign-in.
+ *
+ * So: an exemption may only say how a query is NARROWED. "The caller is
+ * trusted" is never that. If a reason does not name a filter, it is not a
+ * reason.
+ *
  * It is deliberately dumb: a regular expression over the text, not a type
  * checker. A clever version would understand the query builder and would break
  * the first time the builder changed. This one only has to be right about
@@ -80,16 +98,8 @@ const ALLOWED = [
     why: 'making a site is cross-site by definition; it is behind platformAdmin and writes the tenant it just created',
   },
   {
-    file: 'app/actions/',
-    why: 'every action is behind requireEditor(), which returns the tenant to write with',
-  },
-  {
     file: 'app/admin/sites/page.tsx',
     why: 'the one screen whose whole job is to see across sites, behind platformAdmin',
-  },
-  {
-    file: 'app/admin/',
-    why: 'admin screens are behind a session whose tenant must match the address',
   },
   {
     file: 'app/api/instagram/refresh/route.ts',

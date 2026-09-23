@@ -39,7 +39,16 @@ const groups: { label: string; links: { href: string; label: string; exact?: boo
   },
 ]
 
-export default function AdminSidebar({ email, unreadCount = 0 }: { email: string; unreadCount?: number }) {
+export default function AdminSidebar({
+  email,
+  unreadCount = 0,
+  platformAdmin = false,
+}: {
+  email: string
+  unreadCount?: number
+  /** Shows the cross-site group. Nobody else has anything to see there. */
+  platformAdmin?: boolean
+}) {
   const pathname = usePathname()
 
   function isActive(href: string, exact?: boolean) {
@@ -55,7 +64,10 @@ export default function AdminSidebar({ email, unreadCount = 0 }: { email: string
       </Link>
 
       <nav className="admin-nav">
-        {groups.map((group) => (
+        {(platformAdmin
+          ? [...groups, { label: PLATFORM.name, links: [{ href: '/admin/sites', label: 'Sites' }] }]
+          : groups
+        ).map((group) => (
           <div key={group.label} className="admin-nav-group">
             <p className="admin-nav-label">{group.label}</p>
             {group.links.map((link) => (

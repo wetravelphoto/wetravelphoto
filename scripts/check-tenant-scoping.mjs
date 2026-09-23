@@ -76,8 +76,16 @@ const ALLOWED = [
     why: 'the draft layer carries its own tenant handling',
   },
   {
+    file: 'app/actions/sites.ts',
+    why: 'making a site is cross-site by definition; it is behind platformAdmin and writes the tenant it just created',
+  },
+  {
     file: 'app/actions/',
     why: 'every action is behind requireEditor(), which returns the tenant to write with',
+  },
+  {
+    file: 'app/admin/sites/page.tsx',
+    why: 'the one screen whose whole job is to see across sites, behind platformAdmin',
   },
   {
     file: 'app/admin/',

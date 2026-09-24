@@ -71,7 +71,7 @@ async function install(manifest: TemplateManifest, page = 'home') {
 
 export async function applyLook(slug: string) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -101,6 +101,7 @@ export async function applyLook(slug: string) {
 
   await supabase.from('site_template').upsert(
     {
+      tenant_id: tenantId,
       template_id: data.id,
       version: data.version,
       // The manifest AS APPLIED — so this site can still answer "what was I
@@ -123,7 +124,7 @@ export async function applyLook(slug: string) {
  */
 export async function takeUpdate() {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const current = await currentLook()
   if (!current.look) throw new Error('This site is not using a look yet.')
   if (!current.updateAvailable) throw new Error('You are already on the newest version.')
@@ -145,6 +146,7 @@ export async function takeUpdate() {
   const supabase = await createClient()
   await supabase.from('site_template').upsert(
     {
+      tenant_id: tenantId,
       template_id: current.look.id,
       version: current.look.version,
       snapshot: manifest,
@@ -166,12 +168,13 @@ export async function takeUpdate() {
  */
 export async function revertTo(historyId: string) {
   // A server action is a public endpoint: check who is asking before anything else.
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('site_template_history')
     .select('*')
+    .eq('tenant_id', tenantId)
     .eq('id', historyId)
     .maybeSingle()
 
@@ -221,6 +224,7 @@ export async function revertTo(historyId: string) {
 
     await supabase.from('site_template').upsert(
       {
+        tenant_id: tenantId,
         template_id: data.from_template_id,
         version: data.from_version ?? 1,
         snapshot: snapshot ?? {},

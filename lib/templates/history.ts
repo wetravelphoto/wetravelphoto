@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireEditor } from '@/lib/auth'
 import { getSiteSettings } from '@/lib/site'
 import { currentLook, liveSections } from '@/lib/templates/store'
 
@@ -18,6 +19,14 @@ import { currentLook, liveSections } from '@/lib/templates/store'
  *
  * If the undo point cannot be written, the change does not happen. That is
  * deliberate and it is the whole contract.
+ *
+ * **The tenant is written explicitly.** `site_template_history.tenant_id`
+ * defaults to `default_tenant_id()`, which is THE OLDEST TENANT — not the one
+ * signed in. Every undo point from a second site therefore tried to file
+ * itself under the first site's history, row-level security refused it, and
+ * this function threw. Applying any look on any site but the original failed
+ * with React's redacted "#441", because the real message never reached the
+ * screen.
  */
 export type HistoryAction = 'apply' | 'update' | 'revert' | 'publish'
 
@@ -29,12 +38,14 @@ export async function recordHistory(input: {
   version: number | null
   note?: string
 }): Promise<void> {
+  const { tenantId } = await requireEditor()
   const supabase = await createClient()
   const settings = await getSiteSettings()
   const before = await liveSections('home')
   const current = await currentLook()
 
   const { error } = await supabase.from('site_template_history').insert({
+    tenant_id: tenantId,
     action: input.action,
     template_id: input.templateId,
     template_slug: input.templateSlug,

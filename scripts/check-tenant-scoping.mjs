@@ -61,6 +61,12 @@ const SCOPED = [
   'clients',
   'site_settings',
   'site_images',
+  // Added 2026-09-24, after applying a look on a second site failed. These
+  // were never on the list, and their tenant_id DEFAULTS to
+  // default_tenant_id() — the oldest tenant — so every write that omitted it
+  // addressed the first site on the platform.
+  'site_template',
+  'site_template_history',
 ]
 
 /**
@@ -108,6 +114,16 @@ const ALLOWED = [
   {
     file: 'lib/supabase/',
     why: 'the clients themselves',
+  },
+  {
+    file: 'app/actions/templates.ts',
+    table: 'templates',
+    why: 'the catalogue of looks is the platform\'s, shared by every site, and belongs to no tenant',
+  },
+  {
+    file: 'lib/templates/store.ts',
+    table: 'templates',
+    why: 'the same shared catalogue, read-only',
   },
 ]
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { currentEditor } from '@/lib/auth'
 import { getSiteSettings } from '@/lib/site'
 import { loadPageSections } from '@/lib/sections/load'
 import {
@@ -72,9 +73,12 @@ export async function listLooks(): Promise<MaybeMissing<{ looks: LookRow[] }>> {
 export async function currentLook(): Promise<MaybeMissing<SiteLook>> {
   const supabase = await createClient()
 
+  const editor = await currentEditor()
+
   const { data, error } = await supabase
     .from('site_template')
     .select('template_id, version, snapshot, adopted_at')
+    .eq('tenant_id', editor?.tenantId ?? '')
     .maybeSingle()
 
   if (error) {
@@ -123,9 +127,12 @@ export async function currentLook(): Promise<MaybeMissing<SiteLook>> {
 export async function lookHistory(limit = 20): Promise<HistoryRow[]> {
   const supabase = await createClient()
 
+  const editor = await currentEditor()
+
   const { data, error } = await supabase
     .from('site_template_history')
     .select('id, action, template_slug, template_name, version, created_at, note')
+    .eq('tenant_id', editor?.tenantId ?? '')
     .order('created_at', { ascending: false })
     .limit(limit)
 

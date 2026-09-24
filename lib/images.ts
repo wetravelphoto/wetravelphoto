@@ -1,4 +1,26 @@
+/**
+ * A photograph that ships with the platform rather than one somebody uploaded.
+ *
+ * New sites start with a small sample gallery so the first thing a
+ * photographer sees is a site with pictures in it, not an outline of one.
+ * Those files live in `public/samples/` and are served from this origin — NOT
+ * copied into each site's bucket, which would mean paying to store the same
+ * six photographs once per customer and would make "delete this gallery"
+ * capable of destroying them for everyone.
+ *
+ * Matched narrowly, exactly as `lib/sections/mark.ts` matches `/logos/`: a
+ * value starting with "/" is a URL on this origin, and "//somewhere.else/x"
+ * is a URL on ANY origin. Anything that is not precisely /samples/<path> is
+ * treated as a storage key, which can only ever resolve inside the bucket.
+ */
+const BUILT_IN_PHOTO = /^\/samples\/[\w-]+\/[\w-]+\.webp$/
+
+export function isSamplePhoto(storagePath: string | null | undefined): boolean {
+  return typeof storagePath === 'string' && BUILT_IN_PHOTO.test(storagePath)
+}
+
 export function photoUrl(storagePath: string): string {
+  if (isSamplePhoto(storagePath)) return storagePath
   return `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${storagePath}`
 }
 

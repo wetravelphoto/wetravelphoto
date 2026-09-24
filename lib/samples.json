@@ -1,0 +1,80 @@
+[
+  {
+    "slug": "rickshaw",
+    "title": "Chandni Chowk, Delhi",
+    "caption": "A rickshaw puller waits out the middle of the day.",
+    "width": 5580,
+    "height": 3720,
+    "storage_path": "/samples/rickshaw/1600.webp",
+    "derivatives": {
+      "400": "/samples/rickshaw/400.webp",
+      "800": "/samples/rickshaw/800.webp",
+      "1600": "/samples/rickshaw/1600.webp"
+    }
+  },
+  {
+    "slug": "monkey",
+    "title": "Rooftop macaque",
+    "caption": "Crossing between buildings on a water pipe.",
+    "width": 4356,
+    "height": 2904,
+    "storage_path": "/samples/monkey/1600.webp",
+    "derivatives": {
+      "400": "/samples/monkey/400.webp",
+      "800": "/samples/monkey/800.webp",
+      "1600": "/samples/monkey/1600.webp"
+    }
+  },
+  {
+    "slug": "portrait",
+    "title": "In the doorway",
+    "caption": "A moment before she looked away.",
+    "width": 6048,
+    "height": 4032,
+    "storage_path": "/samples/portrait/1600.webp",
+    "derivatives": {
+      "400": "/samples/portrait/400.webp",
+      "800": "/samples/portrait/800.webp",
+      "1600": "/samples/portrait/1600.webp"
+    }
+  },
+  {
+    "slug": "gull",
+    "title": "Gull at first light",
+    "caption": "Held against the ridge, barely moving.",
+    "width": 5028,
+    "height": 3352,
+    "storage_path": "/samples/gull/1600.webp",
+    "derivatives": {
+      "400": "/samples/gull/400.webp",
+      "800": "/samples/gull/800.webp",
+      "1600": "/samples/gull/1600.webp"
+    }
+  },
+  {
+    "slug": "oriole",
+    "title": "Hooded oriole",
+    "caption": "Five seconds on the branch, then gone.",
+    "width": 4343,
+    "height": 2895,
+    "storage_path": "/samples/oriole/1600.webp",
+    "derivatives": {
+      "400": "/samples/oriole/400.webp",
+      "800": "/samples/oriole/800.webp",
+      "1600": "/samples/oriole/1600.webp"
+    }
+  },
+  {
+    "slug": "church",
+    "title": "Vík í Mýrdal",
+    "caption": "The church above the town, weather coming in.",
+    "width": 5259,
+    "height": 3506,
+    "storage_path": "/samples/church/1600.webp",
+    "derivatives": {
+      "400": "/samples/church/400.webp",
+      "800": "/samples/church/800.webp",
+      "1600": "/samples/church/1600.webp"
+    }
+  }
+]

@@ -3,7 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireEditor } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import { isSamplePhoto } from '@/lib/images'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { PLATFORM } from '@/lib/platform'
+import { SAMPLE_ALBUM_SLUG, SAMPLE_ALBUM_TITLE, SAMPLE_PHOTOS } from '@/lib/samples'
 import { EMAIL_PATTERN } from '@/lib/email'
 
 /**
@@ -142,7 +146,12 @@ export async function createSite(formData: FormData): Promise<NewSite> {
     )
   }
 
-  // ── 4. the photographer ───────────────────────────────────────────────────
+  // ── 4. something to look at ───────────────────────────────────────────────
+  // Not fatal. A site with no sample gallery is a working site; a site that
+  // could not be made because a sample gallery failed is not.
+  await seedSamples(db, tenantId)
+
+  // ── 5. the photographer ───────────────────────────────────────────────────
   // An invitation rather than a password: they set their own, and no password
   // ever passes through this screen, this log, or an email you wrote.
   const { data: invited, error: inviteError } = await db.auth.admin.inviteUserByEmail(email, {
@@ -153,10 +162,25 @@ export async function createSite(formData: FormData): Promise<NewSite> {
     // An account may already exist — theirs, from another site, or a stale
     // one. That is a judgement call rather than something to guess at, so the
     // site is taken back and the reason handed over.
+    const why = inviteError?.message ?? 'no reason given'
+
+    /**
+     * "Error sending invite email" is all Supabase says when its SMTP provider
+     * refuses the message — the provider's own reason never reaches here. In
+     * practice it is nearly always one of three things, and saying which three
+     * is the difference between a five-minute fix and an afternoon.
+     */
+    const smtp =
+      why.toLowerCase().includes('sending') ||
+      why.toLowerCase().includes('smtp') ||
+      why.toLowerCase().includes('email')
+
     return undo(
-      inviteError?.message?.includes('already')
+      why.includes('already')
         ? `${email} already has an account. Attach it to the new site by hand, or invite a different address.`
-        : `The invitation could not be sent: ${inviteError?.message ?? 'no reason given'}`
+        : smtp
+          ? `The invitation could not be sent, so the site was not made. Supabase does not pass on the provider's reason — check the provider's own log. Usually: the sender domain is not verified, the API key cannot send, or the account is still restricted to its owner's address.`
+          : `The invitation could not be sent, so the site was not made: ${why}`
     )
   }
 
@@ -216,4 +240,122 @@ function starterSettings(name: string): Record<string, unknown> {
     show_instagram: false,
     show_newsletter: false,
   }
+}
+
+
+/**
+ * A SITE THAT ARRIVES WITH PICTURES IN IT
+ * ═══════════════════════════════════════
+ *
+ * The starter WORDS exist so the first screen is a site rather than an
+ * outline. The same argument applies to the photographs, and more strongly:
+ * a photography site with no photographs does not show what it is for, every
+ * layout choice is invisible, and "Recent work" is a heading over nothing.
+ *
+ * These six are Gonzalo's, and they are the platform's, not the tenant's.
+ * The files live in `public/samples/` and are served from this origin (see
+ * `isSamplePhoto` in lib/images.ts) — one copy for everybody, rather than the
+ * same six photographs paid for once per customer. It also means deleting the
+ * gallery can never destroy the files, because there is nothing in anybody's
+ * bucket to destroy.
+ *
+ * The gallery says SAMPLE wherever it appears, and `removeSamples()` takes it
+ * away in one click. The thing to avoid is a photographer showing their new
+ * site to a client with somebody else's pictures still on it, so the label
+ * has to be impossible to miss rather than tasteful.
+ */
+
+async function seedSamples(db: SupabaseClient, tenantId: string): Promise<void> {
+  const { data: album, error: albumError } = await db
+    .from('albums')
+    .insert({
+      tenant_id: tenantId,
+      title: SAMPLE_ALBUM_TITLE,
+      slug: SAMPLE_ALBUM_SLUG,
+      privacy_type: 'public',
+      // Nobody may download somebody else's photographs from a site that is
+      // not theirs, however briefly they are sitting on it.
+      allow_downloads: false,
+      display_order: 1,
+    })
+    .select('id')
+    .single()
+
+  if (albumError || !album) return
+
+  const rows = SAMPLE_PHOTOS.map((photo, index) => ({
+    tenant_id: tenantId,
+    album_id: album.id as string,
+    storage_path: photo.storage_path,
+    original_path: null,
+    derivatives: photo.derivatives,
+    width: photo.width,
+    height: photo.height,
+    caption: photo.caption,
+    sort_order: index,
+    is_for_sale: false,
+  }))
+
+  const { data: inserted } = await db.from('photos').insert(rows).select('id')
+
+  // The first one becomes the cover, so the gallery has a face on every
+  // listing rather than a grey rectangle.
+  if (inserted?.[0]?.id) {
+    await db
+      .from('albums')
+      .update({ cover_photo_id: inserted[0].id })
+      .eq('tenant_id', tenantId)
+      .eq('id', album.id)
+  }
+}
+
+/**
+ * Takes the sample gallery away. Deliberately not a general "delete album":
+ * it only ever touches rows whose storage_path is a built-in sample, so a
+ * mistake here cannot reach a photograph somebody took.
+ */
+export async function removeSamples(): Promise<{ ok: boolean; message: string }> {
+  const { tenantId } = await requireEditor()
+  const supabase = await createClient()
+
+  const { data: album } = await supabase
+    .from('albums')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('slug', SAMPLE_ALBUM_SLUG)
+    .maybeSingle()
+
+  if (!album) return { ok: true, message: 'There were no samples to remove.' }
+
+  const { data: photos } = await supabase
+    .from('photos')
+    .select('id, storage_path')
+    .eq('tenant_id', tenantId)
+    .eq('album_id', album.id)
+
+  const theirs = (photos ?? []).filter((p) => !isSamplePhoto(p.storage_path as string))
+  if (theirs.length > 0) {
+    return {
+      ok: false,
+      message: `That gallery now has ${theirs.length} of your own photograph${
+        theirs.length === 1 ? '' : 's'
+      } in it. Move them somewhere else first, or delete the gallery yourself.`,
+    }
+  }
+
+  // Clear the cover before deleting what it points at.
+  await supabase
+    .from('albums')
+    .update({ cover_photo_id: null })
+    .eq('tenant_id', tenantId)
+    .eq('id', album.id)
+
+  await supabase.from('photos').delete().eq('tenant_id', tenantId).eq('album_id', album.id)
+  await supabase.from('albums').delete().eq('tenant_id', tenantId).eq('id', album.id)
+
+  revalidatePath('/admin/trips')
+  revalidatePath('/admin')
+  revalidatePath('/')
+
+  return { ok: true, message: 'The sample gallery is gone. Nothing of yours was touched.' }
 }

@@ -3,6 +3,8 @@ import { attachCovers, photoCounts } from '@/lib/album-covers'
 import GalleryGrid from '@/components/admin/GalleryGrid'
 import Link from 'next/link'
 import { requireEditor } from '@/lib/auth'
+import SampleNotice from '@/components/admin/SampleNotice'
+import { SAMPLE_ALBUM_SLUG } from '@/lib/samples'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,6 +63,8 @@ export default async function GalleriesPage({
     return a.sortOrder - b.sortOrder
   })
 
+  const hasSamples = base.some((a) => a.slug === SAMPLE_ALBUM_SLUG)
+
   const totalPhotos = rows.reduce((sum, r) => sum + r.photoCount, 0)
   const publicCount = rows.filter((r) => r.privacy === 'public').length
 
@@ -86,6 +90,8 @@ export default async function GalleriesPage({
           New gallery
         </Link>
       </div>
+
+      {hasSamples && <SampleNotice />}
 
       {error && (
         <div className="admin-panel" style={{ borderColor: 'rgba(163,50,36,0.4)', marginBottom: '1rem' }}>

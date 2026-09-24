@@ -46,12 +46,46 @@ export async function requireUser() {
  * backstop. This is the gate: it fails with a clear message before any query
  * runs, and it hands back the tenant, so a write can say WHICH site's row it
  * means instead of reaching for "row 1".
+ *
+ * ── `tenantId` is the site being EDITED, not the account's home ─────────────
+ *
+ * For a photographer these are the same thing and always will be. They differ
+ * in exactly one case: a **platform admin on somebody else's address**.
+ *
+ * That case used to be broken, and quietly. The host/tenant check below lets a
+ * platform admin through — that is what supporting somebody else's site means
+ * — but this function then handed back the ADMIN'S OWN tenant, while every
+ * public page at that address resolved the tenant from the host. So opening
+ * `ana.lensgrid.co/admin` showed Ana's site on the front and bound the admin
+ * to wetravelphoto's data behind it: her galleries on the left, your rows
+ * underneath, and anything saved there landing in your live site. Nothing
+ * errored. Nothing warned. It was harmless while there was one site and one
+ * admin who knew; it stopped being harmless the day a tester asked for help.
+ *
+ * So the address decides which site is being edited, for everyone. The account
+ * decides who is allowed to. `homeTenantId` keeps the account's own site, and
+ * `supporting` is set only while the two differ — the admin chrome reads it and
+ * says out loud whose site this is, because a silent version of this is the
+ * bug again wearing a different hat.
+ *
+ * Deliberately NOT extended to an `assumed` address (a laptop, a preview
+ * build, the host this deployment was configured for). Those resolve to the
+ * oldest tenant by guess, and letting a guess redirect an admin's writes is a
+ * worse failure than the one being fixed.
  */
 export type Editor = {
   userId: string
+  /**
+   * The site being edited. The account's own, except when a platform admin is
+   * working on another site's address — then it is that site.
+   */
   tenantId: string
   role: string
   platformAdmin: boolean
+  /** The site this account belongs to. Equal to `tenantId` for everybody but a supporting admin. */
+  homeTenantId: string
+  /** Set only while a platform admin is editing a site that is not their own. */
+  supporting: { tenantId: string; host: string } | null
 }
 
 const EDIT_ROLES = ['owner', 'admin', 'editor']
@@ -69,11 +103,29 @@ export const currentEditor = cache(async (): Promise<Editor | null> => {
 
   if (!data?.tenant_id) return null
 
+  const homeTenantId = data.tenant_id as string
+  const platformAdmin = data.is_platform_admin === true
+
+  // Resolved here rather than in requireEditor() so that everything reading an
+  // editor agrees on which site it is looking at — including the ones that
+  // never call requireEditor(): the draft store, the version history, the
+  // look history, the newsletter export, and the upload route that files a
+  // photograph under `t/<tenant id>/`. If those kept the admin's own tenant
+  // while the writes moved, a photograph uploaded on a tester's site would
+  // land in the wrong prefix, which is the same bug split in half.
+  const site = await currentSite()
+  const supporting =
+    platformAdmin && site && !site.assumed && site.tenantId !== homeTenantId
+      ? { tenantId: site.tenantId, host: site.host }
+      : null
+
   return {
     userId: user.id,
-    tenantId: data.tenant_id as string,
+    tenantId: supporting?.tenantId ?? homeTenantId,
     role: (data.role as string) ?? 'editor',
-    platformAdmin: data.is_platform_admin === true,
+    platformAdmin,
+    homeTenantId,
+    supporting,
   }
 })
 
@@ -105,11 +157,16 @@ export async function requireEditor(): Promise<Editor> {
    * Only refused when the address is a CLAIMED one. A laptop, a preview build
    * or the address this deployment was configured for resolve by assumption
    * rather than by a row, and blocking on a guess would lock people out of
-   * their own editor for no gain. A platform admin passes either way — that is
-   * what supporting somebody else's site means.
+   * their own editor for no gain.
+   *
+   * A platform admin is not refused — but is no longer let through holding
+   * their own tenant either. `currentEditor()` has already pointed them at the
+   * site whose address this is, so for them the two now agree by construction
+   * and this check has nothing left to catch. Compared against `homeTenantId`
+   * so it keeps asking the question it was written to ask.
    */
   const site = await currentSite()
-  if (site && !site.assumed && !editor.platformAdmin && site.tenantId !== editor.tenantId) {
+  if (site && !site.assumed && !editor.platformAdmin && site.tenantId !== editor.homeTenantId) {
     throw new Error(
       `This is not your site. You are signed in to a different one — open your own address to edit it.`
     )

@@ -17,6 +17,7 @@ import { resolveTokens } from '@/lib/styles/tokens'
 import type { TypeStyles } from '@/lib/type-styles'
 import { UI_FONT_HREF } from '@/lib/fonts'
 import Canvas, { type CanvasSection } from '@/components/canvas/Canvas'
+import SupportingBanner from '@/components/admin/SupportingBanner'
 import type { StoryOption } from '@/components/canvas/editors/HeroStories'
 import '@/app/edit/canvas.css'
 
@@ -146,6 +147,10 @@ export default async function EditPage({
       siteHost={(await siteUrl()).replace(/^https?:\/\//, '')}
       initialMode={mode === 'style' ? 'style' : 'content'}
       />
+
+      {/* Only ever visible to a platform admin working on somebody else's
+          address. The canvas looks identical whoever's site it is. */}
+      <SupportingBanner />
     </>
   )
 }

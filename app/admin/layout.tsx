@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import AdminSidebar from '@/components/admin/AdminSidebar'
+import SupportingBanner from '@/components/admin/SupportingBanner'
 import { currentEditor } from '@/lib/auth'
 import { UI_FONT_HREF } from '@/lib/fonts'
 import './admin.css'
@@ -59,6 +60,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         platformAdmin={editor?.platformAdmin === true}
       />
       <main className="admin-main">{children}</main>
+      <SupportingBanner />
     </div>
   )
 }

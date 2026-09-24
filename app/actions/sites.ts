@@ -428,6 +428,8 @@ async function fillHomepage(db: SupabaseClient, tenantId: string): Promise<void>
   // the photograph. Otherwise their choice of mode stands.
   if (!empty(current.hero_image_path)) delete patch.hero_mode
 
+  await fillSections(db, tenantId)
+
   if (Object.keys(patch).length > 0) {
     // Same tolerance as the inserts: 37 settings in one update, and one column
     // this deployment does not have would otherwise lose all 37.
@@ -725,13 +727,22 @@ export async function addSamples(): Promise<{ ok: boolean; message: string }> {
 
   await fillHomepage(db, tenantId)
 
+  // The editor keeps its own copy. `ensureDraft()` seeds it from the live page
+  // the first time somebody opens the canvas, so a draft made BEFORE these
+  // photographs existed holds the empty version — and publishing it would undo
+  // everything just done. Removing it makes the editor re-read the live page.
+  //
+  // Safe here because this button only appears on a site with no galleries of
+  // its own: there is no work in that draft to lose.
+  await db.from('site_draft').delete().eq('tenant_id', tenantId)
+
   revalidatePath('/admin/trips')
   revalidatePath('/admin')
   revalidatePath('/')
   return {
     ok: true,
     message:
-      'Six sample photographs added, a sample story written, and the homepage filled in. Anything you had already written was left alone.',
+      'Six sample photographs added, a sample story written, and the homepage filled in — hero, intro, about and contact. Anything you had already written was left alone.',
   }
 }
 
@@ -860,4 +871,73 @@ function trimTo(full: Record<string, unknown>, shape: Record<string, unknown>): 
   const out: Record<string, unknown> = {}
   for (const key of Object.keys(full)) out[key] = key in shape ? full[key] : undefined
   return out
+}
+
+
+/**
+ * THE SETTINGS ARE NOT WHERE THE PAGE COMES FROM — NOT AFTER THE FIRST LOAD
+ * ═════════════════════════════════════════════════════════════════════════
+ *
+ * `site_settings` describes a homepage exactly once. The first time anybody
+ * opens the editor, `materializeSections()` turns those settings into rows in
+ * `page_sections`, and from that moment the ROWS are the page. Applying a look
+ * replaces them outright.
+ *
+ * So `fillHomepage()` alone was writing to a table the page had stopped
+ * reading. On a site made before the sample photographs existed — which is
+ * every site made so far — the settings gained a hero image and the homepage
+ * carried on showing nothing, which is exactly what happened.
+ *
+ * This puts the same photographs into the section rows. Same rule as
+ * everywhere else here: **only where the field is empty.** A hero somebody has
+ * already given a photograph to is theirs and is not touched.
+ *
+ * If there are no rows yet, this does nothing on purpose — they will be
+ * materialised later from the settings, which by then are filled in.
+ */
+async function fillSections(db: SupabaseClient, tenantId: string): Promise<void> {
+  const photo = (slug: string) =>
+    SAMPLE_PHOTOS.find((s) => s.slug === slug)?.storage_path ?? null
+
+  // The section type, the page it is on, and what to put in it if it is bare.
+  const WANTED: { type: string; page: string; fill: Record<string, unknown> }[] = [
+    {
+      type: 'hero',
+      page: 'home',
+      fill: {
+        image_path: photo('church'),
+        mode: 'fixed',
+        subtitle: 'The line people read first. Click it to change it.',
+        kicker: 'Photography',
+        focal: { x: 0.5, y: 0.55, mx: 0.5, my: 0.55 },
+      },
+    },
+    { type: 'intro', page: 'home', fill: { image_path: photo('portrait'), image_side: 'left' } },
+    { type: 'contact', page: 'home', fill: { image_path: photo('gull'), image_side: 'right' } },
+    { type: 'about', page: 'about', fill: { image_path: photo('rickshaw'), image_side: 'right' } },
+  ]
+
+  const { data: rows } = await db
+    .from('page_sections')
+    .select('id, page, type, settings')
+    .eq('tenant_id', tenantId)
+    .in('page', ['home', 'about'])
+
+  for (const row of rows ?? []) {
+    const wanted = WANTED.find((w) => w.type === row.type && w.page === row.page)
+    if (!wanted) continue
+
+    const settings = (row.settings ?? {}) as Record<string, unknown>
+
+    // The photograph is the whole point of this. If the section already has
+    // one, the person has been here before us and everything else stays too.
+    const existing = settings.image_path
+    if (typeof existing === 'string' && existing.trim() !== '') continue
+
+    await db
+      .from('page_sections')
+      .update({ settings: { ...settings, ...wanted.fill } })
+      .eq('tenant_id', tenantId)
+      .eq('id', row.id)
+  }
 }

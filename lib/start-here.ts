@@ -42,9 +42,8 @@ export type StartHere = {
   /** False once there is nothing left to say. */
   show: boolean
   /**
-   * The sample gallery is here but the FIRST SCREEN still has no photograph
-   * on it. True only for sites seeded before the homepage was part of this —
-   * it is offered as a one-click fix rather than left as a puzzle.
+   * The sample gallery is here but the FIRST SCREEN genuinely has no
+   * photograph on it. Offered as a one-click fix rather than left as a puzzle.
    */
   homepageBare: boolean
 }
@@ -53,11 +52,25 @@ export type StartHere = {
 const STARTER_INTRO_HEADING = 'Say who you are'
 const STARTER_TAGLINE = 'A line about what you photograph'
 
+/**
+ * Key order survives a round trip through Postgres' jsonb unpredictably, so
+ * two objects that mean the same thing can stringify differently. Sorting the
+ * keys at every level makes the comparison about content and nothing else.
+ */
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`
+}
+
 export async function startHere(tenantId: string): Promise<StartHere> {
   const supabase = await createClient()
   const settings = await getSiteSettings()
 
-  const [albums, photos, samples, hero, looks] = await Promise.all([
+  const [albums, photos, samples, hero, adopted] = await Promise.all([
     supabase
       .from('albums')
       .select('id', { count: 'exact', head: true })
@@ -76,17 +89,33 @@ export async function startHere(tenantId: string): Promise<StartHere> {
       .eq('page', 'home')
       .eq('type', 'hero')
       .maybeSingle(),
-    // The catalogue of looks belongs to the platform, not to any site.
-    supabase.from('templates').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+    // The look this site was given, kept so "have they changed it" can be
+    // asked of the site rather than assumed.
+    supabase
+      .from('site_template')
+      .select('snapshot')
+      .eq('tenant_id', tenantId)
+      .maybeSingle(),
   ])
 
   const ownGalleries = albums.count ?? 0
   const hasPhotos = (photos.count ?? 0) > 0
   const hasSamples = (samples.count ?? 0) > 0
 
-  const heroImage = (hero.data?.settings as { image_path?: unknown } | null)?.image_path
-  const homepageBare =
-    hasSamples && !(typeof heroImage === 'string' && heroImage.trim() !== '')
+  // ── Is the homepage actually bare? ────────────────────────────────────────
+  // Ask the SAME question the page itself asks (lib/sections/load.ts): if a
+  // hero row exists, that row is the homepage; if none does, the page is being
+  // rendered straight from site_settings and THAT is the homepage.
+  //
+  // This used to look only at page_sections. A brand-new site has no rows
+  // there at all — they are not materialised until the editor is first opened
+  // — so a homepage that was already full of photographs read as empty, and
+  // the checklist offered to fill it. Asking one table about a page that is
+  // being drawn from another is the same mistake that lost the photographs the
+  // first time, pointing the other way.
+  const heroFromSection = (hero.data?.settings as { image_path?: unknown } | null)?.image_path
+  const heroImage = hero.data ? heroFromSection : settings.hero_image_path
+  const homepageBare = hasSamples && !(typeof heroImage === 'string' && heroImage.trim() !== '')
 
   // "Written something" means the starter words are no longer what is on the
   // page. Checking the heading AND the tagline, because changing only one is
@@ -97,11 +126,24 @@ export async function startHere(tenantId: string): Promise<StartHere> {
   const wroteTagline =
     (settings.tagline ?? '') !== STARTER_TAGLINE && (settings.tagline ?? '').trim().length > 0
 
-  // A new site arrives wearing the first published look, so "choose your look"
-  // is only a step worth showing when there is more than one to choose
-  // between. With one, it is a chore dressed as a decision.
-  const lookCount = looks.count ?? 0
-  const choseLook = Object.keys((settings.global_styles as object) ?? {}).length > 0
+  // ── Have they made the design their own? ──────────────────────────────────
+  // A new site now ARRIVES wearing a look, so "have you chosen one" stopped
+  // being a real question — the answer is always yes, and a step that is
+  // ticked the moment it appears teaches nothing.
+  //
+  // The honest question is whether the design still is exactly the one they
+  // were handed. Compared against the snapshot taken when the look was
+  // applied, so any change made in the editor's style mode ticks it off.
+  // With no snapshot to compare against — a site made before looks were
+  // applied on creation — fall back to "are there any styles at all".
+  const snapshot = (adopted.data?.snapshot ?? null) as {
+    styles?: { tokens?: unknown; type_styles?: unknown }
+  } | null
+
+  const madeItTheirs = snapshot?.styles
+    ? canonical(settings.global_styles) !== canonical(snapshot.styles.tokens ?? {}) ||
+      canonical(settings.type_styles) !== canonical(snapshot.styles.type_styles ?? {})
+    : Object.keys((settings.global_styles as object) ?? {}).length > 0
 
   const steps: Step[] = [
     {
@@ -122,18 +164,18 @@ export async function startHere(tenantId: string): Promise<StartHere> {
       cta: 'Edit the site',
       done: wroteIntro && wroteTagline,
     },
-    ...(lookCount > 1
-      ? [
-          {
-            id: 'look',
-            title: 'Choose your look',
-            detail: 'Typeface, colours and spacing, applied everywhere at once.',
-            href: '/admin/design',
-            cta: 'Look & style',
-            done: choseLook,
-          },
-        ]
-      : []),
+    {
+      id: 'look',
+      title: 'Make it look like yours',
+      detail:
+        'Your site came dressed in Field Notes. Change the typeface, the colours and the spacing until it looks like you.',
+      // Straight into the editor rather than the design page: the design page
+      // is a list of looks, and with one look it is a list of one. The editor
+      // is where the typeface and the colours actually change.
+      href: '/edit/home?mode=style',
+      cta: 'Open the editor',
+      done: madeItTheirs,
+    },
     {
       id: 'samples',
       title: 'Remove the sample photographs',

@@ -266,16 +266,23 @@ function starterSettings(name: string): Record<string, unknown> {
     carousel_heading: 'Recent work',
 
     show_journal: true,
-    journal_heading: 'Latest stories',
+    journal_heading: 'From the journal',
+    journal_page_eyebrow: 'Writing',
+    journal_page_heading: 'Journal',
 
     show_about: true,
+    about_eyebrow: 'Who you are',
     about_heading: 'About',
+    about_image_path: photo('rickshaw'),
+    about_image_side: 'right',
     about_body:
-      'The longer version: how you started, how you work, what a day with you is like. This page is yours to fill.',
+      'The longer version. How you started, what you use, how you work with people — and what a day with you is actually like, which is the thing most visitors are trying to find out before they get in touch.\n\nTwo or three paragraphs is plenty. Write it the way you would say it out loud, and put a photograph of yourself beside it if you have one you can stand.',
 
     show_contact_section: true,
+    contact_eyebrow: 'Say hello',
     contact_heading: 'Get in touch',
-    contact_note: 'Tell me what you have in mind and I’ll come back to you.',
+    contact_note:
+      'Tell me what you have in mind — where, roughly when, and what it is for. I read everything and come back within a day or two.',
     contact_image_path: photo('gull'),
     contact_image_side: 'right',
 
@@ -310,22 +317,30 @@ function starterSettings(name: string): Record<string, unknown> {
  */
 
 async function seedSamples(db: SupabaseClient, tenantId: string): Promise<string | null> {
-  const { data: album, error: albumError } = await db
-    .from('albums')
-    .insert({
+  const {
+    data: album,
+    error: albumError,
+    dropped: albumDropped,
+  } = await insertTolerant<{ id: string }>(
+    async (row) => await db.from('albums').insert(row).select('id').single(),
+    {
       tenant_id: tenantId,
       title: SAMPLE_ALBUM_TITLE,
       slug: SAMPLE_ALBUM_SLUG,
       privacy_type: 'public',
       // Nobody may download somebody else's photographs from a site that is
-      // not theirs, however briefly they are sitting on it.
+      // not theirs, however briefly they are sitting on it. Dropped without
+      // complaint if this deployment has no such column — the gallery is worth
+      // more than the flag.
       allow_downloads: false,
       display_order: 1,
-    })
-    .select('id')
-    .single()
+    }
+  )
 
-  if (albumError || !album) return albumError?.message ?? 'the gallery could not be made'
+  if (albumError || !album) return albumError ?? 'the gallery could not be made'
+  if (albumDropped.length > 0) {
+    console.warn(`[samples] albums has no ${albumDropped.join(', ')} on this deployment`)
+  }
 
   const rows = SAMPLE_PHOTOS.map((photo, index) => ({
     tenant_id: tenantId,
@@ -340,8 +355,12 @@ async function seedSamples(db: SupabaseClient, tenantId: string): Promise<string
     is_for_sale: false,
   }))
 
-  const { data: inserted, error: photoError } = await db.from('photos').insert(rows).select('id')
-  if (photoError) return photoError.message
+  const { data: inserted, error: photoError } = await insertTolerant<{ id: string }[]>(
+    async (row) =>
+      await db.from('photos').insert(rows.map((r) => trimTo(r, row))).select('id'),
+    rows[0]
+  )
+  if (photoError) return photoError
 
   // The first one becomes the cover, so the gallery has a face on every
   // listing rather than a grey rectangle.
@@ -353,7 +372,70 @@ async function seedSamples(db: SupabaseClient, tenantId: string): Promise<string
       .eq('id', album.id)
   }
 
+  // ── One story ─────────────────────────────────────────────────────────────
+  // Not fatal either. A site without a sample story is a working site.
+  const { data: story } = await db
+    .from('blog_posts')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('slug', 'a-sample-story')
+    .maybeSingle()
+
+  if (!story) {
+    await db.from('blog_posts').insert({ tenant_id: tenantId, ...sampleStory() })
+  }
+
   return null
+}
+
+/**
+ * Fills the homepage with the sample photographs and the starter words — but
+ * ONLY where nothing is there yet.
+ *
+ * `starterSettings()` runs once, when a site is made. This is the same content
+ * applied to a site that already exists, which is what makes "Add sample
+ * photographs" work on a site rather than only on a brand-new one.
+ *
+ * Every field is written only if it is currently empty. A photographer who has
+ * already put their own photograph in the hero and written their own opening
+ * line keeps both; they simply get the parts they have not filled in. Nothing
+ * here can overwrite somebody's work, which is why it is safe to offer as a
+ * button rather than a decision.
+ */
+async function fillHomepage(db: SupabaseClient, tenantId: string): Promise<void> {
+  const { data: current } = await db
+    .from('site_settings')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .maybeSingle()
+
+  if (!current) return
+
+  const { data: tenant } = await db.from('tenants').select('name').eq('id', tenantId).maybeSingle()
+  const starter = starterSettings((tenant?.name as string) ?? (current.site_title as string) ?? 'Your site')
+
+  const empty = (value: unknown) =>
+    value === null || value === undefined || (typeof value === 'string' && value.trim() === '')
+
+  const patch: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(starter)) {
+    // Booleans and the site's own name are decisions, not blanks — leave them.
+    if (key === 'site_title' || typeof value === 'boolean') continue
+    if (empty(current[key as keyof typeof current])) patch[key] = value
+  }
+
+  // The hero only becomes a standing photograph if we are the ones supplying
+  // the photograph. Otherwise their choice of mode stands.
+  if (!empty(current.hero_image_path)) delete patch.hero_mode
+
+  if (Object.keys(patch).length > 0) {
+    // Same tolerance as the inserts: 37 settings in one update, and one column
+    // this deployment does not have would otherwise lose all 37.
+    await insertTolerant(
+      async (row) => await db.from('site_settings').update(row).eq('tenant_id', tenantId).select('tenant_id'),
+      patch
+    )
+  }
 }
 
 /**
@@ -641,8 +723,141 @@ export async function addSamples(): Promise<{ ok: boolean; message: string }> {
   const why = await seedSamples(db, tenantId)
   if (why) return { ok: false, message: `The sample gallery could not be added: ${why}` }
 
+  await fillHomepage(db, tenantId)
+
   revalidatePath('/admin/trips')
   revalidatePath('/admin')
   revalidatePath('/')
-  return { ok: true, message: 'Six sample photographs added.' }
+  return {
+    ok: true,
+    message:
+      'Six sample photographs added, a sample story written, and the homepage filled in. Anything you had already written was left alone.',
+  }
+}
+
+/**
+ * ONE STORY, SO THE JOURNAL IS NOT AN EMPTY ROOM
+ *
+ * The homepage has a "Latest stories" block and the menu has a Journal page.
+ * With nothing in either, a photographer sees a heading over a blank space and
+ * learns nothing about what a story looks like — how a lead paragraph sits,
+ * what a pull quote does, how photographs break up text.
+ *
+ * So there is one, built from blocks a photographer will actually use, and
+ * written about the photographs it contains rather than filled with lorem
+ * ipsum. It goes out published, because a draft would not appear on the
+ * homepage and the point is to see the homepage.
+ */
+function sampleStory(): Record<string, unknown> {
+  const path = (slug: string) =>
+    SAMPLE_PHOTOS.find((s) => s.slug === slug)?.storage_path ?? ''
+
+  const blocks = [
+    {
+      id: 'lead',
+      type: 'lead',
+      text: 'This is a story — a few hundred words and the photographs that go with them. Delete it whenever you like, or open it in the editor and write over it.',
+    },
+    {
+      id: 'p1',
+      type: 'paragraph',
+      text: 'A story is where the pictures get their context: why you were there, what the light was doing, what you were waiting for. Most photographers find it is the part clients read.',
+    },
+    { id: 'im1', type: 'image', image: { path: path('rickshaw'), caption: 'A single image, full width.' } },
+    {
+      id: 'p2',
+      type: 'paragraph',
+      text: 'You can put photographs between paragraphs one at a time, in pairs, or as a strip. Each one can carry a caption, and the caption is often where the real story is.',
+    },
+    {
+      id: 'pair',
+      type: 'image_pair',
+      left: { path: path('monkey'), caption: null },
+      right: { path: path('oriole'), caption: null },
+    },
+    {
+      id: 'q',
+      type: 'quote',
+      text: 'A line worth pulling out of the text and setting on its own.',
+      attribution: null,
+    },
+    {
+      id: 'p3',
+      type: 'paragraph',
+      text: 'When you are ready, this is the button to press: open the Journal, write your own, and delete this one. Nothing here is permanent.',
+    },
+  ]
+
+  return {
+    title: 'A sample story',
+    slug: 'a-sample-story',
+    status: 'published',
+    published_at: new Date().toISOString(),
+    excerpt: 'What a story looks like on your site — words, photographs and captions together.',
+    featured_custom_path: path('church'),
+    blocks,
+  }
+}
+
+/**
+ * WRITING A ROW WHEN THE SCHEMA IS NOT FULLY KNOWN
+ * ════════════════════════════════════════════════
+ *
+ * `db/test-fixture.sql` is written by hand from what production is believed to
+ * look like, and twice now that belief has been wrong in a way only production
+ * could reveal: `site_settings.single_row`, a constraint the fixture did not
+ * have, and `albums.allow_downloads`, a column the fixture has and PostgREST
+ * says it cannot find. Both failed the same way — locally green, live broken.
+ *
+ * Seeding is decoration. A sample gallery is worth having and worth nothing at
+ * all compared to the site existing, so one unrecognised column must not take
+ * the whole row down with it. This writes the row, and if the database says it
+ * does not know a column, drops that column and tries again.
+ *
+ * It is deliberately narrow: it only ever REMOVES fields, never invents them,
+ * and only in response to the database saying that field does not exist. A row
+ * that fails for any other reason — a constraint, a foreign key, a bad value —
+ * fails, because those are real errors and hiding them is how the last two
+ * bugs stayed hidden.
+ *
+ * Returns the columns it had to drop, so they can be said out loud rather than
+ * quietly tolerated forever.
+ */
+type Tolerant<T> = { data: T | null; error: string | null; dropped: string[] }
+
+const UNKNOWN_COLUMN = /Could not find the '([^']+)' column|column "([^"]+)" of relation .* does not exist/
+
+async function insertTolerant<T>(
+  run: (row: Record<string, unknown>) => Promise<{ data: T | null; error: { message: string } | null }>,
+  row: Record<string, unknown>
+): Promise<Tolerant<T>> {
+  const dropped: string[] = []
+  const attempt = { ...row }
+
+  // Bounded: one pass per field at worst, and it stops the moment the error is
+  // anything other than "no such column".
+  for (let i = 0; i <= Object.keys(row).length; i++) {
+    const { data, error } = await run(attempt)
+    if (!error) return { data, error: null, dropped }
+
+    const match = UNKNOWN_COLUMN.exec(error.message)
+    const column = match?.[1] ?? match?.[2]
+    if (!column || !(column in attempt)) {
+      return { data: null, error: error.message, dropped }
+    }
+
+    delete attempt[column]
+    dropped.push(column)
+  }
+
+  return { data: null, error: 'too many unknown columns', dropped }
+}
+
+
+/** The same keys as `shape`, taken from `full`. Used to apply a column drop
+ *  worked out on one row to every row in the batch. */
+function trimTo(full: Record<string, unknown>, shape: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(full)) out[key] = key in shape ? full[key] : undefined
+  return out
 }

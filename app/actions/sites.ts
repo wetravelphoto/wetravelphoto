@@ -41,7 +41,9 @@ import { EMAIL_PATTERN } from '@/lib/email'
  * already existed.
  */
 
-export type NewSite = { ok: true; host: string; tenantId: string } | { ok: false; message: string }
+export type NewSite =
+  | { ok: true; host: string; tenantId: string; note?: string }
+  | { ok: false; message: string }
 
 /** Only a subdomain of the platform, for now. Lower-case, no dots inside. */
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/
@@ -152,7 +154,7 @@ export async function createSite(formData: FormData): Promise<NewSite> {
   // ── 4. something to look at ───────────────────────────────────────────────
   // Not fatal. A site with no sample gallery is a working site; a site that
   // could not be made because a sample gallery failed is not.
-  await seedSamples(db, tenantId)
+  const seeded = await seedSamples(db, tenantId)
 
   // ── 5. the photographer ───────────────────────────────────────────────────
   // An invitation rather than a password: they set their own, and no password
@@ -200,7 +202,12 @@ export async function createSite(formData: FormData): Promise<NewSite> {
   }
 
   revalidatePath('/admin/sites')
-  return { ok: true, host, tenantId }
+  return {
+    ok: true,
+    host,
+    tenantId,
+    ...(seeded ? { note: `The site is made, but the sample gallery is not there: ${seeded}` } : {}),
+  }
 }
 
 /**
@@ -213,15 +220,47 @@ export async function createSite(formData: FormData): Promise<NewSite> {
  * something that gets published by accident.
  */
 function starterSettings(name: string): Record<string, unknown> {
+  /**
+   * The photographs on the HOMEPAGE, not only in the gallery.
+   *
+   * The first version put the samples in a gallery and left the homepage
+   * empty, which missed the point: a photographer cannot picture their site
+   * from an outline of one. The hero is the whole first screen, and a hero
+   * with no photograph behind it teaches nothing about what the site will
+   * look like — it is a grey rectangle with their name on it.
+   *
+   * So three of the six do double duty. They are the same files, referenced
+   * again; nothing is copied. Replacing any of them is one click in the
+   * editor, and `removeSamples()` clears any of the three still pointing at a
+   * sample — "remove the sample photographs" has to mean all of them, or a
+   * photographer who clicked it still has a stranger's picture filling their
+   * first screen.
+   */
+  const photo = (slug: string) =>
+    SAMPLE_PHOTOS.find((s) => s.slug === slug)?.storage_path ?? null
+
   return {
     site_title: name,
     tagline: 'A line about what you photograph',
+
+    // A standing photograph rather than featured stories: there are no
+    // stories yet, and the hero is what makes a site look like a site.
+    hero_mode: 'fixed',
+    hero_image_path: photo('church'),
+    hero_fixed_focal: { x: 0.5, y: 0.55, mx: 0.5, my: 0.55 },
+    hero_kicker: 'Photography',
+    hero_fixed_title: name,
+    hero_fixed_subtitle: 'The line people read first. Click it to change it.',
+    hero_title_position: 'center',
+    show_bird: false,
 
     show_intro: true,
     intro_kicker: 'Hello',
     intro_heading: 'Say who you are',
     intro_body:
       'A short paragraph about your work — where you shoot, what draws you to it, who you make pictures for. Click this text in the editor to change it.',
+    intro_image_path: photo('portrait'),
+    intro_image_side: 'left',
 
     show_galleries: true,
     carousel_heading: 'Recent work',
@@ -237,6 +276,8 @@ function starterSettings(name: string): Record<string, unknown> {
     show_contact_section: true,
     contact_heading: 'Get in touch',
     contact_note: 'Tell me what you have in mind and I’ll come back to you.',
+    contact_image_path: photo('gull'),
+    contact_image_side: 'right',
 
     // Off until the photographer has something to put in them.
     show_shop: false,
@@ -268,7 +309,7 @@ function starterSettings(name: string): Record<string, unknown> {
  * has to be impossible to miss rather than tasteful.
  */
 
-async function seedSamples(db: SupabaseClient, tenantId: string): Promise<void> {
+async function seedSamples(db: SupabaseClient, tenantId: string): Promise<string | null> {
   const { data: album, error: albumError } = await db
     .from('albums')
     .insert({
@@ -284,7 +325,7 @@ async function seedSamples(db: SupabaseClient, tenantId: string): Promise<void> 
     .select('id')
     .single()
 
-  if (albumError || !album) return
+  if (albumError || !album) return albumError?.message ?? 'the gallery could not be made'
 
   const rows = SAMPLE_PHOTOS.map((photo, index) => ({
     tenant_id: tenantId,
@@ -299,7 +340,8 @@ async function seedSamples(db: SupabaseClient, tenantId: string): Promise<void> 
     is_for_sale: false,
   }))
 
-  const { data: inserted } = await db.from('photos').insert(rows).select('id')
+  const { data: inserted, error: photoError } = await db.from('photos').insert(rows).select('id')
+  if (photoError) return photoError.message
 
   // The first one becomes the cover, so the gallery has a face on every
   // listing rather than a grey rectangle.
@@ -310,6 +352,8 @@ async function seedSamples(db: SupabaseClient, tenantId: string): Promise<void> 
       .eq('tenant_id', tenantId)
       .eq('id', album.id)
   }
+
+  return null
 }
 
 /**
@@ -356,11 +400,41 @@ export async function removeSamples(): Promise<{ ok: boolean; message: string }>
   await supabase.from('photos').delete().eq('tenant_id', tenantId).eq('album_id', album.id)
   await supabase.from('albums').delete().eq('tenant_id', tenantId).eq('id', album.id)
 
+  // ── And the ones on the homepage ──────────────────────────────────────────
+  // Only where they are still a sample. Anything the photographer has already
+  // replaced is theirs and is left exactly where it is.
+  const { data: settings } = await supabase
+    .from('site_settings')
+    .select('hero_image_path, intro_image_path, contact_image_path')
+    .eq('tenant_id', tenantId)
+    .maybeSingle()
+
+  const clear: Record<string, unknown> = {}
+  if (isSamplePhoto(settings?.hero_image_path as string)) {
+    clear.hero_image_path = null
+    // With no standing photograph, the hero goes back to featured stories,
+    // which is what an empty site shows before anything is chosen.
+    clear.hero_mode = 'stories'
+    clear.hero_fixed_subtitle = null
+  }
+  if (isSamplePhoto(settings?.intro_image_path as string)) clear.intro_image_path = null
+  if (isSamplePhoto(settings?.contact_image_path as string)) clear.contact_image_path = null
+
+  const cleared = Object.keys(clear).length > 0
+  if (cleared) {
+    await supabase.from('site_settings').update(clear).eq('tenant_id', tenantId)
+  }
+
   revalidatePath('/admin/trips')
   revalidatePath('/admin')
   revalidatePath('/')
 
-  return { ok: true, message: 'The sample gallery is gone. Nothing of yours was touched.' }
+  return {
+    ok: true,
+    message: cleared
+      ? 'The sample gallery is gone, and the sample photographs have been taken off your homepage. Nothing of yours was touched.'
+      : 'The sample gallery is gone. Nothing of yours was touched.',
+  }
 }
 
 /**
@@ -533,4 +607,42 @@ async function deleteTenantFiles(tenantId: string): Promise<number> {
   } while (token)
 
   return failures
+}
+
+
+/**
+ * Puts the sample gallery into the site you are signed in to.
+ *
+ * Exists because the seeding inside `createSite` is deliberately non-fatal — a
+ * site that could not be made because a sample gallery failed would be a much
+ * worse bug than a site without one — and a failure that is not fatal is a
+ * failure nobody sees. This is the way to run it again, and to be told exactly
+ * why if it does not work.
+ */
+export async function addSamples(): Promise<{ ok: boolean; message: string }> {
+  const { tenantId } = await requireEditor()
+
+  let db
+  try {
+    db = createAdminClient()
+  } catch {
+    return { ok: false, message: 'SUPABASE_SERVICE_ROLE_KEY is not set on this deployment.' }
+  }
+
+  const { data: existing } = await db
+    .from('albums')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('slug', SAMPLE_ALBUM_SLUG)
+    .maybeSingle()
+
+  if (existing) return { ok: false, message: 'This site already has the sample gallery.' }
+
+  const why = await seedSamples(db, tenantId)
+  if (why) return { ok: false, message: `The sample gallery could not be added: ${why}` }
+
+  revalidatePath('/admin/trips')
+  revalidatePath('/admin')
+  revalidatePath('/')
+  return { ok: true, message: 'Six sample photographs added.' }
 }

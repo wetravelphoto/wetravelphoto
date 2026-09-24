@@ -91,7 +91,7 @@ export default async function GalleriesPage({
         </Link>
       </div>
 
-      {hasSamples && <SampleNotice />}
+      {(hasSamples || rows.length === 0) && <SampleNotice present={hasSamples} />}
 
       {error && (
         <div className="admin-panel" style={{ borderColor: 'rgba(163,50,36,0.4)', marginBottom: '1rem' }}>

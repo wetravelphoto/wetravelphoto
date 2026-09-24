@@ -64,7 +64,11 @@ create table albums (
   slug         text not null,
   privacy_type text not null default 'private',
   password_hash text,
-  allow_downloads boolean default false,
+  -- Present because the app reads it in three places — but it was missing
+  -- from the real database until 2026-09-24_allow_downloads.sql, which is
+  -- exactly the kind of disagreement this file keeps having with production.
+  -- Keep the default in step with that migration.
+  allow_downloads boolean not null default false,
   display_order int default 0,
   created_by   uuid references profiles(id),
   tenant_id    uuid not null default default_tenant_id() references tenants(id),

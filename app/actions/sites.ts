@@ -5,6 +5,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { isSamplePhoto } from '@/lib/images'
+import { tenantPrefix } from '@/lib/storage-keys'
+import { r2Client } from '@/lib/r2'
+import { ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { PLATFORM } from '@/lib/platform'
 import { SAMPLE_ALBUM_SLUG, SAMPLE_ALBUM_TITLE, SAMPLE_PHOTOS } from '@/lib/samples'
@@ -358,4 +361,176 @@ export async function removeSamples(): Promise<{ ok: boolean; message: string }>
   revalidatePath('/')
 
   return { ok: true, message: 'The sample gallery is gone. Nothing of yours was touched.' }
+}
+
+/**
+ * DELETING A SITE, WHICH NOTHING ELSE CAN UNDO
+ * ════════════════════════════════════════════
+ *
+ * There was no way to do this, which was fine while every site was one Gonzalo
+ * had just made and could ignore. It stops being fine the moment a tester
+ * leaves, a subdomain is needed back, or a site is made with a typo in the
+ * address — and the alternative is hand-written SQL against production at
+ * eleven at night, which is how a wrong WHERE clause happens.
+ *
+ * **Nothing cascades.** The foreign keys to `tenants` carry no ON DELETE
+ * clause, so a tenant with a single photograph in it cannot be deleted at all.
+ * That is a good accident: it means this function has to name every table it
+ * destroys, in an order somebody can read and argue with, rather than one
+ * DELETE quietly taking away more than it appears to.
+ *
+ * **The files go too.** `t/<tenant id>/…` is the whole of a site's storage
+ * (lib/storage-keys.ts), so the prefix is the unit of deletion. If listing or
+ * deleting them fails the rows are still removed and the caller is told the
+ * files were left behind — an orphaned object costs a fraction of a penny; a
+ * half-deleted database is a support problem.
+ *
+ * **The confirmation is the host, typed.** Not "are you sure": a dialogue
+ * nobody reads is worse than no dialogue, because it converts a mistake into a
+ * mistake somebody has approved. Typing `ana.lensgrid.co` cannot be done by
+ * accident.
+ */
+export type DeleteResult = { ok: boolean; message: string }
+
+/** Every table holding a site's work, in the order they have to go. */
+const TENANT_TABLES = [
+  // Leaves first — rows that point at photographs, albums or clients.
+  'downloads',
+  'favorites',
+  'page_views',
+  'order_items',
+  'orders',
+  'photo_shop_categories',
+  'album_clients',
+  'catalog_items',
+  'products',
+  'print_options',
+  'shop_categories',
+  'room_scenes',
+  'instagram_media',
+  'contact_messages',
+  'newsletter_signups',
+  'site_draft_steps',
+  'site_draft',
+  'page_sections',
+  // Then the things they pointed at.
+  'photos',
+  'blog_posts',
+  'albums',
+  'clients',
+  'site_settings',
+  'tenant_domains',
+] as const
+
+export async function deleteSite(formData: FormData): Promise<DeleteResult> {
+  const editor = await requireEditor()
+  if (!editor.platformAdmin) {
+    return { ok: false, message: 'Only a platform admin can delete a site.' }
+  }
+
+  const tenantId = clean(formData.get('tenant_id'))
+  const typed = clean(formData.get('confirm')).toLowerCase()
+
+  let db
+  try {
+    db = createAdminClient()
+  } catch {
+    return { ok: false, message: 'SUPABASE_SERVICE_ROLE_KEY is not set on this deployment.' }
+  }
+
+  const { data: domains } = await db
+    .from('tenant_domains')
+    .select('host, is_primary')
+    .eq('tenant_id', tenantId)
+
+  const primary =
+    (domains ?? []).find((d) => d.is_primary)?.host ?? (domains ?? [])[0]?.host ?? ''
+
+  if (!primary) {
+    return {
+      ok: false,
+      message: 'That site has no address, so there is nothing to type to confirm. Give it one first, or remove it in Supabase.',
+    }
+  }
+
+  if (typed !== primary.toLowerCase()) {
+    return { ok: false, message: `Type ${primary} exactly to confirm.` }
+  }
+
+  // ── The people ────────────────────────────────────────────────────────────
+  // Read before the rows go, or there is no way to find them afterwards.
+  const { data: people } = await db.from('profiles').select('id').eq('tenant_id', tenantId)
+
+  // ── The files ─────────────────────────────────────────────────────────────
+  let filesLeft = 0
+  try {
+    filesLeft = await deleteTenantFiles(tenantId)
+  } catch {
+    filesLeft = -1
+  }
+
+  // ── The rows, leaves first ────────────────────────────────────────────────
+  const failed: string[] = []
+  for (const table of TENANT_TABLES) {
+    const { error } = await db.from(table).delete().eq('tenant_id', tenantId)
+    // A table that does not exist on this deployment is not a failure.
+    if (error && !/does not exist|schema cache/i.test(error.message)) failed.push(table)
+  }
+
+  await db.from('profiles').delete().eq('tenant_id', tenantId)
+
+  const { error: tenantError } = await db.from('tenants').delete().eq('id', tenantId)
+  if (tenantError) {
+    return {
+      ok: false,
+      message: `The site's contents were removed but the site itself was not: ${tenantError.message}`,
+    }
+  }
+
+  for (const person of people ?? []) {
+    await db.auth.admin.deleteUser(person.id as string)
+  }
+
+  revalidatePath('/admin/sites')
+
+  const notes: string[] = []
+  if (failed.length > 0) notes.push(`rows may remain in ${failed.join(', ')}`)
+  if (filesLeft === -1) notes.push('the stored files could not be reached and were left in place')
+  else if (filesLeft > 0) notes.push(`${filesLeft} file${filesLeft === 1 ? '' : 's'} could not be deleted`)
+
+  return {
+    ok: true,
+    message:
+      `${primary} is gone, along with ${(people ?? []).length} account${
+        (people ?? []).length === 1 ? '' : 's'
+      }.` + (notes.length > 0 ? ` One thing to know: ${notes.join('; ')}.` : ''),
+  }
+}
+
+/** Everything under `t/<tenant id>/`. Returns how many could not be deleted. */
+async function deleteTenantFiles(tenantId: string): Promise<number> {
+  const Bucket = process.env.R2_BUCKET_NAME
+  if (!Bucket) return -1
+
+  const prefix = `${tenantPrefix(tenantId)}/`
+  let token: string | undefined
+  let failures = 0
+
+  do {
+    const listed = await r2Client.send(
+      new ListObjectsV2Command({ Bucket, Prefix: prefix, ContinuationToken: token })
+    )
+    const keys = (listed.Contents ?? []).map((o) => ({ Key: o.Key! })).filter((o) => o.Key)
+
+    for (let i = 0; i < keys.length; i += 1000) {
+      const result = await r2Client.send(
+        new DeleteObjectsCommand({ Bucket, Delete: { Objects: keys.slice(i, i + 1000) } })
+      )
+      failures += result.Errors?.length ?? 0
+    }
+
+    token = listed.IsTruncated ? listed.NextContinuationToken : undefined
+  } while (token)
+
+  return failures
 }

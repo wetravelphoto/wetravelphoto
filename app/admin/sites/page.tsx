@@ -3,6 +3,7 @@ import { currentEditor } from '@/lib/auth'
 import { createAdminClientOrNull } from '@/lib/supabase/admin'
 import { PLATFORM } from '@/lib/platform'
 import NewSiteForm from '@/components/admin/NewSiteForm'
+import DeleteSite from '@/components/admin/DeleteSite'
 
 /**
  * EVERY SITE ON THE PLATFORM — for the platform admin only.
@@ -140,8 +141,14 @@ export default async function SitesPage() {
                     )}
                   </span>
                 </span>
-                <span className="admin-meta" style={{ whiteSpace: 'nowrap' }}>
+                <span
+                  className="admin-meta"
+                  style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+                >
                   {site.people} {site.people === 1 ? 'person' : 'people'}
+                  {site.hosts[0] && (
+                    <DeleteSite tenantId={site.id} host={site.hosts[0].host} />
+                  )}
                 </span>
               </li>
             ))}

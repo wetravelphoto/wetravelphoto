@@ -264,3 +264,59 @@
   justify-content: center;
   padding: 1.5rem;
 }
+
+/* ── Start here: the first-run checklist ────────────────────────────────────
+ * Lives in the stylesheet rather than inline, because these need :hover and
+ * a struck-through done state, and both are awkward as style objects.
+ */
+.start-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 0.72rem 0.95rem;
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+}
+.start-step:hover { background: rgba(26, 23, 21, 0.035); }
+
+.start-tick {
+  margin-top: 1px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1.2px solid var(--admin-line);
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 0.6rem;
+  color: #fff;
+}
+.start-step[data-done] .start-tick { background: #4b9b6e; border-color: #4b9b6e; }
+
+.start-title { display: block; font-size: 0.84rem; font-weight: 500; }
+.start-detail {
+  display: block;
+  font-size: 0.73rem;
+  color: var(--admin-mute);
+  margin-top: 0.15rem;
+  max-width: 62ch;
+  line-height: 1.5;
+}
+.start-step[data-done] .start-title {
+  color: var(--admin-mute);
+  font-weight: 400;
+  text-decoration: line-through;
+  text-decoration-color: rgba(26, 23, 21, 0.25);
+}
+
+.start-go {
+  margin-left: auto;
+  align-self: center;
+  font-size: 0.7rem;
+  color: var(--admin-accent);
+  border: 0.5px solid rgba(181, 96, 44, 0.3);
+  border-radius: 7px;
+  padding: 0.26rem 0.6rem;
+  white-space: nowrap;
+}

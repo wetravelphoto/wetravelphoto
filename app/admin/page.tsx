@@ -1,12 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { requireEditor } from '@/lib/auth'
+import { startHere } from '@/lib/start-here'
+import StartHere from '@/components/admin/StartHere'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminDashboard() {
   const { tenantId } = await requireEditor()
   const supabase = await createClient()
+  const guide = await startHere(tenantId)
 
   const [albums, photos, posts, drafts, clients, unread, signups] = await Promise.all([
     supabase.from('albums').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
@@ -65,6 +68,8 @@ export default async function AdminDashboard() {
       <p className="admin-meta" style={{ margin: '0 0 1.75rem' }}>
         {views?.length ?? 0} page views · {uniqueVisitors} visitors in the last 30 days
       </p>
+
+      <StartHere data={guide} />
 
       <div className="stat-row">
         <Stat label="Trips" value={albums.count ?? 0} href="/admin/trips" />

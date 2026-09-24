@@ -99,6 +99,9 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
     sort_order: get('sort_order'),
     cover_overlay_type: get('cover_overlay_type') || 'none',
     cover_overlay_opacity: num('cover_overlay_opacity', 0.35),
+    // An unchecked box sends nothing, so absent means off — which is the
+    // answer we want anyway for a switch that hands over full-size files.
+    allow_downloads: formData.get('allow_downloads') === 'on',
   }
 
   const password = get('password')
@@ -106,11 +109,31 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
     updates.password_hash = hashPassword(password)
   }
 
-  const { error } = await supabase
-    .from('albums')
-    .update(updates)
-    .eq('tenant_id', tenantId)
-    .eq('id', albumId)
+  const save = (row: Record<string, unknown>) =>
+    supabase.from('albums').update(row).eq('tenant_id', tenantId).eq('id', albumId)
+
+  let { error } = await save(updates)
+
+  /**
+   * DEPLOY ORDER MUST NOT MATTER.
+   *
+   * `allow_downloads` arrives with `db/migrations/2026-09-24_allow_downloads.sql`.
+   * If this code reaches production before that migration is run, PostgREST
+   * rejects the whole statement for naming a column it does not know — and the
+   * casualty would not be downloads, it would be **saving gallery settings at
+   * all**. A photographer renaming an album would get an error about a switch
+   * they never touched.
+   *
+   * So the one field that might not exist yet is dropped and the save retried.
+   * Only that field, only on that error. The same tolerance
+   * `app/actions/sites.ts` needed for the same reason.
+   */
+  if (error && /allow_downloads/.test(error.message)) {
+    const { allow_downloads: _dropped, ...withoutIt } = updates
+    void _dropped
+    ;({ error } = await save(withoutIt))
+  }
+
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin')

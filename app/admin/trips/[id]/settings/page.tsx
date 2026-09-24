@@ -117,6 +117,7 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
           initialFont={album?.cover_font ?? 'Oswald'}
           initialScale={album?.cover_title_scale ?? 1}
           initialColor={album?.cover_title_color ?? '#FAF9F6'}
+          initialAllowDownloads={album?.allow_downloads === true}
           initialShowLocation={album?.cover_show_location ?? false}
           initialShowDate={album?.cover_show_date ?? false}
           initialShowButton={album?.cover_show_button ?? false}

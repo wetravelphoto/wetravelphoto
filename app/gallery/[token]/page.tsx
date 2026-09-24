@@ -121,7 +121,12 @@ export default async function ClientGalleryPage({
               publicUrl={publicUrl}
               galleryTitle={(album.cover_title_text as string) || (album.title as string)}
               siteTitle={settings.site_title}
-              allowDownloads={album.allow_downloads !== false}
+              // `=== true`, not `!== false`. The two download paths used to
+              // disagree about the default — the zip gate demanded true, this
+              // showed the button unless it was explicitly false — so a null
+              // or missing value opened one door and not the other. One
+              // question, asked the same way in both places.
+              allowDownloads={album.allow_downloads === true}
             />
           </section>
         )

@@ -61,6 +61,7 @@ export default function AlbumSettingsEditor(props: {
   initialShowDate: boolean
   initialShowButton: boolean
   initialButtonText: string
+  initialAllowDownloads: boolean
 }) {
   const { albumId, photos, publicUrl, albumTitle, albumLocation, albumDateLabel, customCoverPath, coverVideoPath } = props
 
@@ -92,6 +93,7 @@ export default function AlbumSettingsEditor(props: {
   const [descAlign, setDescAlign] = useState(props.initialDescAlign || 'left')
   const [descScale, setDescScale] = useState(props.initialDescScale ?? 1)
   const [tags, setTags] = useState<string[]>(props.initialTags)
+  const [allowDownloads, setAllowDownloads] = useState(props.initialAllowDownloads)
 
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -621,6 +623,35 @@ export default function AlbumSettingsEditor(props: {
                 autoComplete="new-password"
               />
             </label>
+
+            {/*
+              One switch, two doors. It decides whether a PUBLIC album offers a
+              zip of the whole gallery, and whether a CLIENT opening a share
+              link sees a download button. Both were governed by this column
+              already; there was simply nothing anywhere that set it, so
+              downloads were off on every site and nobody could turn them on.
+
+              Off by default, and staying that way on save is the point: a
+              photographer who has not thought about it has not agreed to hand
+              over full-size files.
+            */}
+            <label
+              className="admin-field"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}
+            >
+              <input
+                type="checkbox"
+                name="allow_downloads"
+                checked={allowDownloads}
+                onChange={(e) => setAllowDownloads(e.target.checked)}
+              />
+              Let people download the photographs
+            </label>
+            <p className="admin-meta" style={{ margin: 0, lineHeight: 1.6 }}>
+              {allowDownloads
+                ? 'Clients with a share link get a download button, and a public album offers a zip of the whole gallery. Full-size originals, not the web versions.'
+                : 'Downloads are off. Nobody — client or visitor — can save the files from the gallery page.'}
+            </p>
           </div>
         </div>
 

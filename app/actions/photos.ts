@@ -191,7 +191,7 @@ export async function toggleForSale(albumId: string, photoId: string, currentVal
 
   // The flag alone doesn't make a photo buyable — it needs the product rows
   // that carry the sizes and prices.
-  await syncProductsForPhoto(photoId)
+  await syncProductsForPhoto(tenantId, photoId)
 
   revalidatePath(`/admin/trips/${albumId}`)
   revalidatePath('/admin/shop')

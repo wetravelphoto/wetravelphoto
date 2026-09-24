@@ -92,10 +92,6 @@ const ALLOWED = [
     why: 'the nightly sync takes its tenant explicitly — it runs on a cron with no address to read',
   },
   {
-    file: 'lib/products.ts',
-    why: 'admin-only, behind requireEditor, writing rows whose tenant comes from the caller',
-  },
-  {
     file: 'lib/drafts/',
     why: 'the draft layer carries its own tenant handling',
   },

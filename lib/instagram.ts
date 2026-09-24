@@ -105,7 +105,11 @@ export async function syncInstagram(
   if (clearError) return { ok: false, message: clearError.message }
 
   if (rows.length > 0) {
-    const { error } = await db.from('instagram_media').insert(rows)
+    // The delete above is scoped; this was not, so a second site's posts were
+    // written under whichever tenant default_tenant_id() names.
+    const { error } = await db
+      .from('instagram_media')
+      .insert(rows.map((row) => ({ ...row, tenant_id: tenantId })))
     if (error) return { ok: false, message: error.message }
   }
 

@@ -11,13 +11,26 @@ import { createClient } from '@/lib/supabase/server'
  *
  * Unlisting deactivates rather than deletes, so relisting restores the
  * original prices instead of quietly adopting today's.
+ *
+ * **The site is passed in, not assumed.** Every query here used to be keyed on
+ * a photograph id alone, which was fine when there was one site and wrong the
+ * moment there were two: the price list it copied from was read WITHOUT a
+ * tenant, and `print_options` carries a permissive "anyone reads active
+ * options" policy — so listing a print on one site would have priced it from
+ * a mixture of every site's price list. The catalogue entry it wrote had no
+ * tenant either, so it landed on whichever site `default_tenant_id()` names:
+ * the oldest one.
  */
-export async function syncProductsForPhoto(photoId: string): Promise<void> {
+export async function syncProductsForPhoto(
+  tenantId: string,
+  photoId: string
+): Promise<void> {
   const supabase = await createClient()
 
   const { data: photo } = await supabase
     .from('photos')
     .select('id, is_for_sale')
+    .eq('tenant_id', tenantId)
     .eq('id', photoId)
     .maybeSingle()
 
@@ -29,12 +42,16 @@ export async function syncProductsForPhoto(photoId: string): Promise<void> {
   if (photo.is_for_sale) {
     await supabase
       .from('catalog_items')
-      .upsert({ photo_id: photoId }, { onConflict: 'photo_id', ignoreDuplicates: true })
+      .upsert(
+        { tenant_id: tenantId, photo_id: photoId },
+        { onConflict: 'photo_id', ignoreDuplicates: true }
+      )
   }
 
   const { data: existingRows } = await supabase
     .from('products')
     .select('id, print_option_id, is_active')
+    .eq('tenant_id', tenantId)
     .eq('photo_id', photoId)
 
   const existing = existingRows ?? []
@@ -42,7 +59,11 @@ export async function syncProductsForPhoto(photoId: string): Promise<void> {
   // Unlisted: stand every option down, keep the rows and their prices
   if (!photo.is_for_sale) {
     if (existing.some((p) => p.is_active)) {
-      await supabase.from('products').update({ is_active: false }).eq('photo_id', photoId)
+      await supabase
+        .from('products')
+        .update({ is_active: false })
+        .eq('tenant_id', tenantId)
+        .eq('photo_id', photoId)
     }
     return
   }
@@ -50,6 +71,7 @@ export async function syncProductsForPhoto(photoId: string): Promise<void> {
   const { data: optionRows } = await supabase
     .from('print_options')
     .select('id, label, kind, price_cents, sort_order')
+    .eq('tenant_id', tenantId)
     .eq('is_active', true)
     .order('sort_order', { ascending: true })
 
@@ -68,6 +90,7 @@ export async function syncProductsForPhoto(photoId: string): Promise<void> {
     }
 
     create.push({
+      tenant_id: tenantId,
       photo_id: photoId,
       print_option_id: option.id,
       type: option.kind,
@@ -86,11 +109,19 @@ export async function syncProductsForPhoto(photoId: string): Promise<void> {
 
   await Promise.all([
     revive.length > 0
-      ? supabase.from('products').update({ is_active: true }).in('id', revive)
+      ? supabase
+          .from('products')
+          .update({ is_active: true })
+          .eq('tenant_id', tenantId)
+          .in('id', revive)
       : null,
     create.length > 0 ? supabase.from('products').insert(create) : null,
     orphaned.length > 0
-      ? supabase.from('products').update({ is_active: false }).in('id', orphaned)
+      ? supabase
+          .from('products')
+          .update({ is_active: false })
+          .eq('tenant_id', tenantId)
+          .in('id', orphaned)
       : null,
   ])
 }

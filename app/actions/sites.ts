@@ -151,12 +151,15 @@ export async function createSite(formData: FormData): Promise<NewSite> {
     )
   }
 
-  // ── 4. something to look at ───────────────────────────────────────────────
+  // ── 4. a look ─────────────────────────────────────────────────────────────
+  await applyDefaultLook(db, tenantId)
+
+  // ── 5. something to look at ───────────────────────────────────────────────
   // Not fatal. A site with no sample gallery is a working site; a site that
   // could not be made because a sample gallery failed is not.
   const seeded = await seedSamples(db, tenantId)
 
-  // ── 5. the photographer ───────────────────────────────────────────────────
+  // ── 6. the photographer ───────────────────────────────────────────────────
   // An invitation rather than a password: they set their own, and no password
   // ever passes through this screen, this log, or an email you wrote.
   const { data: invited, error: inviteError } = await db.auth.admin.inviteUserByEmail(email, {
@@ -944,4 +947,70 @@ async function fillSections(db: SupabaseClient, tenantId: string): Promise<void>
       .eq('tenant_id', tenantId)
       .eq('id', row.id)
   }
+}
+
+
+/**
+ * A NEW SITE ARRIVES WITH A LOOK ON IT
+ * ════════════════════════════════════
+ *
+ * Nothing chose one before, so the Design page opened saying "No look chosen
+ * yet" and a photographer had to pick from a list of one. That is not a
+ * choice, it is a chore — and a site with no look is a site nobody decided
+ * how to draw, which is a strange thing to hand somebody.
+ *
+ * The **first published look, in the order they are offered**, is the default.
+ * Not a slug written into this file: when there are four looks and the order
+ * changes, the default changes with it, and no code has to be edited to make
+ * that true.
+ *
+ * **Why this is not `applyLook()`.** That is a server action, and it resolves
+ * the site from `requireEditor()` — the session. Here the session is the
+ * platform admin's, whose tenant is the FIRST site on the platform. Calling it
+ * would have quietly restyled WeTravelPhoto every time a friend was invited.
+ * It is the same trap that broke the look history, so this takes the tenant as
+ * an argument and never asks who is signed in.
+ *
+ * Only the styles are applied — typography and tokens. The look's sections are
+ * left alone on purpose: a brand-new site has none yet, and they are
+ * materialised from the settings the first time the editor opens, which is
+ * after this has run and by then correct.
+ */
+async function applyDefaultLook(db: SupabaseClient, tenantId: string): Promise<void> {
+  const { data: look } = await db
+    .from('templates')
+    .select('id, version, manifest')
+    .eq('status', 'published')
+    .order('sort_order', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (!look) return
+
+  const manifest = (look.manifest ?? {}) as {
+    styles?: { type_styles?: unknown; tokens?: unknown }
+  }
+
+  const styles: Record<string, unknown> = {}
+  if (manifest.styles?.type_styles) styles.type_styles = manifest.styles.type_styles
+  if (manifest.styles?.tokens) styles.global_styles = manifest.styles.tokens
+
+  if (Object.keys(styles).length > 0) {
+    await insertTolerant(
+      async (row) =>
+        await db.from('site_settings').update(row).eq('tenant_id', tenantId).select('tenant_id'),
+      styles
+    )
+  }
+
+  await db.from('site_template').upsert(
+    {
+      tenant_id: tenantId,
+      template_id: look.id,
+      version: look.version,
+      snapshot: look.manifest,
+      adopted_at: new Date().toISOString(),
+    },
+    { onConflict: 'tenant_id' }
+  )
 }

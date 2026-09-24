@@ -94,7 +94,7 @@ export default async function SitesPage() {
         <NewSiteForm platformDomain={PLATFORM.domain} />
       </div>
 
-      <div className="admin-panel">
+      <div className="admin-panel" style={{ overflow: 'hidden' }}>
         <h2 className="admin-h2">
           {sites.length} site{sites.length === 1 ? '' : 's'}
         </h2>
@@ -111,45 +111,61 @@ export default async function SitesPage() {
                 style={{
                   padding: '0.75rem 0',
                   borderTop: '0.5px solid var(--admin-line)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'baseline',
-                  gap: '1rem',
-                  flexWrap: 'wrap',
+                  // A plain block, NOT a flex row. The name and the count are
+                  // a flex row nested inside it; the delete form is a sibling
+                  // block underneath.
+                  //
+                  // It used to be the other way round: the <li> was the flex
+                  // row and <DeleteSite> lived inside the right-hand cell,
+                  // which is `white-space: nowrap`. A width:100% form in a
+                  // nowrap cell has nowhere to go, so it pushed the cell wider
+                  // than the panel and the whole confirmation escaped the card
+                  // — leaving "1 person" stranded on a line of its own.
+                  minWidth: 0,
                 }}
               >
-                <span>
-                  <strong style={{ fontWeight: 500 }}>{site.name}</strong>
-                  <span className="admin-meta" style={{ display: 'block', marginTop: '0.2rem' }}>
-                    {site.hosts.length === 0 ? (
-                      <em>no address yet — it will show &ldquo;no site here&rdquo;</em>
-                    ) : (
-                      site.hosts.map((h, i) => (
-                        <span key={h.host}>
-                          {i > 0 && ', '}
-                          <a
-                            href={`https://${h.host}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ borderBottom: '0.5px solid currentColor' }}
-                          >
-                            {h.host}
-                          </a>
-                          {h.is_primary && site.hosts.length > 1 ? ' (home)' : ''}
-                        </span>
-                      ))
-                    )}
-                  </span>
-                </span>
-                <span
-                  className="admin-meta"
-                  style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    gap: '1rem',
+                    flexWrap: 'wrap',
+                  }}
                 >
-                  {site.people} {site.people === 1 ? 'person' : 'people'}
-                  {site.hosts[0] && (
-                    <DeleteSite tenantId={site.id} host={site.hosts[0].host} />
-                  )}
-                </span>
+                  <span style={{ minWidth: 0 }}>
+                    <strong style={{ fontWeight: 500 }}>{site.name}</strong>
+                    <span
+                      className="admin-meta"
+                      style={{ display: 'block', marginTop: '0.2rem', overflowWrap: 'anywhere' }}
+                    >
+                      {site.hosts.length === 0 ? (
+                        <em>no address yet — it will show &ldquo;no site here&rdquo;</em>
+                      ) : (
+                        site.hosts.map((h, i) => (
+                          <span key={h.host}>
+                            {i > 0 && ', '}
+                            <a
+                              href={`https://${h.host}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ borderBottom: '0.5px solid currentColor' }}
+                            >
+                              {h.host}
+                            </a>
+                            {h.is_primary && site.hosts.length > 1 ? ' (home)' : ''}
+                          </span>
+                        ))
+                      )}
+                    </span>
+                  </span>
+
+                  <span className="admin-meta" style={{ whiteSpace: 'nowrap' }}>
+                    {site.people} {site.people === 1 ? 'person' : 'people'}
+                  </span>
+                </div>
+
+                {site.hosts[0] && <DeleteSite tenantId={site.id} host={site.hosts[0].host} />}
               </li>
             ))}
           </ul>

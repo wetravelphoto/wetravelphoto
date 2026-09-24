@@ -57,7 +57,7 @@ export async function startHere(tenantId: string): Promise<StartHere> {
   const supabase = await createClient()
   const settings = await getSiteSettings()
 
-  const [albums, photos, samples, hero] = await Promise.all([
+  const [albums, photos, samples, hero, looks] = await Promise.all([
     supabase
       .from('albums')
       .select('id', { count: 'exact', head: true })
@@ -76,6 +76,8 @@ export async function startHere(tenantId: string): Promise<StartHere> {
       .eq('page', 'home')
       .eq('type', 'hero')
       .maybeSingle(),
+    // The catalogue of looks belongs to the platform, not to any site.
+    supabase.from('templates').select('id', { count: 'exact', head: true }).eq('status', 'published'),
   ])
 
   const ownGalleries = albums.count ?? 0
@@ -95,7 +97,10 @@ export async function startHere(tenantId: string): Promise<StartHere> {
   const wroteTagline =
     (settings.tagline ?? '') !== STARTER_TAGLINE && (settings.tagline ?? '').trim().length > 0
 
-  // A look has been chosen once the site's styles stop being the defaults.
+  // A new site arrives wearing the first published look, so "choose your look"
+  // is only a step worth showing when there is more than one to choose
+  // between. With one, it is a chore dressed as a decision.
+  const lookCount = looks.count ?? 0
   const choseLook = Object.keys((settings.global_styles as object) ?? {}).length > 0
 
   const steps: Step[] = [
@@ -117,14 +122,18 @@ export async function startHere(tenantId: string): Promise<StartHere> {
       cta: 'Edit the site',
       done: wroteIntro && wroteTagline,
     },
-    {
-      id: 'look',
-      title: 'Choose your look',
-      detail: 'Typeface, colours and spacing, applied everywhere at once.',
-      href: '/admin/design',
-      cta: 'Look & style',
-      done: choseLook,
-    },
+    ...(lookCount > 1
+      ? [
+          {
+            id: 'look',
+            title: 'Choose your look',
+            detail: 'Typeface, colours and spacing, applied everywhere at once.',
+            href: '/admin/design',
+            cta: 'Look & style',
+            done: choseLook,
+          },
+        ]
+      : []),
     {
       id: 'samples',
       title: 'Remove the sample photographs',

@@ -14,6 +14,8 @@ import {
 } from '@/lib/sections/pages'
 import { legacyMenu, newMenuId, sanitizeMenu, type MenuItem } from '@/lib/menu'
 import { sectionDef } from '@/lib/sections/registry'
+import { createClient } from '@/lib/supabase/server'
+import { SAMPLE_PHOTOS } from '@/lib/samples'
 
 /**
  * PAGES AND THE MENU
@@ -44,7 +46,21 @@ function cleanTitle(input: unknown): string {
  * with room under the fixed header. Something to click and write into, rather
  * than an empty page with nothing to select.
  */
-function starterSections(title: string): DraftSection[] {
+/**
+ * A new page opens with a photograph on it.
+ *
+ * It used to be one text block and nothing else, which is a blank page with a
+ * heading — and a blank page teaches a photographer nothing about what a page
+ * can be. A picture beside the words shows the shape of it immediately.
+ *
+ * Whose picture: **theirs if they have one**, and a sample only while they do
+ * not. Nobody wants a stranger's photograph appearing on a page they just
+ * made, and by the time somebody is adding pages they usually have their own.
+ *
+ * The sample rotates with the number of pages so a second new page does not
+ * open with the same picture as the first.
+ */
+function starterSections(title: string, imagePath: string | null): DraftSection[] {
   const def = sectionDef('intro')
   if (!def) return []
   return [
@@ -58,9 +74,30 @@ function starterSections(title: string): DraftSection[] {
         heading: title,
         body: 'Write about this page here. Add photographs, galleries or a contact form with “+ Add a section”.',
         space_top: 'l',
+        ...(imagePath ? { image_path: imagePath, image_side: 'right' } : {}),
       },
     },
   ]
+}
+
+/** Their newest photograph, or a sample while they have none. */
+async function pictureForNewPage(tenantId: string, index: number): Promise<string | null> {
+  const supabase = await createClient()
+
+  const { data: mine } = await supabase
+    .from('photos')
+    .select('storage_path')
+    .eq('tenant_id', tenantId)
+    .not('storage_path', 'like', '/samples/%')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (mine?.storage_path) return mine.storage_path as string
+
+  const samples = SAMPLE_PHOTOS
+  if (samples.length === 0) return null
+  return samples[index % samples.length].storage_path
 }
 
 /** Removes every menu entry pointing at a page, including inside folders. */
@@ -82,7 +119,7 @@ function withoutPage(menu: MenuItem[], key: string): MenuItem[] {
  * its key, so the editor can open it.
  */
 export async function createDraftPage(input: { title: unknown; slug?: unknown }) {
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   const title = cleanTitle(input.title)
   const pages = await currentCustomPages()
 
@@ -95,12 +132,13 @@ export async function createDraftPage(input: { title: unknown; slug?: unknown })
   if (problem) throw new Error(problem)
 
   const page: CustomPage = { key: newPageKey(), slug, title }
+  const picture = await pictureForNewPage(tenantId, pages.length)
 
   await writeDraftSite(
     (draft) => ({
       ...draft,
       custom_pages: [...draft.custom_pages, page],
-      pages: { ...draft.pages, [page.key]: starterSections(title) },
+      pages: { ...draft.pages, [page.key]: starterSections(title, picture) },
       menu: [...(draft.menu ?? legacyMenu()), { id: newMenuId(), kind: 'page', page: page.key }],
     }),
     `Added the ${title} page`

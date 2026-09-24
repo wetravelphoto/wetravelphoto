@@ -121,6 +121,16 @@ const ALLOWED = [
     table: 'templates',
     why: 'the same shared catalogue, read-only',
   },
+  {
+    file: 'lib/start-here.ts',
+    table: 'templates',
+    why: 'counting how many looks the platform offers, which is the same number for everybody',
+  },
+  {
+    file: 'app/actions/sites.ts',
+    table: 'templates',
+    why: 'reading the default look from the shared catalogue when a site is made',
+  },
 ]
 
 function walk(dir, out = []) {

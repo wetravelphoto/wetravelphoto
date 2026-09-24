@@ -15,6 +15,14 @@ import { deleteSite } from '@/app/actions/sites'
  *
  * Closed by default, so the list of sites is a list rather than a row of
  * loaded guns.
+ *
+ * LAYOUT — the part that went wrong once and is worth stating:
+ * both states are BLOCKS occupying the same place in the list item, one
+ * under the site's name and address. Closed, the button is pushed to the
+ * right edge by its own row; open, the form fills that row. Neither is ever
+ * a child of the "1 person" cell, which is `white-space: nowrap` — a
+ * width:100% form in there widened the cell past the panel and the whole
+ * confirmation escaped the card.
  */
 export default function DeleteSite({ tenantId, host }: { tenantId: string; host: string }) {
   const router = useRouter()
@@ -25,13 +33,15 @@ export default function DeleteSite({ tenantId, host }: { tenantId: string; host:
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="admin-btn admin-btn-sm admin-btn-danger"
-      >
-        Delete
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.4rem' }}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="admin-btn admin-btn-sm admin-btn-danger"
+        >
+          Delete
+        </button>
+      </div>
     )
   }
 
@@ -50,16 +60,29 @@ export default function DeleteSite({ tenantId, host }: { tenantId: string; host:
           }
         })
       }}
-      style={{ width: '100%', marginTop: '0.75rem' }}
+      style={{
+        width: '100%',
+        maxWidth: '100%',
+        minWidth: 0,
+        marginTop: '0.75rem',
+        padding: '0.85rem 0.9rem',
+        borderRadius: 10,
+        border: '0.5px solid rgba(163, 50, 36, 0.35)',
+        background: 'rgba(163, 50, 36, 0.04)',
+        boxSizing: 'border-box',
+      }}
     >
       <input type="hidden" name="tenant_id" value={tenantId} />
 
-      <p className="admin-meta" style={{ margin: '0 0 0.6rem', lineHeight: 1.65 }}>
+      <p
+        className="admin-meta"
+        style={{ margin: '0 0 0.6rem', lineHeight: 1.65, overflowWrap: 'anywhere' }}
+      >
         This removes the site, its galleries, its photographs, its stored files and the accounts
         that sign in to it. It cannot be undone. Type <strong>{host}</strong> to confirm.
       </p>
 
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', minWidth: 0 }}>
         <input
           type="text"
           name="confirm"
@@ -68,7 +91,10 @@ export default function DeleteSite({ tenantId, host }: { tenantId: string; host:
           placeholder={host}
           autoComplete="off"
           className="admin-input"
-          style={{ flex: 1, minWidth: 220 }}
+          // flexBasis rather than minWidth: the field may shrink below its
+          // preferred size in a narrow window instead of forcing the row wider
+          // than the panel.
+          style={{ flex: '1 1 220px', minWidth: 0, marginTop: 0, boxSizing: 'border-box' }}
         />
         <button
           type="submit"

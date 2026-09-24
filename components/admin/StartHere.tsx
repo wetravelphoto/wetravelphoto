@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { StartHere as StartHereData } from '@/lib/start-here'
+import FillHomepage from '@/components/admin/FillHomepage'
 
 /**
  * The first thing a photographer sees, while there is still something to say.
@@ -86,6 +87,11 @@ export default function StartHere({ data }: { data: StartHereData }) {
       </div>
 
       <ul style={{ listStyle: 'none', margin: 0, padding: '0.35rem' }}>
+        {data.homepageBare && (
+          <li>
+            <FillHomepage />
+          </li>
+        )}
         {data.steps.map((step) => (
           <li key={step.id}>
             <Link

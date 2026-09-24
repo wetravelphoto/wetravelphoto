@@ -720,9 +720,12 @@ export async function addSamples(): Promise<{ ok: boolean; message: string }> {
     .eq('slug', SAMPLE_ALBUM_SLUG)
     .maybeSingle()
 
-  if (existing) return { ok: false, message: 'This site already has the sample gallery.' }
-
-  const why = await seedSamples(db, tenantId)
+  // Not an error if the gallery is already here. The button means "make this
+  // site look like a site", and the homepage is a separate half of that — a
+  // site seeded before the homepage half existed has the gallery and an empty
+  // first screen, and refusing to run would leave it that way forever.
+  let why: string | null = null
+  if (!existing) why = await seedSamples(db, tenantId)
   if (why) return { ok: false, message: `The sample gallery could not be added: ${why}` }
 
   await fillHomepage(db, tenantId)
@@ -741,8 +744,9 @@ export async function addSamples(): Promise<{ ok: boolean; message: string }> {
   revalidatePath('/')
   return {
     ok: true,
-    message:
-      'Six sample photographs added, a sample story written, and the homepage filled in — hero, intro, about and contact. Anything you had already written was left alone.',
+    message: existing
+      ? 'The homepage now has the sample photographs on it — hero, intro, about and contact. Anything you had already written was left alone.'
+      : 'Six sample photographs added, a sample story written, and the homepage filled in — hero, intro, about and contact. Anything you had already written was left alone.',
   }
 }
 

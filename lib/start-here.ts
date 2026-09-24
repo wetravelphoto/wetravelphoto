@@ -41,6 +41,12 @@ export type StartHere = {
   total: number
   /** False once there is nothing left to say. */
   show: boolean
+  /**
+   * The sample gallery is here but the FIRST SCREEN still has no photograph
+   * on it. True only for sites seeded before the homepage was part of this —
+   * it is offered as a one-click fix rather than left as a puzzle.
+   */
+  homepageBare: boolean
 }
 
 /** The starter copy, which is what "they have not written anything yet" means. */
@@ -51,7 +57,7 @@ export async function startHere(tenantId: string): Promise<StartHere> {
   const supabase = await createClient()
   const settings = await getSiteSettings()
 
-  const [albums, photos, samples] = await Promise.all([
+  const [albums, photos, samples, hero] = await Promise.all([
     supabase
       .from('albums')
       .select('id', { count: 'exact', head: true })
@@ -63,11 +69,22 @@ export async function startHere(tenantId: string): Promise<StartHere> {
       .select('id', { count: 'exact', head: true })
       .eq('tenant_id', tenantId)
       .eq('slug', SAMPLE_ALBUM_SLUG),
+    supabase
+      .from('page_sections')
+      .select('settings')
+      .eq('tenant_id', tenantId)
+      .eq('page', 'home')
+      .eq('type', 'hero')
+      .maybeSingle(),
   ])
 
   const ownGalleries = albums.count ?? 0
   const hasPhotos = (photos.count ?? 0) > 0
   const hasSamples = (samples.count ?? 0) > 0
+
+  const heroImage = (hero.data?.settings as { image_path?: unknown } | null)?.image_path
+  const homepageBare =
+    hasSamples && !(typeof heroImage === 'string' && heroImage.trim() !== '')
 
   // "Written something" means the starter words are no longer what is on the
   // page. Checking the heading AND the tagline, because changing only one is
@@ -121,5 +138,13 @@ export async function startHere(tenantId: string): Promise<StartHere> {
 
   const done = steps.filter((s) => s.done).length
 
-  return { steps, done, total: steps.length, show: done < steps.length }
+  return {
+    steps,
+    done,
+    total: steps.length,
+    // Stays on screen while there is a bare homepage to fix, even if every
+    // step is ticked: the offer is the point, not the tally.
+    show: done < steps.length || homepageBare,
+    homepageBare,
+  }
 }

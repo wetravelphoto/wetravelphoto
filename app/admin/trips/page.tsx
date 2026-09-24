@@ -65,6 +65,7 @@ export default async function GalleriesPage({
 
   const hasSamples = base.some((a) => a.slug === SAMPLE_ALBUM_SLUG)
 
+
   const totalPhotos = rows.reduce((sum, r) => sum + r.photoCount, 0)
   const publicCount = rows.filter((r) => r.privacy === 'public').length
 

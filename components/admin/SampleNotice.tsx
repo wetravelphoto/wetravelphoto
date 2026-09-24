@@ -115,21 +115,25 @@ export default function SampleNotice({ present = true }: { present?: boolean }) 
           )}
         </div>
 
-        <button
-          type="button"
-          className="admin-btn admin-btn-ghost"
-          disabled={pending}
-          onClick={() =>
-            startTransition(async () => {
-              const r = await removeSamples()
-              setResult(r)
-              if (r.ok) router.refresh()
-            })
-          }
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          {pending ? 'Removing…' : 'Remove the samples'}
-        </button>
+        <span style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* The "put them on the homepage" offer lives in the dashboard
+              checklist, where it is seen. One place for it, not two. */}
+          <button
+            type="button"
+            className="admin-btn admin-btn-ghost"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const r = await removeSamples()
+                setResult(r)
+                if (r.ok) router.refresh()
+              })
+            }
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {pending ? 'Removing…' : 'Remove the samples'}
+          </button>
+        </span>
       </div>
     </div>
   )

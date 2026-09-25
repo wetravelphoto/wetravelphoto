@@ -14,13 +14,19 @@ import { SAMPLE_ALBUM_SLUG } from '@/lib/samples'
  * **Nothing here is stored.** There is no `onboarding_step` column and no
  * "dismissed" flag, because both go wrong in the same way: the checklist and
  * the site disagree, and the checklist is the one that lies. Every step is a
- * question asked of the site itself — is there a gallery, does the homepage
- * still say "Say who you are" — so ticking a step off is done by doing the
- * thing, and undoing it un-ticks. A photographer who deletes their only
- * gallery gets the step back, which is correct: they have no gallery.
+ * question asked of the site itself — is there a gallery, is the design still
+ * the one it arrived in — so ticking a step off is done by doing the thing,
+ * and undoing it un-ticks. A photographer who deletes their only gallery gets
+ * the step back, which is correct: they have no gallery.
  *
  * The cost is one small query per dashboard load. The benefit is that this can
  * never be wrong.
+ *
+ * **Every step goes somewhere different.** There was a "Say who you are" step
+ * that opened the editor, directly above a design step that also opened the
+ * editor. Two rows, one destination, so the list read as longer than the work
+ * actually was. A step earns its line by sending you somewhere the others do
+ * not.
  *
  * **It leaves when it is finished.** Scaffolding, not furniture: once every
  * step is done the list is gone, and the dashboard is the dashboard.
@@ -47,10 +53,6 @@ export type StartHere = {
    */
   homepageBare: boolean
 }
-
-/** The starter copy, which is what "they have not written anything yet" means. */
-const STARTER_INTRO_HEADING = 'Say who you are'
-const STARTER_TAGLINE = 'A line about what you photograph'
 
 /**
  * Key order survives a round trip through Postgres' jsonb unpredictably, so
@@ -91,11 +93,7 @@ export async function startHere(tenantId: string): Promise<StartHere> {
       .maybeSingle(),
     // The look this site was given, kept so "have they changed it" can be
     // asked of the site rather than assumed.
-    supabase
-      .from('site_template')
-      .select('snapshot')
-      .eq('tenant_id', tenantId)
-      .maybeSingle(),
+    supabase.from('site_template').select('snapshot').eq('tenant_id', tenantId).maybeSingle(),
   ])
 
   const ownGalleries = albums.count ?? 0
@@ -109,22 +107,13 @@ export async function startHere(tenantId: string): Promise<StartHere> {
   //
   // This used to look only at page_sections. A brand-new site has no rows
   // there at all — they are not materialised until the editor is first opened
-  // — so a homepage that was already full of photographs read as empty, and
-  // the checklist offered to fill it. Asking one table about a page that is
-  // being drawn from another is the same mistake that lost the photographs the
-  // first time, pointing the other way.
+  // — so a homepage already full of photographs read as empty, and the
+  // checklist offered to fill it. Asking one table about a page that is being
+  // drawn from another is the same mistake that lost the photographs the first
+  // time, pointing the other way.
   const heroFromSection = (hero.data?.settings as { image_path?: unknown } | null)?.image_path
   const heroImage = hero.data ? heroFromSection : settings.hero_image_path
   const homepageBare = hasSamples && !(typeof heroImage === 'string' && heroImage.trim() !== '')
-
-  // "Written something" means the starter words are no longer what is on the
-  // page. Checking the heading AND the tagline, because changing only one is
-  // usually somebody trying the editor rather than saying who they are.
-  const wroteIntro =
-    (settings.intro_heading ?? '') !== STARTER_INTRO_HEADING &&
-    (settings.intro_heading ?? '').trim().length > 0
-  const wroteTagline =
-    (settings.tagline ?? '') !== STARTER_TAGLINE && (settings.tagline ?? '').trim().length > 0
 
   // ── Have they made the design their own? ──────────────────────────────────
   // A new site now ARRIVES wearing a look, so "have you chosen one" stopped
@@ -156,22 +145,13 @@ export async function startHere(tenantId: string): Promise<StartHere> {
       done: ownGalleries > 0 && hasPhotos,
     },
     {
-      id: 'words',
-      title: 'Say who you are',
-      detail:
-        'Replace the starter words on your homepage. In the editor, click any piece of text to change it.',
-      href: '/edit/home',
-      cta: 'Edit the site',
-      done: wroteIntro && wroteTagline,
-    },
-    {
       id: 'look',
       title: 'Make it look like yours',
       detail:
-        'Your site came dressed in Field Notes. Change the typeface, the colours and the spacing until it looks like you.',
+        'Your site came dressed in Field Notes, with starter words on it. Change the typeface, the colours and the writing until it looks like you.',
       // Straight into the editor rather than the design page: the design page
       // is a list of looks, and with one look it is a list of one. The editor
-      // is where the typeface and the colours actually change.
+      // is where the typeface, the colours and the words actually change.
       href: '/edit/home?mode=style',
       cta: 'Open the editor',
       done: madeItTheirs,

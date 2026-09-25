@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { currentUser } from '@/lib/auth'
+import { currentEditor, currentUser } from '@/lib/auth'
 import { getSiteSettings, type SiteSettings } from '@/lib/site'
 import { patchSiteSettings } from '@/lib/site-patch'
 import {
@@ -111,12 +111,26 @@ const MISSING_HINT =
 export async function readDraft(): Promise<DraftState> {
   const supabase = await createClient()
 
+  // WHOSE DRAFT. This had no tenant filter and a `.maybeSingle()`, which is a
+  // combination that only worked while one site existed. With several, the
+  // query matches several rows and `maybeSingle()` fails — reported to the
+  // photographer as "the draft table is missing", which is not what happened.
+  // Worse for a platform admin, who passes every row-level-security check and
+  // so genuinely sees every site's draft.
+  //
+  // The review-link path does NOT come through here: lib/drafts/review.ts
+  // reads the draft with the tenant the share token resolves to, which is how
+  // an anonymous viewer can be shown one without a session.
+  const editor = await currentEditor()
+  if (!editor) return { draft: null, missing: false }
+
   const { data, error } = await supabase
     .from('site_draft')
     // '*' rather than a column list, so a column added by a newer migration
     // that has not been run yet reads as absent instead of failing the read —
     // which the canvas would show as "the draft table is missing".
     .select('*')
+    .eq('tenant_id', editor.tenantId)
     .maybeSingle()
 
   if (error) {
@@ -311,6 +325,33 @@ async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
   // already done rather than making a second round trip to the auth server.
   const user = await currentUser()
 
+  /**
+   * WHOSE DRAFT THIS IS — said out loud.
+   *
+   * This used to be left to the column default. `site_draft.tenant_id` was
+   * declared `uuid primary key default default_tenant_id()`, and the row below
+   * simply did not mention it: the upsert named `tenant_id` as its conflict
+   * target and trusted the database to work out the value.
+   *
+   * That was never right. It was a guess made in SQL, and what it guessed
+   * depended on who was asking — which is how a photographer's draft could
+   * have been filed under another site without anything erroring.
+   * `2026-09-24_no_guessing_tenant.sql` removed that default precisely so a
+   * missing tenant would fail instead of guess, and this is the call site it
+   * caught: the insert put NULL into a NOT NULL primary key, threw, and
+   * Next.js redacted it into React #441. Every save in the editor, for
+   * everybody.
+   *
+   * The lesson is not "the migration was wrong". The lesson is that
+   * `onConflict: 'tenant_id'` READS like the tenant is handled and isn't:
+   * naming a column as a conflict target says nothing about setting it. The
+   * scoping checker was fooled the same way, and now has a rule for it.
+   */
+  const editor = await currentEditor()
+  if (!editor) {
+    throw new Error('You are signed out. Sign in again and your draft will still be here.')
+  }
+
   let editLabel: string | null | undefined
   if (how.kind === 'edit') {
     const label = how.label ?? describeChange(how.before, draft)
@@ -322,6 +363,7 @@ async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
   }
 
   const row: Record<string, unknown> = {
+    tenant_id: editor.tenantId,
     pages: draft.pages,
     global_styles: draft.global_styles,
     type_styles: draft.type_styles,
@@ -670,9 +712,29 @@ export async function discardDraft(): Promise<void> {
 async function deleteDraft(): Promise<void> {
   const supabase = await createClient()
 
-  // No .eq() — RLS already limits this to the caller's own site, and naming a
-  // tenant here would be a second, weaker copy of that rule.
-  const { error } = await supabase.from('site_draft').delete().not('tenant_id', 'is', null)
+  /**
+   * THE ONE THAT WOULD HAVE TAKEN EVERYBODY'S WORK.
+   *
+   * This said `.delete().not('tenant_id', 'is', null)` with no tenant, and a
+   * comment explaining that row-level security already limited it to the
+   * caller's own site. For an ordinary photographer that was true. **A
+   * platform admin passes every tenant check**, so publishing from the editor
+   * would have deleted every photographer's unpublished draft on the platform,
+   * in one statement, with nothing raised and nothing to undo.
+   *
+   * This is the same bug, word for word in its reasoning, as the one found in
+   * `lib/sections/store.ts` on 2026-09-23 — `replaceSections` deleting every
+   * site's sections. That one was caught because the scoping checker looked at
+   * that file. This one was not, because `lib/drafts/` had a blanket exemption
+   * reading "the draft layer carries its own tenant handling". It did not.
+   */
+  const editor = await currentEditor()
+  if (!editor) return
+
+  const { error } = await supabase
+    .from('site_draft')
+    .delete()
+    .eq('tenant_id', editor.tenantId)
   if (error) throw new Error(error.message)
 }
 

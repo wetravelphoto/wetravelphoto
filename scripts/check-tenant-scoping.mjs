@@ -67,6 +67,20 @@ const SCOPED = [
   // addressed the first site on the platform.
   'site_template',
   'site_template_history',
+  // Added 2026-09-25, after the editor went down for every photographer.
+  // `site_draft` was never watched, so the draft save could name tenant_id as
+  // its conflict target, never set it, and pass this check for months. These
+  // nine are every remaining table in db/ that carries a tenant_id; the list
+  // was built by reading the schema rather than by remembering.
+  'site_draft',
+  'site_draft_steps',
+  'site_versions',
+  'draft_shares',
+  'site_secrets',
+  'profiles',
+  'tenant_domains',
+  'orders',
+  'order_items',
 ]
 
 /**
@@ -90,10 +104,6 @@ const ALLOWED = [
   {
     file: 'lib/instagram.ts',
     why: 'the nightly sync takes its tenant explicitly — it runs on a cron with no address to read',
-  },
-  {
-    file: 'lib/drafts/',
-    why: 'the draft layer carries its own tenant handling',
   },
   {
     file: 'app/actions/sites.ts',
@@ -149,6 +159,36 @@ function statementAt(text, index) {
     else if (c === ')') depth--
     else if ((c === '\n' && depth <= 0 && /[;,)]\s*$/.test(text.slice(end - 2, end + 1))) || (c === '\n' && text[end + 1] === '\n')) break
   }
+  // A chained call keeps going. Breaking at the `})` that closes an
+  // `.update({...})` cut the window just before the `.eq('tenant_id', …)` that
+  // followed it, which reported two correctly-scoped newsletter writes as
+  // unscoped. A checker's false alarms are not harmless: they are what
+  // persuades somebody to add an exemption, and an exemption is how the last
+  // hole got in.
+  while (end < text.length) {
+    // Skip whitespace AND comments. A comment between `.from(...)` and the
+    // `.eq('tenant_id', ...)` below it used to end the window early, which
+    // reported a correctly scoped read as unscoped — and the fix somebody
+    // reaches for when that happens is an exemption.
+    let rest = 0
+    for (;;) {
+      const ws = text.slice(end + rest).match(/^\s*/)[0].length
+      rest += ws
+      const two = text.slice(end + rest, end + rest + 2)
+      if (two === '//') rest += text.slice(end + rest).indexOf('\n') + 1
+      else if (two === '/*') rest += text.slice(end + rest).indexOf('*/') + 2
+      else break
+    }
+    if (text[end + rest] !== '.') break
+    end += rest + 1
+    let depth = 0
+    for (; end < text.length; end++) {
+      const c = text[end]
+      if (c === '(') depth++
+      else if (c === ')') { depth--; if (depth === 0) { end++; break } }
+    }
+  }
+
   return text.slice(Math.max(start, index - 400), Math.min(end + 200, text.length))
 }
 
@@ -167,9 +207,43 @@ for (const file of walk(join(ROOT, 'lib')).concat(walk(join(ROOT, 'app')))) {
       )
       if (!excused) {
         const statement = statementAt(text, at)
+        const line = text.slice(0, at).split('\n').length
+
         if (!statement.includes('tenant_id')) {
-          const line = text.slice(0, at).split('\n').length
           problems.push(`${rel}:${line}  reads ${table} without saying whose`)
+        } else if (
+          /\.(insert|upsert)\s*\(/.test(statement) &&
+          /onConflict\s*:\s*['"][^'"]*tenant_id/.test(statement) &&
+          // The payload is usually a variable built a dozen lines earlier, so
+          // this one looks further back than the statement window does.
+          // Deliberately generous: the cost of missing a real one is an
+          // outage, the cost of looking too far is nothing.
+          !/tenant_id\s*:/.test(text.slice(Math.max(0, at - 2000), at + 400))
+        ) {
+          /**
+           * NAMING A COLUMN IS NOT SETTING IT.
+           *
+           * This rule exists because of one outage. The draft save read:
+           *
+           *   supabase.from('site_draft').upsert(row, { onConflict: 'tenant_id' })
+           *
+           * and `row` never contained a tenant. The nine characters were right
+           * there in the statement, so the check above was satisfied and the
+           * line looked, to a reader and to this script, like it had been
+           * thought about. It had not: the value came from a column default
+           * that guessed. When the default was removed so that a forgotten
+           * tenant would fail loudly, this failed loudly — on every save in
+           * the editor, for every photographer, as a redacted React #441.
+           *
+           * So an insert or upsert whose ONLY mention of tenant_id is its
+           * conflict target is refused. Narrow on purpose: payloads built a
+           * few lines above are common and legitimate, and a checker that
+           * cries wolf gets exemptions added to it, which is how the first
+           * hole got in.
+           */
+          problems.push(
+            `${rel}:${line}  ${table}: onConflict names tenant_id but the row never sets it`
+          )
         }
       }
       at = text.indexOf(needle, at + 1)

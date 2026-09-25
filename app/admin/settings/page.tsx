@@ -48,7 +48,15 @@ export default async function SettingsPage() {
     .select('id', { count: 'exact', head: true })
     .eq('tenant_id', tenantId)
 
-  const { data: team } = await supabase.from('profiles').select('id, email, display_name, role')
+  // Whose team. Left unscoped this listed every profile on the platform —
+  // narrowed by row-level security for an ordinary photographer, but a
+  // platform admin passes every tenant check, so opening Settings would have
+  // shown every tester's email address in one list. "Row-level security will
+  // handle it" is not a filter; this is.
+  const { data: team } = await supabase
+    .from('profiles')
+    .select('id, email, display_name, role')
+    .eq('tenant_id', tenantId)
 
   const unprocessed = await countUnprocessed()
 

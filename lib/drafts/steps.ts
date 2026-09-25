@@ -259,7 +259,15 @@ export async function moveStep(
 
   await write(target)
 
-  await supabase.from('site_draft_steps').delete().eq('id', step.id as number)
+  // The id came from a read that was already scoped, so this is belt and
+  // braces — but a delete addressed only by id is the shape that goes wrong
+  // when somebody later reuses the line, and a platform admin's session would
+  // not stop it.
+  await supabase
+    .from('site_draft_steps')
+    .delete()
+    .eq('tenant_id', editor.tenantId)
+    .eq('id', step.id as number)
 
   const moved = diffDrafts(current, target)
   return {

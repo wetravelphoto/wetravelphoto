@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import ImagePickerModal from '@/components/admin/ImagePickerModal'
 import type { BlockImage } from '@/lib/blocks'
+import { imageSrc } from '@/lib/images'
 
 /** Choose-or-clear photo field with a hidden input, for page editors. */
 export default function PageImagePicker({
@@ -28,7 +29,7 @@ export default function PageImagePicker({
       {path ? (
         <div style={{ marginTop: '0.4rem' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`${publicUrl}/${path}`} alt="" style={{ width: '100%', maxWidth: 260, display: 'block' }} />
+          <img src={imageSrc(publicUrl, path)} alt="" style={{ width: '100%', maxWidth: 260, display: 'block' }} />
           <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
             <button type="button" onClick={() => setOpen(true)} className="admin-btn admin-btn-sm admin-btn-ghost">
               Change

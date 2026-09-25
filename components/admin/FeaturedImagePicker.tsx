@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import ImagePickerModal from '@/components/admin/ImagePickerModal'
 import type { BlockImage } from '@/lib/blocks'
+import { imageSrc } from '@/lib/images'
 
 /**
  * The featured image can come from any album or a fresh upload — it does
@@ -35,7 +36,7 @@ export default function FeaturedImagePicker({
           <div style={{ position: 'relative', maxWidth: 340 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${publicUrl}/${path}`}
+              src={imageSrc(publicUrl, path)}
               alt=""
               style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', display: 'block' }}
             />

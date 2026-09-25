@@ -9,6 +9,7 @@ import { COVER_FONTS, TITLE_COLORS, fontHref } from '@/lib/fonts'
 import CoverRenderer, { type CoverSettings } from '@/components/CoverRenderer'
 import LayoutThumb from '@/components/admin/LayoutThumb'
 import TagInput from '@/components/admin/TagInput'
+import { imageSrc } from '@/lib/images'
 
 type Photo = { id: string; storage_path: string; taken_at?: string | null }
 
@@ -106,11 +107,11 @@ export default function AlbumSettingsEditor(props: {
   const selectedPhoto = photos.find((p) => p.id === coverId)
   const usingCustom = !!customCoverPath
   const imageUrl = usingCustom
-    ? `${publicUrl}/${customCoverPath}`
+    ? imageSrc(publicUrl, customCoverPath)
     : selectedPhoto
-      ? `${publicUrl}/${selectedPhoto.storage_path}`
+      ? imageSrc(publicUrl, selectedPhoto.storage_path)
       : null
-  const videoUrl = coverVideoPath ? `${publicUrl}/${coverVideoPath}` : null
+  const videoUrl = coverVideoPath ? imageSrc(publicUrl, coverVideoPath) : null
 
   const settings: CoverSettings = {
     title: titleEnabled ? titleText || albumTitle : '',
@@ -909,7 +910,7 @@ export default function AlbumSettingsEditor(props: {
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={`${publicUrl}/${photo.storage_path}`}
+                        src={imageSrc(publicUrl, photo.storage_path)}
                         alt=""
                         style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }}
                       />
@@ -1002,7 +1003,7 @@ function GalleryPreview({
 
   const img = (p: Photo, style: React.CSSProperties) => (
     // eslint-disable-next-line @next/next/no-img-element
-    <img key={p.id} src={`${publicUrl}/${p.storage_path}`} alt="" style={{ display: 'block', ...style }} />
+    <img key={p.id} src={imageSrc(publicUrl, p.storage_path)} alt="" style={{ display: 'block', ...style }} />
   )
 
   const hero = heroPhoto ? (

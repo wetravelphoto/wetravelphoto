@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import PhotoPicker from '@/components/canvas/PhotoPicker'
 import { updateDraftPageSeo } from '@/app/actions/canvas'
+import { imageSrc } from '@/lib/images'
 import {
   DESCRIPTION_LIMIT,
   TITLE_LIMIT,
@@ -209,7 +210,7 @@ export default function PageSettings({
           <div className="cv-seo-image">
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={`${publicUrl}/${image}`} alt="" />
+              <img src={imageSrc(publicUrl, image)} alt="" />
             ) : (
               <span className="cv-seo-image-empty">No image</span>
             )}
@@ -264,7 +265,7 @@ export default function PageSettings({
         <div className="cv-seo-card" aria-label="How a shared link may look">
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={`${publicUrl}/${image}`} alt="" />
+            <img src={imageSrc(publicUrl, image)} alt="" />
           ) : (
             <span className="cv-seo-card-noimg" />
           )}

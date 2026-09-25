@@ -6,6 +6,7 @@ import { uploadCustomCover, clearCustomCover, uploadCoverVideo, clearCoverVideo 
 import { COVER_LAYOUTS } from '@/lib/cover-layouts'
 import { COVER_FONTS, TITLE_COLORS, fontHref } from '@/lib/fonts'
 import CoverRenderer, { type CoverSettings } from '@/components/CoverRenderer'
+import { imageSrc } from '@/lib/images'
 
 type Photo = { id: string; storage_path: string }
 
@@ -82,11 +83,11 @@ export default function CoverEditor(props: {
   const selectedPhoto = photos.find((p) => p.id === coverId)
   const usingCustom = !!customCoverPath
   const imageUrl = usingCustom
-    ? `${publicUrl}/${customCoverPath}`
+    ? imageSrc(publicUrl, customCoverPath)
     : selectedPhoto
-      ? `${publicUrl}/${selectedPhoto.storage_path}`
+      ? imageSrc(publicUrl, selectedPhoto.storage_path)
       : null
-  const videoUrl = coverVideoPath ? `${publicUrl}/${coverVideoPath}` : null
+  const videoUrl = coverVideoPath ? imageSrc(publicUrl, coverVideoPath) : null
 
   const settings: CoverSettings = {
     title: titleText || albumTitle,
@@ -568,7 +569,7 @@ export default function CoverEditor(props: {
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={`${publicUrl}/${photo.storage_path}`}
+                        src={imageSrc(publicUrl, photo.storage_path)}
                         alt=""
                         style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }}
                       />

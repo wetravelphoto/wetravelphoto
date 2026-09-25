@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import type { BlockImage } from '@/lib/blocks'
 import { fetchAlbumPhotos, registerJournalImage } from '@/app/actions/blog'
+import { imageSrc } from '@/lib/images'
 
 type AlbumOption = { id: string; title: string }
 type PhotoOption = { id: string; storage_path: string; caption: string | null }
@@ -191,7 +192,7 @@ export default function ImagePickerModal({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`${publicUrl}/${photo.storage_path}`}
+                    src={imageSrc(publicUrl, photo.storage_path)}
                     alt=""
                     style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }}
                   />

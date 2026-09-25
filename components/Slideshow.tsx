@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { imageSrc } from '@/lib/images'
 
 type Slide = { id: string; storage_path: string; caption: string | null }
 
@@ -59,7 +60,7 @@ export default function Slideshow({
       </button>
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`${publicUrl}/${current.storage_path}`} alt={current.caption ?? ''} className="slideshow-image" />
+      <img src={imageSrc(publicUrl, current.storage_path)} alt={current.caption ?? ''} className="slideshow-image" />
 
       <div className="slideshow-bar">
         <button onClick={prev} aria-label="Previous">

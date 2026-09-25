@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import FocalPicker from '@/components/admin/FocalPicker'
+import { imageSrc } from '@/lib/images'
 
 export type StoryOption = {
   id: string
@@ -142,7 +143,7 @@ export default function HeroStories({
               <div className="cv-story-head">
                 {story.imagePath ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img className="cv-story-thumb" src={`${publicUrl}/${story.imagePath}`} alt="" />
+                  <img className="cv-story-thumb" src={imageSrc(publicUrl, story.imagePath)} alt="" />
                 ) : (
                   <span className="cv-story-thumb cv-story-thumb-empty" aria-hidden="true" />
                 )}
@@ -234,7 +235,7 @@ export default function HeroStories({
                       <span className="cv-focal-label">Crop</span>
                       <FocalPicker
                         onDevice={onDevice}
-                        imageUrl={`${publicUrl}/${story.imagePath}`}
+                        imageUrl={imageSrc(publicUrl, story.imagePath)}
                         desktop={{ x: focal.x, y: focal.y }}
                         mobile={{ x: focal.mx, y: focal.my }}
                         onChange={({ desktop, mobile }) =>
@@ -280,7 +281,7 @@ export default function HeroStories({
             >
               {story.imagePath ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="cv-story-thumb" src={`${publicUrl}/${story.imagePath}`} alt="" />
+                <img className="cv-story-thumb" src={imageSrc(publicUrl, story.imagePath)} alt="" />
               ) : (
                 <span className="cv-story-thumb cv-story-thumb-empty" aria-hidden="true" />
               )}

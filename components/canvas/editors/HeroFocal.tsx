@@ -1,6 +1,7 @@
 'use client'
 
 import FocalPicker from '@/components/admin/FocalPicker'
+import { imageSrc } from '@/lib/images'
 
 type Focal = { x?: number; y?: number; mx?: number; my?: number }
 
@@ -50,7 +51,7 @@ export default function HeroFocal({
       </span>
 
       <FocalPicker
-        imageUrl={`${publicUrl}/${imagePath}`}
+        imageUrl={imageSrc(publicUrl, imagePath)}
         desktop={{ x: focal.x ?? 0.5, y: focal.y ?? 0.5 }}
         mobile={{ x: focal.mx ?? 0.5, y: focal.my ?? 0.5 }}
         onDevice={onDevice}

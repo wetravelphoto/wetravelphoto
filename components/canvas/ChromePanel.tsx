@@ -15,6 +15,7 @@ import {
 } from '@/lib/chrome'
 import { FONT_NAMES } from '@/lib/styles/tokens'
 import { fontHref } from '@/lib/fonts'
+import { imageSrc } from '@/lib/images'
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -427,7 +428,7 @@ function ChromeLogo({
       Logo
       <div className="cv-mark-preview" data-tone={slot} data-empty={!path}>
         {path ? (
-          <img src={`${publicUrl}/${path}`} alt="" />
+          <img src={imageSrc(publicUrl, path)} alt="" />
         ) : (
           <span className="cv-mark-none">The logo that came with your site</span>
         )}

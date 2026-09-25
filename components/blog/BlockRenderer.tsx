@@ -1,8 +1,9 @@
 import type { Block, BlockImage } from '@/lib/blocks'
 import { embedUrl } from '@/lib/blocks'
+import { imageSrc } from '@/lib/images'
 
 function url(publicUrl: string, path: string) {
-  return `${publicUrl}/${path}`
+  return imageSrc(publicUrl, path)
 }
 
 function Caption({ text }: { text?: string | null }) {

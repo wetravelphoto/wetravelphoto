@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Block, BlockImage } from '@/lib/blocks'
 import { embedUrl } from '@/lib/blocks'
+import { imageSrc } from '@/lib/images'
 
 function Caption({ text }: { text?: string | null }) {
   if (!text) return null
@@ -60,7 +61,7 @@ export default function PostBody({ blocks, publicUrl }: { blocks: Block[]; publi
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={`${publicUrl}/${image.path}`}
+        src={imageSrc(publicUrl, image.path)}
         alt={image.alt ?? image.caption ?? ''}
         loading="lazy"
         onClick={() => setOpenIndex(indexOf(image))}
@@ -238,7 +239,7 @@ export default function PostBody({ blocks, publicUrl }: { blocks: Block[]; publi
           )}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`${publicUrl}/${current.path}`}
+            src={imageSrc(publicUrl, current.path)}
             alt={current.alt ?? current.caption ?? ''}
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '100%', maxHeight: '82vh', objectFit: 'contain', display: 'block' }}

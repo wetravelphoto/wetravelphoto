@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { reorderPhotos, deletePhoto, updateCaption, toggleForSale } from '@/app/actions/photos'
+import { imageSrc } from '@/lib/images'
 
 type Photo = {
   id: string
@@ -126,7 +127,7 @@ export default function PhotoGrid({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${publicUrl}/${photo.storage_path}`}
+              src={imageSrc(publicUrl, photo.storage_path)}
               alt={photo.alt_text ?? ''}
               draggable={false}
               style={{

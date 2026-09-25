@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { requireEditor } from '@/lib/auth'
+import { imageSrc } from '@/lib/images'
 
 export default async function AlbumFavoritesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -19,7 +20,7 @@ export default async function AlbumFavoritesPage({ params }: { params: Promise<{
     .select('photo_id, client_id, clients(name, email), photos(storage_path, caption)')
     .eq('album_id', id)
 
-  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''
 
   const byClient = new Map<
     string,
@@ -65,7 +66,7 @@ export default async function AlbumFavoritesPage({ params }: { params: Promise<{
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={i}
-                src={`${publicUrl}/${photo.path}`}
+                src={imageSrc(publicUrl, photo.path ?? '')}
                 alt={photo.caption ?? ''}
                 title={photo.caption ?? ''}
                 style={{ width: 84, height: 84, objectFit: 'cover', display: 'block' }}

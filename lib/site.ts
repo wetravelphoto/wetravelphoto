@@ -236,7 +236,7 @@ const FALLBACK: SiteSettings = {
   hero_focal: {},
   hero_title_position: 'center',
   hero_story_align: 'left',
-  hero_show_mark: true,
+  hero_show_mark: false,
   hero_mode: 'stories',
   hero_image_path: null,
   hero_fixed_title: null,

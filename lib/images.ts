@@ -24,6 +24,26 @@ export function photoUrl(storagePath: string): string {
   return `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${storagePath}`
 }
 
+/**
+ * The same answer, for the thirty-odd components that are handed the bucket's
+ * address as a prop rather than reading the environment.
+ *
+ * Every one of them was writing `` `${publicUrl}/${path}` `` by hand, which is
+ * correct for an uploaded photograph and wrong for a sample: it asks the
+ * bucket for a file that lives on this origin, and the picker draws a broken
+ * image icon. It showed up first in the hero's crop box, where the big preview
+ * beside it rendered the same photograph perfectly — because that one went
+ * through `photoUrl()` and this one did not.
+ *
+ * The rule is not "remember to check" — it is that there should be one place
+ * that knows, and a bare template literal should look wrong. `markSrc()` in
+ * lib/sections/mark.ts is the same idea for `/logos/`.
+ */
+export function imageSrc(publicUrl: string, storagePath: string): string {
+  if (isSamplePhoto(storagePath)) return storagePath
+  return `${publicUrl}/${storagePath}`
+}
+
 export function focalPosition(x: number | null, y: number | null): string {
   return `${((x ?? 0.5) * 100).toFixed(1)}% ${((y ?? 0.5) * 100).toFixed(1)}%`
 }

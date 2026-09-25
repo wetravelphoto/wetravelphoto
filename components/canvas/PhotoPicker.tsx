@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { imageSrc } from '@/lib/images'
 import {
   forgetSiteImage,
   listPickerImages,
@@ -284,7 +285,7 @@ export default function PhotoPicker({
                     onClick={() => onPick(image.path)}
                     title={image.caption ?? undefined}
                   >
-                    <img src={`${publicUrl}/${image.path}`} alt={image.caption ?? ''} loading="lazy" />
+                    <img src={imageSrc(publicUrl, image.path)} alt={image.caption ?? ''} loading="lazy" />
                   </button>
                   {source === 'uploads' && image.id && (
                     <button

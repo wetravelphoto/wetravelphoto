@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { BLOCK_LABELS, newBlock, type Block, type BlockImage } from '@/lib/blocks'
 import ImagePickerModal from '@/components/admin/ImagePickerModal'
 import PostBody from '@/components/blog/PostBody'
+import { imageSrc } from '@/lib/images'
 
 const ADD_ORDER: Block['type'][] = [
   'paragraph',
@@ -157,7 +158,7 @@ export default function BlockEditor({
       {featuredPath && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`${publicUrl}/${featuredPath}`}
+          src={imageSrc(publicUrl, featuredPath)}
           alt=""
           style={{ width: '100%', height: 'auto', display: 'block', margin: '0.9rem 0' }}
         />
@@ -347,7 +348,7 @@ export default function BlockEditor({
               {featuredPath && (
                 <figure className="post-figure-full">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`${publicUrl}/${featuredPath}`} alt="" style={{ width: '100%', display: 'block' }} />
+                  <img src={imageSrc(publicUrl, featuredPath)} alt="" style={{ width: '100%', display: 'block' }} />
                 </figure>
               )}
               <PostBody blocks={bodyBlocks} publicUrl={publicUrl} />
@@ -434,7 +435,7 @@ function ThumbStrip({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`${publicUrl}/${img.path}`}
+            src={imageSrc(publicUrl, img.path)}
             alt=""
             draggable={false}
             style={{ width: 70, height: 70, objectFit: 'cover', display: 'block' }}
@@ -690,7 +691,7 @@ function ImageSlot({
         {image.path ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={`${publicUrl}/${image.path}`}
+            src={imageSrc(publicUrl, image.path)}
             alt=""
             style={{ width: '100%', maxHeight: 180, objectFit: 'cover', display: 'block' }}
           />

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import PhotoPicker from '@/components/canvas/PhotoPicker'
+import { imageSrc } from '@/lib/images'
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -52,7 +53,7 @@ export default function ImageField({
 
       {path ? (
         <div className="cv-img-has">
-          <img src={`${publicUrl}/${path}`} alt="" />
+          <img src={imageSrc(publicUrl, path)} alt="" />
           <div className="cv-img-tools">
             <button type="button" className="cv-btn cv-btn-ghost" onClick={() => setOpen(true)}>
               Change

@@ -45,10 +45,35 @@
   z-index: 2;
   display: flex;
   justify-content: center;
+  /*
+   * The wordmark is an <img> when a logo has been uploaded and a <span> of
+   * type when it has not (components/Logo.tsx). .hero-wordmark below sets
+   * `width: 100%`, which is right for the image — it spans the hero — and
+   * left-aligns the TEXT inside a 1100px box, because justify-content cannot
+   * centre a child that already fills the line. Reported as "centre and it
+   * stays on the left". text-align reaches the text and leaves the image
+   * alone.
+   */
+  text-align: center;
 }
 
+/*
+ * THE SELECT SAYS 'bottom'. THIS FILE WAS LISTENING FOR 'lower'.
+ *
+ * The Title position control offers exactly two values, 'center' and
+ * 'bottom' (lib/sections/registry.ts). Every rule here was written for
+ * 'center', 'upper' and 'lower', so choosing Bottom matched NOTHING: the mark
+ * fell back to the bare .hero-mark below, which sets `left` and no `top`, and
+ * landed at the very top of the hero against the header. Reported as "I set
+ * it to the bottom and it goes to the header", which is exactly what it did.
+ *
+ * 'upper' and 'lower' are kept as aliases. No control can produce them today,
+ * but a row stored by an older release can, and a dead selector is cheaper
+ * than a hero that jumps.
+ */
 .hero[data-title-pos='center'] .hero-mark { top: 46%; transform: translate(-50%, -50%); }
 .hero[data-title-pos='upper'] .hero-mark { top: 26%; transform: translate(-50%, -50%); }
+.hero[data-title-pos='bottom'] .hero-mark,
 .hero[data-title-pos='lower'] .hero-mark { top: 66%; transform: translate(-50%, -50%); }
 
 .hero-wordmark {
@@ -163,6 +188,7 @@
   .hero-mark { width: 86vw; }
   .hero[data-title-pos='center'] .hero-mark,
   .hero[data-title-pos='upper'] .hero-mark,
+  .hero[data-title-pos='bottom'] .hero-mark,
   .hero[data-title-pos='lower'] .hero-mark { top: 38%; transform: translate(-50%, -50%); }
 
   .hero-bar-mobile {
@@ -344,7 +370,9 @@
 
 .hero-fixed-cta:hover { background: #faf9f6; color: #14100e; }
 
-/* When the mark and copy would collide, lift the mark */
+/* When the mark and copy would collide, lift the mark.
+   'bottom' is what the control actually stores; see the note by .hero-mark. */
+.hero[data-title-pos='bottom'] .hero-fixed-copy,
 .hero[data-title-pos='lower'] .hero-fixed-copy { bottom: clamp(1.5rem, 3vw, 2.5rem); }
 
 /* ---------------- ADMIN: hero mode chooser ---------------- */

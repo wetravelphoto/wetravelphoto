@@ -206,7 +206,12 @@ export const SECTIONS: Record<string, SectionDef> = {
       mode: 'stories',
       title_position: 'center',
       story_align: 'left',
-      show_mark: true,
+      // OFF. It was on, so every new site arrived with its own name stamped
+      // across the opening photograph — under a toggle labelled "Show the
+      // scroll mark", which is not a thing anybody would click to remove it.
+      // A wordmark over a full-bleed hero is a real design; it is not a
+      // default, and a photographer who wants it can say so.
+      show_mark: false,
       image_path: null,
       title: null,
       subtitle: null,
@@ -260,7 +265,20 @@ export const SECTIONS: Record<string, SectionDef> = {
         { value: 'bottom', label: 'Bottom' },
       ] },
       { key: 'story_align', label: 'Story text', kind: 'select', group: 'Layout', options: ALIGN, live: { attr: 'data-story-align' }, when: { key: 'mode', equals: 'stories' } },
-      { key: 'show_mark', label: 'Show the scroll mark', kind: 'toggle', group: 'Layout' },
+      {
+        // It was labelled "Show the scroll mark", which is not what it does
+        // and sent a photographer looking for a control that does not exist.
+        // What it draws is the wordmark over the photograph — FixedHero and
+        // HomeHero both render `<Logo className="hero-wordmark">` from it.
+        // Somebody seeing their site's name sitting on their hero had no way
+        // to work out which switch it was, and clicking it selects nothing,
+        // because it is not text on the page: it is the site's name.
+        key: 'show_mark',
+        label: 'Your name over the picture',
+        kind: 'toggle',
+        group: 'Layout',
+        help: 'Your site’s name, or your header logo, drawn over the photograph. Change the wording in Settings; upload a logo in the Header section.',
+      },
       {
         key: 'featured_post_ids',
         label: 'Featured stories',

@@ -1,9 +1,10 @@
 import { photoUrl } from '@/lib/images'
 import { srcSetFromPath } from '@/lib/srcset'
 import { sectionVars } from '@/lib/type-styles'
-import { bool, list, map, str, type SectionSettings } from '@/lib/sections/registry'
+import { list, map, str, type SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
+import { spot } from '@/lib/sections/spots'
 import FixedHero from '@/components/home/FixedHero'
 
 type Focal = { x?: number; y?: number; mx?: number; my?: number }
@@ -61,10 +62,9 @@ export default function HeroSection({
           ctaHref={str(settings, 'cta_href')}
           focal={{ x: focal.x ?? 0.5, y: focal.y ?? 0.5 }}
           focalMobile={{ x: focal.mx ?? 0.5, y: focal.my ?? 0.5 }}
-          showMark={bool(settings, 'show_mark')}
-          markPosition={position}
-          logoUrl={ctx.settings.logo_header_path ? photoUrl(ctx.settings.logo_header_path) : null}
-          siteTitle={ctx.settings.site_title}
+          titleSpot={spot(settings.title_spot)}
+          subtitleSpot={spot(settings.subtitle_spot)}
+          ctaSpot={spot(settings.cta_spot)}
           styleVars={vars}
           editable={ctx.editable}
         />
@@ -72,14 +72,11 @@ export default function HeroSection({
         <HomeHero
           items={items}
           titlePosition={position}
-          showMark={bool(settings, 'show_mark')}
           storyAlign={(str(settings, 'story_align') ?? 'left') as 'left' | 'center'}
           overlayTitle={str(settings, 'title')}
           overlaySubtitle={str(settings, 'subtitle')}
           ctaLabel={str(settings, 'cta_label')}
           ctaHref={str(settings, 'cta_href')}
-          logoUrl={ctx.settings.logo_header_path ? photoUrl(ctx.settings.logo_header_path) : null}
-          siteTitle={ctx.settings.site_title}
           styleVars={vars}
           editable={ctx.editable}
         />

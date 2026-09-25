@@ -255,10 +255,6 @@ function starterSettings(name: string): Record<string, unknown> {
     hero_fixed_title: name,
     hero_fixed_subtitle: 'The line people read first. Click it to change it.',
     hero_title_position: 'center',
-    // Written rather than left to the default, because the column's default
-    // lives in a database this file cannot see — the same assumption that
-    // produced single_row and allow_downloads.
-    hero_show_mark: false,
     show_bird: false,
 
     show_intro: true,

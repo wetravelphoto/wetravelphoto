@@ -206,12 +206,12 @@ export const SECTIONS: Record<string, SectionDef> = {
       mode: 'stories',
       title_position: 'center',
       story_align: 'left',
-      // OFF. It was on, so every new site arrived with its own name stamped
-      // across the opening photograph — under a toggle labelled "Show the
-      // scroll mark", which is not a thing anybody would click to remove it.
-      // A wordmark over a full-bleed hero is a real design; it is not a
-      // default, and a photographer who wants it can say so.
-      show_mark: false,
+      // Where each piece of copy sits on the photograph, out of nine places.
+      // All three start where the old single block sat, so a hero nobody
+      // touches looks exactly as it did. See lib/sections/spots.ts.
+      title_spot: 'bottom-center',
+      subtitle_spot: 'bottom-center',
+      cta_spot: 'bottom-center',
       image_path: null,
       title: null,
       subtitle: null,
@@ -260,24 +260,57 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         placeholder: '/trips',
       },
-      { key: 'title_position', label: 'Title position', kind: 'select', group: 'Layout', live: { attr: 'data-title-pos' }, options: [
-        { value: 'center', label: 'Centre' },
-        { value: 'bottom', label: 'Bottom' },
-      ] },
-      { key: 'story_align', label: 'Story text', kind: 'select', group: 'Layout', options: ALIGN, live: { attr: 'data-story-align' }, when: { key: 'mode', equals: 'stories' } },
+      /*
+       * Still here, and only for the stories hero: HomeHero lays a featured
+       * story's own title over its picture, and this is where that sits. It
+       * has nothing to do with the standing hero's three places below, which
+       * is part of why one control appearing to serve both was so confusing.
+       */
+      { key: 'title_position', label: 'Story title position', kind: 'select', group: 'Layout',
+        live: { attr: 'data-title-pos' },
+        when: { key: 'mode', equals: 'stories' },
+        options: [
+          { value: 'center', label: 'Centre' },
+          { value: 'bottom', label: 'Bottom' },
+        ] },
+      { key: 'story_align', label: 'Story text', kind: 'select', group: 'Layout', options: ALIGN,
+        live: { attr: 'data-story-align' }, when: { key: 'mode', equals: 'stories' } },
+      /*
+       * THREE PLACES, NOT ONE POSITION.
+       *
+       * There was a single "Title position" select here offering Centre and
+       * Bottom. It moved the wordmark and left the copy where it was, because
+       * the title, subtitle and button were one block welded to the bottom of
+       * the picture. Reported, correctly, as "you select center and only the
+       * page title goes to the center, everything stays in the bottom".
+       *
+       * Each now names its own place out of nine. Design rather than content:
+       * a look may move them, and switching look does not carry them across —
+       * unlike the words themselves, which are the photographer's.
+       */
       {
-        // It was labelled "Show the scroll mark", which is not what it does
-        // and sent a photographer looking for a control that does not exist.
-        // What it draws is the wordmark over the photograph — FixedHero and
-        // HomeHero both render `<Logo className="hero-wordmark">` from it.
-        // Somebody seeing their site's name sitting on their hero had no way
-        // to work out which switch it was, and clicking it selects nothing,
-        // because it is not text on the page: it is the site's name.
-        key: 'show_mark',
-        label: 'Your name over the picture',
-        kind: 'toggle',
-        group: 'Layout',
-        help: 'Your site’s name, or your header logo, drawn over the photograph. Change the wording in Settings; upload a logo in the Header section.',
+        key: 'title_spot',
+        label: 'Title',
+        kind: 'custom',
+        editor: 'spot',
+        group: 'Placement',
+        note: 'Where the title sits on the photograph.',
+      },
+      {
+        key: 'subtitle_spot',
+        label: 'Subtitle',
+        kind: 'custom',
+        editor: 'spot',
+        group: 'Placement',
+        note: 'Where the line under the title sits.',
+      },
+      {
+        key: 'cta_spot',
+        label: 'Button',
+        kind: 'custom',
+        editor: 'spot',
+        group: 'Placement',
+        note: 'Where the button sits. Only shown when the button has a label and a link.',
       },
       {
         key: 'featured_post_ids',

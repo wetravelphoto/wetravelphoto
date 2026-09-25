@@ -6,6 +6,7 @@ import { updateDraftSection, updateDraftSectionValues } from '@/app/actions/canv
 import { contentKeys, type Field, type LiveSpec, type SectionDef } from '@/lib/sections/registry'
 import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
+import SpotPicker from '@/components/canvas/editors/SpotPicker'
 import MarkImage from '@/components/canvas/editors/MarkImage'
 import ImageField from '@/components/canvas/ImageField'
 import SectionType from '@/components/canvas/SectionType'
@@ -448,6 +449,15 @@ export default function Inspector({
                     // an old shared group override.
                     saveValues(section.id, { [field.key]: next ?? {} })
                   }}
+                />
+              )
+            }
+
+            if (field.editor === 'spot') {
+              return (
+                <SpotPicker
+                  value={value}
+                  onChange={(next) => saveValues(section.id, { [field.key]: next })}
                 />
               )
             }

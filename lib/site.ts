@@ -66,7 +66,6 @@ export type SiteSettings = {
   hero_focal: Record<string, { x: number; y: number; mx: number; my: number }>
   hero_title_position: string
   hero_story_align: 'left' | 'center'
-  hero_show_mark: boolean
   hero_mode: 'stories' | 'fixed'
   hero_image_path: string | null
   hero_fixed_title: string | null
@@ -236,7 +235,6 @@ const FALLBACK: SiteSettings = {
   hero_focal: {},
   hero_title_position: 'center',
   hero_story_align: 'left',
-  hero_show_mark: false,
   hero_mode: 'stories',
   hero_image_path: null,
   hero_fixed_title: null,

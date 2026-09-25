@@ -35,52 +35,15 @@
   );
 }
 
-/* --- the site wordmark, carried on every image --- */
-
-.hero-mark {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(1100px, 82vw);
-  z-index: 2;
-  display: flex;
-  justify-content: center;
-  /*
-   * The wordmark is an <img> when a logo has been uploaded and a <span> of
-   * type when it has not (components/Logo.tsx). .hero-wordmark below sets
-   * `width: 100%`, which is right for the image — it spans the hero — and
-   * left-aligns the TEXT inside a 1100px box, because justify-content cannot
-   * centre a child that already fills the line. Reported as "centre and it
-   * stays on the left". text-align reaches the text and leaves the image
-   * alone.
-   */
-  text-align: center;
-}
-
 /*
- * THE SELECT SAYS 'bottom'. THIS FILE WAS LISTENING FOR 'lower'.
- *
- * The Title position control offers exactly two values, 'center' and
- * 'bottom' (lib/sections/registry.ts). Every rule here was written for
- * 'center', 'upper' and 'lower', so choosing Bottom matched NOTHING: the mark
- * fell back to the bare .hero-mark below, which sets `left` and no `top`, and
- * landed at the very top of the hero against the header. Reported as "I set
- * it to the bottom and it goes to the header", which is exactly what it did.
- *
- * 'upper' and 'lower' are kept as aliases. No control can produce them today,
- * but a row stored by an older release can, and a dead selector is cheaper
- * than a hero that jumps.
+ * The site wordmark that used to be drawn over every hero lived here. It was
+ * on by default, so a new site arrived with its own name stamped across the
+ * opening photograph; the control for it was labelled "Show the scroll mark",
+ * which is not something anybody would click to remove it; and its two
+ * positions were broken in different directions. Removed rather than mended —
+ * the header already carries the site's name, and a photographer who wants a
+ * mark over a picture has a section for exactly that (Accent mark).
  */
-.hero[data-title-pos='center'] .hero-mark { top: 46%; transform: translate(-50%, -50%); }
-.hero[data-title-pos='upper'] .hero-mark { top: 26%; transform: translate(-50%, -50%); }
-.hero[data-title-pos='bottom'] .hero-mark,
-.hero[data-title-pos='lower'] .hero-mark { top: 66%; transform: translate(-50%, -50%); }
-
-.hero-wordmark {
-  width: 100%;
-  height: auto !important;
-  filter: brightness(0) invert(1) drop-shadow(0 2px 26px rgba(0, 0, 0, 0.4));
-}
 
 /* --- titles along the bottom (tablet and up) --- */
 
@@ -185,12 +148,12 @@
 @media (max-width: 760px) {
   .hero-picker { display: none; }
 
-  .hero-mark { width: 86vw; }
-  .hero[data-title-pos='center'] .hero-mark,
-  .hero[data-title-pos='upper'] .hero-mark,
-  .hero[data-title-pos='bottom'] .hero-mark,
-  .hero[data-title-pos='lower'] .hero-mark { top: 38%; transform: translate(-50%, -50%); }
-
+  /*
+   * On a phone the nine places become three: a column is too narrow for a
+   * title, and a left/right choice made on a desktop reads as a mistake at
+   * 380px. The ROW is kept, because top / middle / bottom is still meaningful
+   * on a tall screen; the column collapses to full width, centred.
+   */
   .hero-bar-mobile {
     position: absolute;
     left: 0;
@@ -323,15 +286,99 @@
 }
 /* ---------------- FIXED HERO ---------------- */
 
-.hero-fixed-copy {
+/*
+ * NINE PLACES ON THE PHOTOGRAPH
+ *
+ * This was one block pinned to the bottom of the hero, centred, holding the
+ * title, subtitle and button together. "Title position" did not move it.
+ *
+ * It is now a three by three grid filling the picture, with a container in
+ * each cell. Each piece of copy is rendered into the container it names
+ * (lib/sections/spots.ts); two that name the same one stack in reading order,
+ * which is why the containers are flex columns rather than the elements being
+ * grid children — grid items sharing a cell overlap, and overlapping is the
+ * thing this replaces.
+ *
+ * The padding sits on the grid, not the cells, so a left-hand title and a
+ * right-hand button are the same distance from their respective edges.
+ */
+.hero-spots {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: clamp(2.5rem, 6vw, 5rem);
+  inset: 0;
   z-index: 3;
-  text-align: center;
-  padding: 0 clamp(1.5rem, 5vw, 4rem);
+  display: flex;
+  flex-direction: column;
+  padding: clamp(4.5rem, 9vw, 6rem) clamp(1.5rem, 5vw, 4rem) clamp(2.5rem, 6vw, 5rem);
   color: #faf9f6;
+  /* The picture stays clickable between the words. */
+  pointer-events: none;
+}
+
+/*
+ * A band per row, three places across it. Bands rather than one nine-cell
+ * grid so a phone can collapse the columns — the three places in a band
+ * stacking down it — without nine children spilling into nine rows.
+ */
+.hero-row {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.hero-spot {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.6rem, 1.4vw, 1rem);
+  min-width: 0;
+}
+
+.hero-spot > * { pointer-events: auto; }
+
+.hero-row[data-row='top'] .hero-spot { justify-content: flex-start; }
+.hero-row[data-row='middle'] .hero-spot { justify-content: center; }
+.hero-row[data-row='bottom'] .hero-spot { justify-content: flex-end; }
+
+/*
+ * The column is DECLARED, not inferred from source order.
+ *
+ * These three lines are load-bearing, and the first version did without them.
+ * There was also a rule hiding empty places — `:empty { display: none }` —
+ * which seemed free and was not: a display:none child leaves the grid
+ * entirely, so the remaining places auto-flowed into columns one, two and
+ * three whatever column they actually belonged to, and every element lined up
+ * on the left. It measured as 20% across for a bottom-CENTRE title.
+ *
+ * Empty places now stay in the layout, costing nothing: the grid has
+ * pointer-events: none and only real content turns it back on.
+ */
+.hero-spot[data-col='left'] { grid-column: 1; align-items: flex-start; text-align: left; }
+.hero-spot[data-col='center'] { grid-column: 2; align-items: center; text-align: center; }
+.hero-spot[data-col='right'] { grid-column: 3; align-items: flex-end; text-align: right; }
+
+/*
+ * The phone, and why this block is HERE rather than in the media query higher
+ * up the file.
+ *
+ * These override the three rules immediately above at the same specificity,
+ * and CSS breaks that tie by source order. Written into the earlier media
+ * query they lost silently: the columns never collapsed, and a bottom-right
+ * button measured 83% across a 420px screen instead of centred.
+ *
+ * A third of 420px is not a width a title can live in, and a left/right
+ * choice made on a desktop reads as a mistake at that size. So the ROW is
+ * kept — top / middle / bottom still means something on a tall screen — and
+ * the three places in a band collapse into one column and stack.
+ */
+@media (max-width: 760px) {
+  .hero-spots { padding: clamp(4rem, 16vw, 5rem) 1.25rem clamp(2rem, 8vw, 3rem); }
+
+  .hero-row { grid-template-columns: 1fr; }
+
+  .hero-spot[data-col='left'],
+  .hero-spot[data-col='center'],
+  .hero-spot[data-col='right'] { grid-column: 1; align-items: center; text-align: center; }
 }
 
 .hero-fixed-title {
@@ -350,7 +397,13 @@
   font-family: var(--sec-body-font, var(--font-body));
   font-size: calc(clamp(0.88rem, 1.4vw, 1.05rem) * var(--sec-body-scale, 1));
   line-height: 1.7;
-  margin: 0.7rem auto 0;
+  /*
+   * `auto` side margins centred this inside its place even when the place was
+   * a left-hand one, so a left-aligned subtitle sat indented under its title.
+   * The gap between stacked items is the grid's now, and the alignment is the
+   * place's, so this only needs to stop fighting them.
+   */
+  margin: 0;
   max-width: 48ch;
   opacity: 0.85;
 }
@@ -370,10 +423,8 @@
 
 .hero-fixed-cta:hover { background: #faf9f6; color: #14100e; }
 
-/* When the mark and copy would collide, lift the mark.
-   'bottom' is what the control actually stores; see the note by .hero-mark. */
-.hero[data-title-pos='bottom'] .hero-fixed-copy,
-.hero[data-title-pos='lower'] .hero-fixed-copy { bottom: clamp(1.5rem, 3vw, 2.5rem); }
+/* The mark and the copy can no longer collide: there is no mark, and each
+   piece of copy has a place of its own. */
 
 /* ---------------- ADMIN: hero mode chooser ---------------- */
 

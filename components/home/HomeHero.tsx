@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import Logo from '@/components/Logo'
 
 export type HeroItem = {
   slug: string
@@ -22,28 +21,22 @@ export type HeroItem = {
 export default function HomeHero({
   items,
   titlePosition = 'center',
-  showMark = true,
   storyAlign = 'left',
   overlayTitle,
   overlaySubtitle,
   ctaLabel,
   ctaHref,
-  logoUrl,
-  siteTitle,
   styleVars,
   editable = false,
 }: {
   items: HeroItem[]
   titlePosition?: string
-  showMark?: boolean
   storyAlign?: string
   overlayTitle?: string | null
   overlaySubtitle?: string | null
   ctaLabel?: string | null
   ctaHref?: string | null
   /** An uploaded logo, or null — in which case the site's name is set as type. */
-  logoUrl?: string | null
-  siteTitle?: string | null
   /**
    * True only inside the editor's preview: tags the overlay title, subtitle and
    * button so each can be hovered and selected on its own. The story titles
@@ -141,11 +134,6 @@ export default function HomeHero({
       <div className="hero-scrim" />
 
       {/* The site's own mark carries the image; the story is named below */}
-      {showMark && (
-        <div className="hero-mark">
-          <Logo src={logoUrl} text={siteTitle} alt={siteTitle ?? ''} tone="light" height={0} className="hero-wordmark" />
-        </div>
-      )}
 
       {/* Copy that belongs to the site rather than to any one story */}
       {(overlayTitle || overlaySubtitle || (ctaLabel && ctaHref) || editable) && (

@@ -2,6 +2,7 @@ import 'server-only'
 import { cache } from 'react'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { markSite } from '@/lib/observability-server'
 
 /**
  * WHICH SITE A REQUEST IS FOR
@@ -124,19 +125,27 @@ export const currentSite = cache(async (): Promise<Site | null> => {
 
   if (match?.tenant_id) {
     const tenantId = match.tenant_id as string
-    return {
+    const site = {
       tenantId,
       host,
       primaryHost: (await primaryHostFor(tenantId)) ?? host,
       assumed: false,
     }
+    // Every error reported for the rest of this request now says which site
+    // it came from. Cheap, and the difference between a useful report and
+    // "something, somewhere, broke".
+    markSite(site)
+    return site
   }
 
   // Not a claimed address. A laptop, a preview build or the address this
   // deployment was configured for gets the oldest site so the app is usable;
   // anything else gets nothing, because serving a stranger someone else's
   // website is worse than serving them an explanation.
-  if (!usesFallbackTenant(host)) return null
+  if (!usesFallbackTenant(host)) {
+    markSite(null)
+    return null
+  }
 
   const { data: oldest } = await supabase
     .from('tenants')
@@ -148,12 +157,14 @@ export const currentSite = cache(async (): Promise<Site | null> => {
   if (!oldest?.id) return null
 
   const tenantId = oldest.id as string
-  return {
+  const site = {
     tenantId,
     host,
     primaryHost: (await primaryHostFor(tenantId)) ?? host,
     assumed: true,
   }
+  markSite(site)
+  return site
 })
 
 /** The address a site calls home, or null if it has none yet. */

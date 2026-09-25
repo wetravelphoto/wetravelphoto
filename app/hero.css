@@ -358,6 +358,34 @@
 .hero-spot[data-col='right'] { grid-column: 3; align-items: flex-end; text-align: right; }
 
 /*
+ * DRAGGING, AND ONLY IN THE EDITOR.
+ *
+ * Every selector here is under [data-spots], which the renderer writes only
+ * when the page is being edited. A visitor's hero carries none of it.
+ */
+.hero-spots[data-spots] [data-spot-drag] { cursor: grab; }
+.hero-spots[data-spots] [data-spot-drag]:active { cursor: grabbing; }
+
+/* The places only show themselves while something is being carried. */
+.hero-spots[data-dragging] .hero-spot {
+  outline: 1px dashed rgba(250, 249, 246, 0.3);
+  outline-offset: -3px;
+  border-radius: 4px;
+  transition: background 0.12s ease, outline-color 0.12s ease;
+}
+
+.hero-spots[data-dragging] .hero-spot[data-over] {
+  outline: 1px solid rgba(250, 249, 246, 0.9);
+  background: rgba(250, 249, 246, 0.12);
+}
+
+/* What is being carried stays visible, but stops pretending to be in place. */
+.hero-spots[data-dragging] .is-spot-dragging { opacity: 0.45; }
+
+/* No text selection while dragging a title across the picture. */
+.hero-spots[data-dragging] { user-select: none; }
+
+/*
  * The phone, and why this block is HERE rather than in the media query higher
  * up the file.
  *

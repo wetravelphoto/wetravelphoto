@@ -60,6 +60,12 @@ type Outbound =
   /** "+ Add a section below" was clicked under the section with this id. */
   | { source: 'wtp-preview'; type: 'add-after'; id: string }
   /**
+   * A piece of hero copy was dragged to one of the nine places. The preview
+   * has already moved the node — see the drag below for why that is allowed —
+   * so this is the editor's cue to save it, not to redraw anything.
+   */
+  | { source: 'wtp-preview'; type: 'spot'; id: string; field: string; value: string }
+  /**
    * A shortcut pressed while the preview had focus. The preview only names
    * the key; the editor decides what it means. See lib/canvas-keys.ts.
    */
@@ -143,6 +149,16 @@ export default function PreviewBridge({ page }: { page: string }) {
     }
 
     const onClick = (event: MouseEvent) => {
+      // The click a completed drag leaves behind. Letting it through would
+      // select the section at the moment of the drop, which reads as the
+      // editor arguing with you.
+      if (swallowClick) {
+        swallowClick = false
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+
       const target = event.target as HTMLElement | null
       const node = target?.closest<HTMLElement>('.pv-section')
 
@@ -199,6 +215,143 @@ export default function PreviewBridge({ page }: { page: string }) {
         sectionType: node.getAttribute('data-section-type') ?? '',
         field,
       })
+    }
+
+
+    /**
+     * DRAGGING A TITLE TO A PLACE
+     * ═══════════════════════════
+     *
+     * The title, subtitle and button each sit in one of nine containers over
+     * the photograph (lib/sections/spots.ts). Dragging one picks it up and
+     * drops it into another.
+     *
+     * **Why moving the node is allowed here.** The rule at the top of this
+     * file is that the preview may only paint what the server would render.
+     * Appending the element to another place's container is exactly what the
+     * next render does — same element, same contents, same parent — so it is
+     * the identity, not a second opinion. Nothing about the element changes;
+     * only which container holds it.
+     *
+     * **Geometry, not hit-testing.** The grid is `pointer-events: none` so the
+     * photograph stays clickable between the words, which means
+     * elementsFromPoint does not return the places. Measuring their rectangles
+     * avoids fighting that, and avoids the dragged element shadowing its own
+     * drop target.
+     *
+     * **A drag is not a click.** Five pixels of movement separates them, and a
+     * real drag swallows the click that follows so the section does not get
+     * selected out from under the drop.
+     */
+    const DRAG_SLOP = 5
+    let drag: {
+      el: HTMLElement
+      field: string
+      section: string
+      from: HTMLElement
+      startX: number
+      startY: number
+      live: boolean
+    } | null = null
+    let swallowClick = false
+
+    const places = (el: HTMLElement): HTMLElement[] => {
+      const grid = el.closest('.hero-spots')
+      return grid ? Array.from(grid.querySelectorAll<HTMLElement>('.hero-spot')) : []
+    }
+
+    const placeAt = (el: HTMLElement, x: number, y: number): HTMLElement | null => {
+      for (const place of places(el)) {
+        const r = place.getBoundingClientRect()
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return place
+      }
+      return null
+    }
+
+    const endDrag = () => {
+      if (!drag) return
+      const grid = drag.el.closest('.hero-spots')
+      grid?.removeAttribute('data-dragging')
+      places(drag.el).forEach((p) => p.removeAttribute('data-over'))
+      drag.el.classList.remove('is-spot-dragging')
+      drag = null
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      /*
+       * Disarm first, always.
+       *
+       * The flag is set on a drop so the click that follows does not also
+       * select the section. But a drag that starts on the title and ends over
+       * an empty place is a press and a release on two different elements, and
+       * the browser fires no click at all — so the flag would still be armed
+       * when the photographer next clicked something, and that click would
+       * vanish. Clearing it here means a stale flag can never outlive the
+       * gesture that set it.
+       */
+      swallowClick = false
+
+      if (event.button !== 0) return
+      const target = event.target as HTMLElement | null
+      const handle = target?.closest<HTMLElement>('[data-spot-drag]')
+      if (!handle) return
+      const section = handle.closest<HTMLElement>('.pv-section')
+      const field = handle.getAttribute('data-spot-drag')
+      const from = handle.closest<HTMLElement>('.hero-spot')
+      const id = section?.getAttribute('data-section-id')
+      if (!field || !from || !id || !SAFE_WORD.test(field)) return
+
+      drag = { el: handle, field, section: id, from, startX: event.clientX, startY: event.clientY, live: false }
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!drag) return
+
+      if (!drag.live) {
+        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < DRAG_SLOP) return
+        drag.live = true
+        drag.el.closest('.hero-spots')?.setAttribute('data-dragging', '')
+        drag.el.classList.add('is-spot-dragging')
+      }
+
+      // A drag must not also select text under the pointer.
+      event.preventDefault()
+
+      const over = placeAt(drag.el, event.clientX, event.clientY)
+      for (const place of places(drag.el)) {
+        if (place === over) place.setAttribute('data-over', '')
+        else place.removeAttribute('data-over')
+      }
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (!drag) return
+      if (!drag.live) {
+        drag = null
+        return
+      }
+
+      const { el, field, section, from } = drag
+      const to = placeAt(el, event.clientX, event.clientY)
+      const spot = to?.getAttribute('data-spot')
+      endDrag()
+      swallowClick = true
+
+      if (!to || !spot || to === from) return
+
+      // Moved here now, saved a moment later. The order matters: the editor's
+      // save triggers a re-render, and a re-render that arrives before the
+      // move would put the element back where it started for a frame.
+      to.appendChild(el)
+      send({ source: 'wtp-preview', type: 'spot', id: section, field, value: spot })
+    }
+
+    // A drag ends when the pointer leaves the window too, or nothing would
+    // ever clear the highlight.
+    const onPointerCancel = () => {
+      const wasLive = drag?.live === true
+      endDrag()
+      if (wasLive) swallowClick = true
     }
 
     const onMessage = (event: MessageEvent) => {
@@ -373,6 +526,10 @@ export default function PreviewBridge({ page }: { page: string }) {
 
     // Capture phase, so a section that stops propagation on its own clicks
     // (the lightbox, the carousel arrows) cannot swallow the selection.
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('pointermove', onPointerMove, true)
+    document.addEventListener('pointerup', onPointerUp, true)
+    document.addEventListener('pointercancel', onPointerCancel, true)
     document.addEventListener('click', onClick, true)
     document.addEventListener('keydown', onKey)
     window.addEventListener('message', onMessage)
@@ -407,6 +564,10 @@ export default function PreviewBridge({ page }: { page: string }) {
     send({ source: 'wtp-preview', type: 'ready', page })
 
     return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('pointermove', onPointerMove, true)
+      document.removeEventListener('pointerup', onPointerUp, true)
+      document.removeEventListener('pointercancel', onPointerCancel, true)
       document.removeEventListener('click', onClick, true)
       document.removeEventListener('keydown', onKey)
       window.removeEventListener('message', onMessage)

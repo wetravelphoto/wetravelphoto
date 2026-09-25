@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import type { CustomPage, SitePage } from '@/lib/sections/pages'
+import { PLACEABLE, SPOTS } from '@/lib/sections/spots'
 import type { MenuItem } from '@/lib/menu'
 import {
   addDraftSection,
@@ -19,6 +20,7 @@ import {
   setDraftVisible,
   clearDraftSectionTypes,
   updateDraftStyles,
+  updateDraftSectionValues,
   undoDraft,
   redoDraft,
 } from '@/app/actions/canvas'
@@ -432,6 +434,7 @@ export default function Canvas({
         type?: string
         id?: string
         field?: string
+        value?: string
         name?: Shortcut
       } | null
       if (!data || data.source !== 'wtp-preview') return
@@ -451,6 +454,26 @@ export default function Canvas({
         setPicking({ after: data.id })
       }
 
+      /**
+       * A piece of hero copy dragged to one of the nine places.
+       *
+       * The preview has already moved it, so this only has to make it true.
+       * Checked here rather than trusted: the message crosses a window
+       * boundary, and `updateDraftSectionValues` writes whatever it is given
+       * into the section's settings. The field must be one of the three that
+       * can be dragged and the value one of the nine places — anything else is
+       * dropped, and the next refresh puts the element back.
+       */
+      if (data.type === 'spot' && data.id && data.field && data.value) {
+        const field = data.field
+        const value = data.value
+        const known = (PLACEABLE as readonly { key: string }[]).some((p) => p.key === field)
+        if (known && (SPOTS as string[]).includes(value)) {
+          const id = data.id
+          run(() => updateDraftSectionValues(page, id, { [field]: value }))
+        }
+      }
+
       // A shortcut pressed while the preview had focus.
       if (data.type === 'shortcut' && data.name) {
         shortcutRef.current(data.name)
@@ -459,7 +482,7 @@ export default function Canvas({
 
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [])
+  }, [page, run])
 
   /**
    * Style, painted onto the page on the spot.

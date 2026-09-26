@@ -31,7 +31,17 @@
  * exactly the container the server will render it in.
  */
 
-export const ROWS = ['top', 'middle', 'bottom'] as const
+/*
+ * Five bands rather than three. The vertical is where the choice actually
+ * matters on a hero — a title a third of the way down and one just above the
+ * fold are different designs — while left / centre / right is how a page is
+ * read and gains nothing from being cut finer. Fifths across a wide picture
+ * are also hard to tell apart in a picker and hard to hit in a drag.
+ *
+ * Widening this is the only change needed: the renderer, the picker and the
+ * drag all count off these two lists.
+ */
+export const ROWS = ['top', 'upper', 'middle', 'lower', 'bottom'] as const
 export const COLUMNS = ['left', 'center', 'right'] as const
 
 export type Row = (typeof ROWS)[number]
@@ -72,7 +82,7 @@ export function columnOf(s: Spot): Column {
 export function describeSpot(s: Spot): string {
   const r = rowOf(s)
   const c = columnOf(s)
-  const row = r === 'middle' ? 'Middle' : r === 'top' ? 'Top' : 'Bottom'
+  const row = { top: 'Top', upper: 'Upper', middle: 'Middle', lower: 'Lower', bottom: 'Bottom' }[r]
   const col = c === 'center' ? 'centre' : c
   return `${row} ${col}`
 }

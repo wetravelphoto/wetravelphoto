@@ -274,6 +274,7 @@ export default function PreviewBridge({ page }: { page: string }) {
       grid?.removeAttribute('data-dragging')
       places(drag.el).forEach((p) => p.removeAttribute('data-over'))
       drag.el.classList.remove('is-spot-dragging')
+      drag.el.style.transform = ''
       drag = null
     }
 
@@ -301,6 +302,17 @@ export default function PreviewBridge({ page }: { page: string }) {
       const id = section?.getAttribute('data-section-id')
       if (!field || !from || !id || !SAFE_WORD.test(field)) return
 
+      /*
+       * Stop the browser doing its own thing with the press.
+       *
+       * Without this, pressing a title began a text selection that smeared
+       * across the picture as you moved, and pressing the button — which is a
+       * real <a> — began a native link drag. Neither is recoverable once
+       * started. These elements are not typed into (the panel owns the text,
+       * and the patch writes it back in), so there is no caret to protect.
+       */
+      event.preventDefault()
+
       drag = { el: handle, field, section: id, from, startX: event.clientX, startY: event.clientY, live: false }
     }
 
@@ -313,6 +325,17 @@ export default function PreviewBridge({ page }: { page: string }) {
         drag.el.closest('.hero-spots')?.setAttribute('data-dragging', '')
         drag.el.classList.add('is-spot-dragging')
       }
+
+      /*
+       * Carry it with the pointer.
+       *
+       * `transform` rather than anything that moves the element in the
+       * layout: the places are found by measuring their rectangles, and an
+       * element that reflowed as it was dragged would move the very targets
+       * it is being dropped into. A transform paints somewhere else and
+       * changes no geometry at all.
+       */
+      drag.el.style.transform = `translate(${event.clientX - drag.startX}px, ${event.clientY - drag.startY}px)`
 
       // A drag must not also select text under the pointer.
       event.preventDefault()
@@ -375,6 +398,23 @@ export default function PreviewBridge({ page }: { page: string }) {
         // renderer splits into paragraphs — this is not a case a patch can
         // express, and the refresh handles it instead.
         if (node && node.childElementCount === 0) node.textContent = data.value ?? ''
+        return
+      }
+
+      /**
+       * A placement chosen in the panel. Moving the element is the identity —
+       * the next render puts it in this very container — so doing it now is
+       * the same narrow exception the text patch relies on, and it is what
+       * makes the picker feel connected to the page instead of laggy.
+       */
+      if (data.type === 'spot' && data.id && data.field && data.value) {
+        const el = document.querySelector<HTMLElement>(
+          `.pv-section[data-section-id="${CSS.escape(data.id)}"] [data-spot-drag="${CSS.escape(data.field)}"]`
+        )
+        const to = el
+          ?.closest('.hero-spots')
+          ?.querySelector<HTMLElement>(`.hero-spot[data-spot="${CSS.escape(data.value)}"]`)
+        if (el && to && el.parentElement !== to) to.appendChild(el)
         return
       }
 

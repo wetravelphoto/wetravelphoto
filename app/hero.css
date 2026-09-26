@@ -336,8 +336,16 @@
 
 .hero-spot > * { pointer-events: auto; }
 
+/*
+ * Where a place sits inside its band. The outer two push their contents to
+ * the very edge of the picture; the three in between centre within their
+ * band, which is what makes "upper" and "lower" read as distinct from
+ * "middle" rather than as slightly-off-centre.
+ */
 .hero-row[data-row='top'] .hero-spot { justify-content: flex-start; }
+.hero-row[data-row='upper'] .hero-spot { justify-content: center; }
 .hero-row[data-row='middle'] .hero-spot { justify-content: center; }
+.hero-row[data-row='lower'] .hero-spot { justify-content: center; }
 .hero-row[data-row='bottom'] .hero-spot { justify-content: flex-end; }
 
 /*
@@ -363,7 +371,12 @@
  * Every selector here is under [data-spots], which the renderer writes only
  * when the page is being edited. A visitor's hero carries none of it.
  */
-.hero-spots[data-spots] [data-spot-drag] { cursor: grab; }
+.hero-spots[data-spots] [data-spot-drag] {
+  cursor: grab;
+  /* A press is a grab, never the start of a text selection. */
+  user-select: none;
+  -webkit-user-select: none;
+}
 .hero-spots[data-spots] [data-spot-drag]:active { cursor: grabbing; }
 
 /* The places only show themselves while something is being carried. */
@@ -379,8 +392,19 @@
   background: rgba(250, 249, 246, 0.12);
 }
 
-/* What is being carried stays visible, but stops pretending to be in place. */
-.hero-spots[data-dragging] .is-spot-dragging { opacity: 0.45; }
+/*
+ * What is being carried follows the pointer (the transform is written by the
+ * bridge) and paints above everything else, or it would slide behind the
+ * neighbouring places on its way across the picture. Slightly transparent, so
+ * the place it is heading for stays readable underneath it.
+ */
+.hero-spots[data-dragging] .is-spot-dragging {
+  position: relative;
+  z-index: 5;
+  opacity: 0.85;
+  cursor: grabbing;
+  will-change: transform;
+}
 
 /* No text selection while dragging a title across the picture. */
 .hero-spots[data-dragging] { user-select: none; }

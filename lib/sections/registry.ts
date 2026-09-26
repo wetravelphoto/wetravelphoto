@@ -242,8 +242,24 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         when: { key: 'mode', equals: 'fixed' },
       },
+      /*
+       * EACH PLACE SITS UNDER ITS OWN WORDS.
+       *
+       * There used to be one "Title position" select that moved the wordmark
+       * and left the copy welded to the bottom of the picture. These replaced
+       * it, and at first lived together in a Placement group — three grids
+       * with nothing saying which was which, three groups away from the text
+       * they move. Under the box is where a control for that box belongs.
+       *
+       * Design rather than content: a look may place them, and switching look
+       * does not carry a placement across, unlike the words themselves.
+       */
       { key: 'title', label: 'Title', kind: 'text', content: true },
+      { key: 'title_spot', label: 'Title position', kind: 'custom', editor: 'spot',
+        note: 'Where the title sits on the photograph.' },
       { key: 'subtitle', label: 'Sub-heading', kind: 'text', content: true },
+      { key: 'subtitle_spot', label: 'Sub-heading position', kind: 'custom', editor: 'spot',
+        note: 'Where the line under the title sits.' },
       {
         key: 'cta_label',
         label: 'Button',
@@ -260,6 +276,8 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         placeholder: '/trips',
       },
+      { key: 'cta_spot', label: 'Button position', kind: 'custom', editor: 'spot',
+        note: 'Where the button sits. Shown only once the button has a label and a link.' },
       /*
        * Still here, and only for the stories hero: HomeHero lays a featured
        * story's own title over its picture, and this is where that sits. It
@@ -275,43 +293,6 @@ export const SECTIONS: Record<string, SectionDef> = {
         ] },
       { key: 'story_align', label: 'Story text', kind: 'select', group: 'Layout', options: ALIGN,
         live: { attr: 'data-story-align' }, when: { key: 'mode', equals: 'stories' } },
-      /*
-       * THREE PLACES, NOT ONE POSITION.
-       *
-       * There was a single "Title position" select here offering Centre and
-       * Bottom. It moved the wordmark and left the copy where it was, because
-       * the title, subtitle and button were one block welded to the bottom of
-       * the picture. Reported, correctly, as "you select center and only the
-       * page title goes to the center, everything stays in the bottom".
-       *
-       * Each now names its own place out of nine. Design rather than content:
-       * a look may move them, and switching look does not carry them across —
-       * unlike the words themselves, which are the photographer's.
-       */
-      {
-        key: 'title_spot',
-        label: 'Title',
-        kind: 'custom',
-        editor: 'spot',
-        group: 'Placement',
-        note: 'Where the title sits on the photograph.',
-      },
-      {
-        key: 'subtitle_spot',
-        label: 'Subtitle',
-        kind: 'custom',
-        editor: 'spot',
-        group: 'Placement',
-        note: 'Where the line under the title sits.',
-      },
-      {
-        key: 'cta_spot',
-        label: 'Button',
-        kind: 'custom',
-        editor: 'spot',
-        group: 'Placement',
-        note: 'Where the button sits. Only shown when the button has a label and a link.',
-      },
       {
         key: 'featured_post_ids',
         label: 'Featured stories',

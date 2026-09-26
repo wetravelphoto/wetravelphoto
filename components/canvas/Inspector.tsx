@@ -58,6 +58,7 @@ export default function Inspector({
   styleBase,
   onPatch,
   onLive,
+  onMoveSpot,
   onTypeVars,
   onDevice,
   onShowStory,
@@ -87,6 +88,12 @@ export default function Inspector({
   onPatch: (field: string, value: string) => void
   /** A design value as it moves — a slider, a layout menu. See LiveSpec. */
   onLive: (field: string, value: string, spec: LiveSpec) => void
+  /**
+   * A hero placement chosen in the panel. Moves the element in the preview at
+   * once; the save follows on the usual debounce. Without it the picker felt
+   * broken — click, nothing, then a beat later the page jumps.
+   */
+  onMoveSpot: (field: string, value: string) => void
   /** A section's typography variables, for the page to repaint at once. */
   onTypeVars: (sectionId: string, vars: Record<string, string | null>, fonts: string[]) => void
   /** Put the preview into the width whose crop is being edited. */
@@ -457,7 +464,12 @@ export default function Inspector({
               return (
                 <SpotPicker
                   value={value}
-                  onChange={(next) => saveValues(section.id, { [field.key]: next })}
+                  label={field.label}
+                  onChange={(next) => {
+                    // The preview first, the database second.
+                    onMoveSpot(field.key, next)
+                    saveValues(section.id, { [field.key]: next })
+                  }}
                 />
               )
             }

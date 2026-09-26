@@ -831,9 +831,6 @@ export default function Canvas({
               onLive={(field, value, spec) => {
                 if (selected) tell({ type: 'live', id: selected, field, value, ...spec })
               }}
-              onMoveSpot={(field, value) => {
-                if (selected) tell({ type: 'spot', id: selected, field, value })
-              }}
               onSettled={(id) => tell({ type: 'settle', id })}
               onSaved={() => {
                 tell({ type: 'refresh' })

@@ -226,12 +226,21 @@ export default function PreviewBridge({ page }: { page: string }) {
      * the photograph (lib/sections/spots.ts). Dragging one picks it up and
      * drops it into another.
      *
-     * **Why moving the node is allowed here.** The rule at the top of this
-     * file is that the preview may only paint what the server would render.
-     * Appending the element to another place's container is exactly what the
-     * next render does — same element, same contents, same parent — so it is
-     * the identity, not a second opinion. Nothing about the element changes;
-     * only which container holds it.
+     * **What this must NOT do: move the node.** The first version called
+     * `to.appendChild(el)` on the drop, reasoning that the next render puts
+     * the element in that very container, so the move was the identity.
+     * Visually true, mechanically false. Those elements are rendered by
+     * React, and React holds a tree of where it believes each one lives.
+     * Re-parenting one behind its back means the next reconciliation tries to
+     * remove a child from a parent that no longer has it, throws, and takes
+     * the whole preview down to the error page — which is exactly the React
+     * #441 this project has chased twice before.
+     *
+     * So nothing here is re-parented. The element is carried by a
+     * `transform`, which is paint and not structure, and it STAYS carried
+     * after the drop — parked over the place it was dropped on — until the
+     * server's render arrives and puts the real element there. Then the
+     * transform is dropped. No snap back, and React's tree is never touched.
      *
      * **Geometry, not hit-testing.** The grid is `pointer-events: none` so the
      * photograph stays clickable between the words, which means
@@ -255,6 +264,14 @@ export default function PreviewBridge({ page }: { page: string }) {
     } | null = null
     let swallowClick = false
 
+    /**
+     * Elements sitting under a transform, waiting for the server to catch up.
+     * Cleared by the observer below the moment the real element appears in the
+     * place it was dropped on, which is the only signal that the round trip
+     * has landed.
+     */
+    const parked = new Map<HTMLElement, string>()
+
     const places = (el: HTMLElement): HTMLElement[] => {
       const grid = el.closest('.hero-spots')
       return grid ? Array.from(grid.querySelectorAll<HTMLElement>('.hero-spot')) : []
@@ -274,7 +291,7 @@ export default function PreviewBridge({ page }: { page: string }) {
       grid?.removeAttribute('data-dragging')
       places(drag.el).forEach((p) => p.removeAttribute('data-over'))
       drag.el.classList.remove('is-spot-dragging')
-      drag.el.style.transform = ''
+      if (!parked.has(drag.el)) drag.el.style.transform = ''
       drag = null
     }
 
@@ -357,15 +374,29 @@ export default function PreviewBridge({ page }: { page: string }) {
       const { el, field, section, from } = drag
       const to = placeAt(el, event.clientX, event.clientY)
       const spot = to?.getAttribute('data-spot')
+
+      /*
+       * Compared against where it is GOING, not where it still sits.
+       *
+       * A parked element has not been re-parented, so its DOM parent is the
+       * place it came from while it is drawn over the place it was dropped
+       * on. Dragging it again before the render lands and comparing parents
+       * would call a drop back onto its own current position a move, and save
+       * it again for nothing.
+       */
+      const already = parked.get(el) ?? from.getAttribute('data-spot')
+      const landed = Boolean(spot && spot !== already)
+
+      // Parked BEFORE the drag is torn down, because endDrag clears the
+      // transform of anything that is not parked — and clearing it here is
+      // precisely the snap back this is meant to avoid.
+      if (landed && spot) parked.set(el, spot)
+
       endDrag()
       swallowClick = true
 
-      if (!to || !spot || to === from) return
+      if (!landed || !spot) return
 
-      // Moved here now, saved a moment later. The order matters: the editor's
-      // save triggers a re-render, and a re-render that arrives before the
-      // move would put the element back where it started for a frame.
-      to.appendChild(el)
       send({ source: 'wtp-preview', type: 'spot', id: section, field, value: spot })
     }
 
@@ -401,22 +432,13 @@ export default function PreviewBridge({ page }: { page: string }) {
         return
       }
 
-      /**
-       * A placement chosen in the panel. Moving the element is the identity —
-       * the next render puts it in this very container — so doing it now is
-       * the same narrow exception the text patch relies on, and it is what
-       * makes the picker feel connected to the page instead of laggy.
+      /*
+       * A placement chosen in the panel used to be applied here by moving the
+       * element. It is not any more, for the reason set out by the drag above:
+       * these nodes belong to React. The panel sends its save without waiting
+       * for a debounce instead, and the element arrives with the render.
        */
-      if (data.type === 'spot' && data.id && data.field && data.value) {
-        const el = document.querySelector<HTMLElement>(
-          `.pv-section[data-section-id="${CSS.escape(data.id)}"] [data-spot-drag="${CSS.escape(data.field)}"]`
-        )
-        const to = el
-          ?.closest('.hero-spots')
-          ?.querySelector<HTMLElement>(`.hero-spot[data-spot="${CSS.escape(data.value)}"]`)
-        if (el && to && el.parentElement !== to) to.appendChild(el)
-        return
-      }
+
 
       if (data.type === 'live' && data.id && data.field && SAFE_WORD.test(data.field)) {
         const id = data.id
@@ -586,11 +608,28 @@ export default function PreviewBridge({ page }: { page: string }) {
     // is exactly the case that snaps a slider back.
     let queued = 0
     const observer = new MutationObserver(() => {
-      if ((!selected.current && pending.size === 0) || queued) return
+      if ((!selected.current && pending.size === 0 && parked.size === 0) || queued) return
       queued = requestAnimationFrame(() => {
         queued = 0
         if (selected.current) paint(selected.current)
         pending.forEach((entry) => entry.apply())
+
+        /*
+         * Release anything parked whose place has caught up.
+         *
+         * A dropped element keeps its transform so it does not jump back to
+         * where it came from while the save is in flight. The render that
+         * lands it in the right container is the signal to let go — and if
+         * React replaced the node outright, it is no longer in the document
+         * and there is nothing to let go of.
+         */
+        parked.forEach((want, el) => {
+          const now = el.closest('.hero-spot')?.getAttribute('data-spot')
+          if (!el.isConnected || now === want) {
+            el.style.transform = ''
+            parked.delete(el)
+          }
+        })
       })
     })
 

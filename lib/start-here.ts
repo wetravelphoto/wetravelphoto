@@ -149,10 +149,11 @@ export async function startHere(tenantId: string): Promise<StartHere> {
       title: 'Make it look like yours',
       detail:
         'Your site came dressed in Field Notes, with starter words on it. Change the typeface, the colours and the writing until it looks like you.',
-      // Straight into the editor rather than the design page: the design page
-      // is a list of looks, and with one look it is a list of one. The editor
-      // is where the typeface, the colours and the words actually change.
-      href: '/edit/home?mode=style',
+      // The editor, opened on Content rather than Style. Style mode is the
+      // typeface-and-colour view; landing there first asks somebody to pick a
+      // palette before they have written a word. The words come first, and
+      // Style is one click away once they are there.
+      href: '/edit/home',
       cta: 'Open the editor',
       done: madeItTheirs,
     },

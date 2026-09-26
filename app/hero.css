@@ -220,7 +220,8 @@
     display: inline-block;
     margin-top: 0.75rem;
     font-family: var(--font-display), sans-serif;
-    text-transform: uppercase;
+    border-radius: var(--button-radius, 0px);
+    text-transform: var(--button-case, uppercase);
     letter-spacing: 0.16em;
     font-size: 0.66rem;
     border: 1px solid rgba(250, 249, 246, 0.6);
@@ -334,7 +335,36 @@
   min-width: 0;
 }
 
-.hero-spot > * { pointer-events: auto; }
+/*
+ * COPY IS NOT CONFINED TO ITS COLUMN.
+ *
+ * A place is one third of the hero wide. A flex item in it sizes to
+ * fit-content, which means the container's width, which means a short title
+ * broke onto three lines with two thirds of the picture standing empty — a
+ * regression the moment the single full-width copy block became fifteen
+ * places.
+ *
+ * `width: max-content` lets a line stay a line, and the cap keeps it off the
+ * edges of the picture. The overflow is symmetrical about the place's own
+ * alignment: a centred title grows evenly either side of the hero's middle, a
+ * left one grows rightwards, a right one leftwards. Nothing clips it — the
+ * grid sets no overflow.
+ */
+.hero-spot > * {
+  pointer-events: auto;
+  width: max-content;
+  max-width: min(86vw, 58ch);
+}
+
+/*
+ * The sub-heading keeps a reading measure — a line that runs the whole width
+ * of a photograph is hard to come back from at the end of it — but 48ch was
+ * set when this was a narrow centred block, and it broke an ordinary hero
+ * sentence of 85 characters onto two lines with room to spare. 68ch is the
+ * usual upper bound for comfortable reading and, measured, is exactly where
+ * that sentence fits on one.
+ */
+.hero-spot > .hero-fixed-sub { max-width: min(86vw, 68ch); }
 
 /*
  * Where a place sits inside its band. The outer two push their contents to
@@ -464,7 +494,13 @@
   display: inline-block;
   margin-top: 1.5rem;
   font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
+  /* Button shape and case come from Look & style, like .section-cta a in
+     home.css. These three buttons were written before those tokens existed
+     and quietly ignored them, which is why the Button shape control looked
+     like it did nothing. Square is the default, so nothing moves until it is
+     changed. */
+  border-radius: var(--button-radius, 0px);
+  text-transform: var(--button-case, uppercase);
   letter-spacing: 0.16em;
   font-size: 0.74rem;
   padding: 0.8em 2em;

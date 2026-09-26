@@ -75,7 +75,8 @@
   display: inline-block;
   margin-top: 0.75rem;
   font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
+  border-radius: var(--button-radius, 0px);
+  text-transform: var(--button-case, uppercase);
   letter-spacing: 0.16em;
   font-size: 0.74rem;
   padding: 0.85em 2.1em;

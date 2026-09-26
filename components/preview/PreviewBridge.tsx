@@ -272,6 +272,25 @@ export default function PreviewBridge({ page }: { page: string }) {
      */
     const parked = new Map<HTMLElement, string>()
 
+    /**
+     * Nothing stays carried forever. The observer below lets go the moment the
+     * render puts the element where it belongs — but if the save failed, that
+     * render never comes, and an element drawn somewhere it is not would be a
+     * lie the page tells until it is next loaded. After this long it goes back
+     * to where it actually is, which is at least true.
+     */
+    const PARK_LIMIT_MS = 8000
+    const release = (el: HTMLElement) => {
+      el.style.transform = ''
+      parked.delete(el)
+    }
+    const parkFor = (el: HTMLElement, spot: string) => {
+      parked.set(el, spot)
+      window.setTimeout(() => {
+        if (parked.get(el) === spot) release(el)
+      }, PARK_LIMIT_MS)
+    }
+
     const places = (el: HTMLElement): HTMLElement[] => {
       const grid = el.closest('.hero-spots')
       return grid ? Array.from(grid.querySelectorAll<HTMLElement>('.hero-spot')) : []
@@ -284,6 +303,58 @@ export default function PreviewBridge({ page }: { page: string }) {
       }
       return null
     }
+
+
+    /**
+     * Park an element exactly where the server is about to put it.
+     *
+     * Dropping used to leave the transform wherever the pointer was released,
+     * which is close to the target but not on it — so when the render landed
+     * and the transform was dropped, the element visibly shifted the last few
+     * pixels into place. Computing the destination instead means the transform
+     * clears onto the same position the element already occupies, and nothing
+     * moves at all.
+     *
+     * The destination is worked out from the place's own alignment rules,
+     * which are the CSS in app/hero.css: the column decides the horizontal
+     * edge (left, centre, right) and the band decides the vertical one (top
+     * sits at the top, bottom at the bottom, the three in between centre).
+     * Exact when the place is empty, which is the ordinary case; a close
+     * approximation when something is already stacked there, since the element
+     * will settle above or below it.
+     */
+    const parkOver = (el: HTMLElement, to: HTMLElement) => {
+      // The natural box, with any carried transform taken off first — measuring
+      // a transformed element would compound the offset.
+      const carried = el.style.transform
+      el.style.transform = ''
+      const from = el.getBoundingClientRect()
+      el.style.transform = carried
+
+      const cell = to.getBoundingClientRect()
+      const column = to.getAttribute('data-col')
+      const band = to.closest('.hero-row')?.getAttribute('data-row')
+
+      const x =
+        column === 'left'
+          ? cell.left - from.left
+          : column === 'right'
+            ? cell.right - from.right
+            : cell.left + cell.width / 2 - (from.left + from.width / 2)
+
+      const y =
+        band === 'top'
+          ? cell.top - from.top
+          : band === 'bottom'
+            ? cell.bottom - from.bottom
+            : cell.top + cell.height / 2 - (from.top + from.height / 2)
+
+      el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
+    }
+
+    /** The place an element is waiting to be rendered into, by its setting. */
+    const placeNamed = (el: HTMLElement, name: string) =>
+      el.closest('.hero-spots')?.querySelector<HTMLElement>(`.hero-spot[data-spot="${CSS.escape(name)}"]`) ?? null
 
     const endDrag = () => {
       if (!drag) return
@@ -390,7 +461,10 @@ export default function PreviewBridge({ page }: { page: string }) {
       // Parked BEFORE the drag is torn down, because endDrag clears the
       // transform of anything that is not parked — and clearing it here is
       // precisely the snap back this is meant to avoid.
-      if (landed && spot) parked.set(el, spot)
+      if (landed && spot && to) {
+        parkFor(el, spot)
+        parkOver(el, to)
+      }
 
       endDrag()
       swallowClick = true
@@ -432,12 +506,26 @@ export default function PreviewBridge({ page }: { page: string }) {
         return
       }
 
-      /*
-       * A placement chosen in the panel used to be applied here by moving the
-       * element. It is not any more, for the reason set out by the drag above:
-       * these nodes belong to React. The panel sends its save without waiting
-       * for a debounce instead, and the element arrives with the render.
+      /**
+       * A placement chosen in the panel.
+       *
+       * The first version applied it by moving the element, which is what
+       * crashed the preview — see the drag above. This carries it instead, by
+       * exactly the same transform the drag uses, so the picker feels as
+       * immediate as dragging does and React's tree is never touched.
        */
+      if (data.type === 'spot' && data.id && data.field && data.value) {
+        const el = document.querySelector<HTMLElement>(
+          `.pv-section[data-section-id="${CSS.escape(data.id)}"] [data-spot-drag="${CSS.escape(data.field)}"]`
+        )
+        const to = el ? placeNamed(el, data.value) : null
+        if (el && to && el.closest('.hero-spot') !== to) {
+          parkFor(el, data.value)
+          parkOver(el, to)
+        }
+        return
+      }
+
 
 
       if (data.type === 'live' && data.id && data.field && SAFE_WORD.test(data.field)) {
@@ -625,10 +713,7 @@ export default function PreviewBridge({ page }: { page: string }) {
          */
         parked.forEach((want, el) => {
           const now = el.closest('.hero-spot')?.getAttribute('data-spot')
-          if (!el.isConnected || now === want) {
-            el.style.transform = ''
-            parked.delete(el)
-          }
+          if (!el.isConnected || now === want) release(el)
         })
       })
     })

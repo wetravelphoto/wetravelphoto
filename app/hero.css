@@ -324,6 +324,20 @@
   flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
+  /*
+   * The single row FILLS the band, rather than being sized by whatever
+   * happens to be in it.
+   *
+   * Without this a place is only as tall as its contents, so moving the
+   * tallest element out of one shrinks the whole band and every other place
+   * in it moves. Two consequences, both measured: the drop preview could not
+   * predict where an element would land, because the geometry it measured
+   * stopped being true the moment the element left; and the drop targets
+   * themselves shifted under the pointer as content changed.
+   *
+   * A place is now a fixed rectangle, whatever is or is not in it.
+   */
+  grid-template-rows: minmax(0, 1fr);
   gap: 0.5rem;
   min-height: 0;
 }

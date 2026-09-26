@@ -58,6 +58,7 @@ export default function Inspector({
   styleBase,
   onPatch,
   onLive,
+  onMoveSpot,
   onTypeVars,
   onDevice,
   onShowStory,
@@ -87,6 +88,12 @@ export default function Inspector({
   onPatch: (field: string, value: string) => void
   /** A design value as it moves — a slider, a layout menu. See LiveSpec. */
   onLive: (field: string, value: string, spec: LiveSpec) => void
+  /**
+   * A hero placement chosen in the panel. The preview carries the element to
+   * the new place at once — by a transform, never by re-parenting — so the
+   * picker feels like the drag rather than like waiting.
+   */
+  onMoveSpot: (field: string, value: string) => void
   /** A section's typography variables, for the page to repaint at once. */
   onTypeVars: (sectionId: string, vars: Record<string, string | null>, fonts: string[]) => void
   /** Put the preview into the width whose crop is being edited. */
@@ -468,6 +475,7 @@ export default function Inspector({
                      * trip IS the feedback, and half a second of debounce on
                      * top of it is what made this feel broken.
                      */
+                    onMoveSpot(field.key, next)
                     saveValues(section.id, { [field.key]: next })
                     sendValues()
                   }}

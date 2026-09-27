@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ROWS, COLUMNS, spot, type Spot } from '@/lib/sections/spots'
+import { ROWS, COLUMNS, drawnAt, type DrawnAt, type Spot, type SpotPair } from '@/lib/sections/spots'
+import { sizesFor, type Shown } from '@/lib/sections/shown'
 import type { TextVars } from '@/lib/sections/text-style'
 
 export type FixedHeroProps = {
@@ -13,10 +14,16 @@ export type FixedHeroProps = {
   ctaHref: string | null
   focal: { x: number; y: number }
   focalMobile: { x: number; y: number }
-  /** Where each piece of copy sits on the photograph. See lib/sections/spots.ts. */
-  titleSpot: Spot
-  subtitleSpot: Spot
-  ctaSpot: Spot
+  /**
+   * Where each piece of copy sits on the photograph, per size. See
+   * lib/sections/spots.ts — the phone follows the desktop until it is given a
+   * place of its own.
+   */
+  titleSpot: SpotPair
+  subtitleSpot: SpotPair
+  ctaSpot: SpotPair
+  /** Which sizes each piece is drawn on. See lib/sections/shown.ts. */
+  shown?: Record<string, Shown>
   /**
    * Typography chosen for individual pieces of text, keyed by the field name.
    * Written as custom properties on the element itself; the stylesheet reads
@@ -61,6 +68,7 @@ export default function FixedHero({
   titleSpot,
   subtitleSpot,
   ctaSpot,
+  shown = {},
   text = {},
   styleVars,
   editable = false,
@@ -84,15 +92,28 @@ export default function FixedHero({
 
   const point = isMobile ? focalMobile : focal
 
-  const at = {
-    title: spot(titleSpot),
-    subtitle: spot(subtitleSpot),
-    cta: spot(ctaSpot),
-  }
-
   const showTitle = Boolean(title) || editable
   const showSubtitle = Boolean(subtitle) || editable
   const showCta = Boolean(ctaLabel && ctaHref)
+
+  /**
+   * WHICH WIDTHS THIS NODE IS FOR — null when this place is not one of them.
+   *
+   * An element sits inside the container for its place, because that is what
+   * makes two elements sharing a place stack rather than overlap, and CSS
+   * cannot move a node between containers. So one that sits somewhere else on
+   * the phone is drawn in both containers with one hidden at each width
+   * (app/hero.css), and one that only appears on the phone is not drawn for
+   * the desktop at all.
+   *
+   * `both` is the common case and the default: drawn once, hidden never,
+   * nothing duplicated.
+   */
+  const placed = (pair: SpotPair, field: string, here: Spot): DrawnAt | null =>
+    drawnAt(pair, here, sizesFor(shown[field] ?? 'all'))
+
+  /** The attribute, present only when there is something for CSS to do. */
+  const only = (kind: DrawnAt) => (kind === 'both' ? {} : { 'data-at': kind })
 
   return (
     <section
@@ -122,37 +143,58 @@ export default function FixedHero({
               const here = `${row}-${column}` as Spot
               return (
                 <div key={here} className="hero-spot" data-spot={here} data-col={column}>
-                  {showTitle && at.title === here && (
-                    <h1
-                      className="hero-fixed-title"
-                      style={own('title')}
-                      {...field('title')}
-                      {...grip('title_spot')}
-                    >
-                      {title}
-                    </h1>
-                  )}
-                  {showSubtitle && at.subtitle === here && (
-                    <p
-                      className="hero-fixed-sub"
-                      style={own('subtitle')}
-                      {...field('subtitle')}
-                      {...grip('subtitle_spot')}
-                    >
-                      {subtitle}
-                    </p>
-                  )}
-                  {showCta && at.cta === here && (
-                    <Link
-                      href={ctaHref as string}
-                      className="hero-fixed-cta"
-                      style={own('cta_label')}
-                      {...field('cta_label')}
-                      {...grip('cta_spot')}
-                    >
-                      {ctaLabel}
-                    </Link>
-                  )}
+                  {showTitle &&
+                    (() => {
+                      const at = placed(titleSpot, 'title', here)
+                      return (
+                        at && (
+                          <h1
+                            className="hero-fixed-title"
+                            style={own('title')}
+                            {...only(at)}
+                            {...field('title')}
+                            {...grip('title_spot')}
+                          >
+                            {title}
+                          </h1>
+                        )
+                      )
+                    })()}
+                  {showSubtitle &&
+                    (() => {
+                      const at = placed(subtitleSpot, 'subtitle', here)
+                      return (
+                        at && (
+                          <p
+                            className="hero-fixed-sub"
+                            style={own('subtitle')}
+                            {...only(at)}
+                            {...field('subtitle')}
+                            {...grip('subtitle_spot')}
+                          >
+                            {subtitle}
+                          </p>
+                        )
+                      )
+                    })()}
+                  {showCta &&
+                    (() => {
+                      const at = placed(ctaSpot, 'cta_label', here)
+                      return (
+                        at && (
+                          <Link
+                            href={ctaHref as string}
+                            className="hero-fixed-cta"
+                            style={own('cta_label')}
+                            {...only(at)}
+                            {...field('cta_label')}
+                            {...grip('cta_spot')}
+                          >
+                            {ctaLabel}
+                          </Link>
+                        )
+                      )
+                    })()}
                 </div>
               )
             })}

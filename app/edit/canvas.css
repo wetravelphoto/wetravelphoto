@@ -3208,6 +3208,68 @@
   left: 0;
 }
 
+/* The phone is showing the desktop's place rather than one of its own —
+   which looks exactly like a place chosen on purpose unless it says so. */
+.spot-follow,
+.shown-note {
+  grid-column: 1 / -1;
+  margin: 0 0 0.35rem;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  opacity: 0.55;
+}
+
+.spot-unfollow {
+  grid-column: 1 / -1;
+  min-height: 24px;
+  margin-bottom: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cv-accent, #b5602c);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-align: left;
+}
+
+/* Three answers to "where does this belong", one under the other. */
+.shown-pop {
+  display: grid;
+  gap: 3px;
+  width: 168px;
+  margin-left: auto;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: #1c1d21;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.shown-choice {
+  min-height: 26px;
+  padding: 0 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.shown-choice:hover { background: rgba(255, 255, 255, 0.16); }
+
+.shown-choice[data-active] {
+  background: var(--cv-accent, #b5602c);
+  border-color: var(--cv-accent, #b5602c);
+  color: #fff;
+}
+
+.shown-note { margin: 0.35rem 0 0; }
+
 .spot-hint {
   grid-column: 1 / -1;
   margin: 0.35rem 0 0;

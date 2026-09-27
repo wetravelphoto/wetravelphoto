@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import type { TextVars } from '@/lib/sections/text-style'
+import { sizesFor, type Shown } from '@/lib/sections/shown'
 
 export type HeroItem = {
   slug: string
@@ -28,6 +29,7 @@ export default function HomeHero({
   ctaLabel,
   ctaHref,
   text = {},
+  shownOn = {},
   styleVars,
   editable = false,
 }: {
@@ -54,10 +56,21 @@ export default function HomeHero({
    * stories should find their title still styled.
    */
   text?: TextVars
+  /**
+   * Which sizes each piece of the overlay copy appears on. This hero places
+   * its copy in one block rather than in fifteen containers, so there is
+   * nothing to duplicate — only the attribute that removes it at a width.
+   */
+  shownOn?: Record<string, Shown>
   styleVars?: React.CSSProperties
 }) {
   /** This piece of copy's own typography, for every device at once. */
   const own = (key: string) => text[key]
+  /** Absent unless this piece is for one size only. See app/hero.css. */
+  const only = (field: string) => {
+    const sizes = sizesFor(shownOn[field] ?? 'all')
+    return sizes.length === 2 ? {} : { 'data-at': sizes[0] }
+  }
 
   const [active, setActive] = useState(0)
   // Held here so the rotation can be paused while a story is being edited.
@@ -155,6 +168,7 @@ export default function HomeHero({
             <p
               className="hero-fixed-title"
               style={own('title')}
+              {...only('title')}
               {...(editable ? { 'data-field': 'title' } : {})}
             >
               {overlayTitle}
@@ -164,6 +178,7 @@ export default function HomeHero({
             <p
               className="hero-fixed-sub"
               style={own('subtitle')}
+              {...only('subtitle')}
               {...(editable ? { 'data-field': 'subtitle' } : {})}
             >
               {overlaySubtitle}
@@ -174,6 +189,7 @@ export default function HomeHero({
               href={ctaHref}
               className="hero-fixed-cta"
               style={own('cta_label')}
+              {...only('cta_label')}
               {...(editable ? { 'data-field': 'cta_label' } : {})}
             >
               {ctaLabel}

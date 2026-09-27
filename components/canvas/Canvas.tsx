@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import type { CustomPage, SitePage } from '@/lib/sections/pages'
 import { PLACEABLE, SPOTS } from '@/lib/sections/spots'
-import { DEVICE_LABEL, type Device as EditDevice } from '@/lib/sections/devices'
+import { DEVICE_LABEL, deviceKey, type Device as EditDevice } from '@/lib/sections/devices'
 import type { MenuItem } from '@/lib/menu'
 import {
   addDraftSection,
@@ -441,6 +441,19 @@ export default function Canvas({
     shortcutRef.current = runShortcut
   }, [runShortcut])
 
+  /*
+   * THE SAME TRICK, FOR THE SIZE BEING EDITED.
+   *
+   * The message listener below is attached once, so it closes over whatever
+   * `device` was on the first render — and a drag made after switching to the
+   * phone would have been written against the desktop. Which is the exact bug
+   * this feature exists to fix, reintroduced one level down.
+   */
+  const deviceRef = useRef(device)
+  useEffect(() => {
+    deviceRef.current = device
+  }, [device])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const name = readShortcut(event)
@@ -496,7 +509,16 @@ export default function Canvas({
         const known = (PLACEABLE as readonly { key: string }[]).some((p) => p.key === field)
         if (known && (SPOTS as string[]).includes(value)) {
           const id = data.id
-          run(() => updateDraftSectionValues(page, id, { [field]: value }))
+          /*
+           * WRITTEN AGAINST THE SIZE ON SCREEN.
+           *
+           * Dragging on the phone used to move the desktop, because there was
+           * one place per element and the preview's width was only a way of
+           * looking. It is the thing being edited now, so a drag lands where
+           * it was made and nowhere else — the same key the picker writes.
+           */
+          const key = deviceKey(field, editedAt(deviceRef.current))
+          run(() => updateDraftSectionValues(page, id, { [key]: value }))
         }
       }
 

@@ -4,8 +4,9 @@ import { sectionVars } from '@/lib/type-styles'
 import { list, map, str, type SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
-import { spot } from '@/lib/sections/spots'
+import { spotPair } from '@/lib/sections/spots'
 import { textVarsByField } from '@/lib/sections/text-style'
+import { shownBag } from '@/lib/sections/shown'
 import { allFonts } from '@/lib/type-styles'
 import TextFonts from '@/components/sections/TextFonts'
 import FixedHero from '@/components/home/FixedHero'
@@ -73,9 +74,10 @@ export default function HeroSection({
           ctaHref={str(settings, 'cta_href')}
           focal={{ x: focal.x ?? 0.5, y: focal.y ?? 0.5 }}
           focalMobile={{ x: focal.mx ?? 0.5, y: focal.my ?? 0.5 }}
-          titleSpot={spot(settings.title_spot)}
-          subtitleSpot={spot(settings.subtitle_spot)}
-          ctaSpot={spot(settings.cta_spot)}
+          titleSpot={spotPair(settings, 'title_spot')}
+          subtitleSpot={spotPair(settings, 'subtitle_spot')}
+          ctaSpot={spotPair(settings, 'cta_spot')}
+          shown={shownBag(settings)}
           text={textVarsByField(settings, HERO_TEXT)}
           styleVars={vars}
           editable={ctx.editable}
@@ -90,6 +92,7 @@ export default function HeroSection({
           ctaLabel={str(settings, 'cta_label')}
           ctaHref={str(settings, 'cta_href')}
           text={textVarsByField(settings, HERO_TEXT)}
+          shownOn={shownBag(settings)}
           styleVars={vars}
           editable={ctx.editable}
         />

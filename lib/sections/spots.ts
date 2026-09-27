@@ -31,6 +31,8 @@
  * exactly the container the server will render it in.
  */
 
+import { deviceKey } from '@/lib/sections/devices'
+
 /*
  * Five bands rather than three. The vertical is where the choice actually
  * matters on a hero — a title a third of the way down and one just above the
@@ -99,3 +101,83 @@ export const PLACEABLE = [
 ] as const
 
 export type PlaceableKey = (typeof PLACEABLE)[number]['key']
+
+/**
+ * WHERE IT SITS ON EACH SIZE
+ * ══════════════════════════
+ *
+ * A phone is a different picture from the same photograph — a wide landscape
+ * becomes a tall crop, and copy that sat neatly in the lower left of one can
+ * be over somebody's face in the other. So each placement can differ by size,
+ * on the same terms as typography: the phone follows the desktop until it is
+ * given a place of its own, and moving it on the phone never moves it on the
+ * desktop.
+ *
+ * Stored as `<key>` for desktop and `<key>_mobile` for the phone (deviceKey),
+ * so every row already in the database is a desktop row.
+ */
+export type SpotPair = {
+  desktop: Spot
+  /** Null while the phone is still following the desktop. */
+  mobile: Spot | null
+  /** What the phone actually resolves to. */
+  effectiveMobile: Spot
+  /** True when the two differ — the one case the renderer has to work for. */
+  differs: boolean
+}
+
+export function spotPair(settings: Record<string, unknown>, key: string): SpotPair {
+  const desktop = spot(settings[key])
+  const raw = settings[deviceKey(key, 'mobile')]
+  // `spot()` would turn anything unrecognised into the default, which would
+  // make "following the desktop" indistinguishable from "deliberately set to
+  // bottom-centre". Following has to stay absent to stay following.
+  const mobile =
+    typeof raw === 'string' && (SPOTS as string[]).includes(raw) ? (raw as Spot) : null
+
+  return {
+    desktop,
+    mobile,
+    effectiveMobile: mobile ?? desktop,
+    differs: mobile !== null && mobile !== desktop,
+  }
+}
+
+/**
+ * WHICH SIZES AN ELEMENT IS DRAWN FOR, IN A GIVEN PLACE.
+ *
+ * The renderer's whole problem in one function. An element lives inside the
+ * container for its place — that is what makes two elements sharing a place
+ * stack instead of overlapping — and CSS cannot move a node between
+ * containers. So an element whose phone place differs from its desktop one
+ * has to be drawn in BOTH containers, with one hidden at each width.
+ *
+ * Drawing it twice is not free: it is the same words twice in the markup, read
+ * twice by anything that reads markup. So it only happens where somebody has
+ * actually asked the two to differ, which is rare and never the default. The
+ * common case — and every site that has never touched this — draws each
+ * element exactly once, marked `both`, with nothing to hide.
+ *
+ * Visibility folds into the same answer rather than being a second mechanism:
+ * a piece of text shown only on the phone is simply not drawn for the desktop.
+ * One attribute then says everything about which widths a node is for.
+ *
+ * Returns null for a container this element has no business being in, so a
+ * renderer can map over the places and ask this each time.
+ */
+export type DrawnAt = 'both' | 'desktop' | 'mobile'
+
+export function drawnAt(
+  pair: SpotPair,
+  here: Spot,
+  sizes: readonly ('desktop' | 'mobile')[] = ['desktop', 'mobile']
+): DrawnAt | null {
+  const wanted = sizes.filter((size) =>
+    (size === 'mobile' ? pair.effectiveMobile : pair.desktop) === here
+  )
+  if (wanted.length === 0) return null
+  // Both sizes want this container AND both sizes show it: one node, no
+  // hiding, nothing duplicated.
+  if (wanted.length === 2) return 'both'
+  return wanted[0]
+}

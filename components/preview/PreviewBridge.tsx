@@ -517,9 +517,25 @@ export default function PreviewBridge({ page }: { page: string }) {
        * immediate as dragging does and React's tree is never touched.
        */
       if (data.type === 'spot' && data.id && data.field && data.value) {
-        const el = document.querySelector<HTMLElement>(
-          `.pv-section[data-section-id="${CSS.escape(data.id)}"] [data-spot-drag="${CSS.escape(data.field)}"]`
-        )
+        /*
+         * THE COPY THAT IS ACTUALLY ON SCREEN.
+         *
+         * A piece of copy that sits somewhere else on the phone is drawn in
+         * BOTH containers, with one removed at each width — an element cannot
+         * move between containers in CSS, and containers are what makes two
+         * pieces sharing a place stack rather than overlap. So there can be
+         * two nodes with this field's name, and carrying the hidden one would
+         * animate something nobody can see while the visible one stayed put.
+         *
+         * `offsetParent` is null for a `display: none` element, which is
+         * exactly the question being asked.
+         */
+        const el =
+          Array.from(
+            document.querySelectorAll<HTMLElement>(
+              `.pv-section[data-section-id="${CSS.escape(data.id)}"] [data-spot-drag="${CSS.escape(data.field)}"]`
+            )
+          ).find((node) => node.offsetParent !== null) ?? null
         const to = el ? placeNamed(el, data.value) : null
         if (el && to && el.closest('.hero-spot') !== to) {
           parkFor(el, data.value)

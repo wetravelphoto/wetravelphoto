@@ -22,6 +22,7 @@ import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import { sanitizeOwnStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
 import { sanitizeTextStyles } from '@/lib/sections/text-style'
+import { sanitizeShown } from '@/lib/sections/shown'
 import { sanitizePageSeo } from '@/lib/seo'
 import { sanitizeChrome } from '@/lib/chrome'
 import {
@@ -324,6 +325,12 @@ export async function updateDraftSectionValues(
   // panel sends the WHOLE bag every time — merging one entry server-side would
   // make deleting an override impossible — so this is the complete new value.
   if ('text' in values) values = { ...values, text: sanitizeTextStyles(values.text) }
+  if ('text_mobile' in values) {
+    values = { ...values, text_mobile: sanitizeTextStyles(values.text_mobile) }
+  }
+  // Which sizes each piece of copy appears on. A small bag, but it decides
+  // whether something is in the markup at all, so it is checked like the rest.
+  if ('shown' in values) values = { ...values, shown: sanitizeShown(values.shown) }
 
   await writeDraftPage(
     page,

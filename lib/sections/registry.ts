@@ -258,6 +258,29 @@ export const SECTIONS: Record<string, SectionDef> = {
       title_spot: 'bottom-center',
       subtitle_spot: 'bottom-center',
       cta_spot: 'bottom-center',
+      /*
+       * The same three places on a phone, where a wide landscape has become a
+       * tall crop and copy that sat in the lower left of one can be over
+       * somebody's face in the other.
+       *
+       * NULL, not a place: null means "still following the desktop", and a
+       * value means "deliberately somewhere else". Defaulting these to
+       * 'bottom-center' would make the two indistinguishable, and moving the
+       * desktop title would then leave the phone one behind.
+       */
+      title_spot_mobile: null,
+      subtitle_spot_mobile: null,
+      cta_spot_mobile: null,
+      /*
+       * Which sizes each piece of copy appears on at all
+       * (lib/sections/shown.ts), keyed by the field it belongs to. Empty means
+       * every piece appears everywhere, which is what a hero nobody has
+       * touched does.
+       *
+       * No field declares it, like `text` — that is what carries it across a
+       * change of look.
+       */
+      shown: {},
       image_path: null,
       title: null,
       subtitle: null,
@@ -302,10 +325,10 @@ export const SECTIONS: Record<string, SectionDef> = {
        */
       { key: 'title', label: 'Title', kind: 'text', content: true, textStyle: true },
       { key: 'title_spot', label: 'Title position', kind: 'custom', editor: 'spot',
-        note: 'Where the title sits on the photograph.' },
+        note: 'Where the title sits on the photograph, on the size you are editing.' },
       { key: 'subtitle', label: 'Sub-heading', kind: 'text', content: true, textStyle: true },
       { key: 'subtitle_spot', label: 'Sub-heading position', kind: 'custom', editor: 'spot',
-        note: 'Where the line under the title sits.' },
+        note: 'Where the line under the title sits, on the size you are editing.' },
       {
         key: 'cta_label',
         label: 'Button',
@@ -324,7 +347,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         placeholder: '/trips',
       },
       { key: 'cta_spot', label: 'Button position', kind: 'custom', editor: 'spot',
-        note: 'Where the button sits. Shown only once the button has a label and a link.' },
+        note: 'Where the button sits, on the size you are editing.' },
       /*
        * Still here, and only for the stories hero: HomeHero lays a featured
        * story's own title over its picture, and this is where that sits. It

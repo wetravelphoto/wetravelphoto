@@ -7,9 +7,12 @@ import { contentKeys, type Field, type LiveSpec, type SectionDef } from '@/lib/s
 import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
 import SpotPicker from '@/components/canvas/editors/SpotPicker'
+import ShownPicker from '@/components/canvas/editors/ShownPicker'
 import MarkImage from '@/components/canvas/editors/MarkImage'
 import ImageField from '@/components/canvas/ImageField'
 import TextStylePanel from '@/components/canvas/editors/TextStylePanel'
+import { spotPair } from '@/lib/sections/spots'
+import { shownBag, withShown, type Shown } from '@/lib/sections/shown'
 import { SEC_VARS, ownStyle, sectionStyle, type TypeStyles } from '@/lib/type-styles'
 import {
   TEXT_VARS,
@@ -521,6 +524,7 @@ export default function Inspector({
                     }
 
             return (
+              <>
               <TextStylePanel
                 label={field.label}
                 device={editing}
@@ -547,6 +551,29 @@ export default function Inspector({
                   saveTextStyle(section.id, field.key, next)
                 }}
               />
+
+              {/*
+                * Which sizes this piece of text appears on. Not governed by
+                * the switcher at the top, unlike everything else here: it is
+                * ABOUT the sizes, so it names all of them at once rather than
+                * taking three visits to say one thing.
+                *
+                * Waits for the re-render rather than being painted live — the
+                * element is being added to or removed from the page, which is
+                * more than one property and so not something a patch may
+                * express. See LiveSpec in the registry.
+                */}
+              <ShownPicker
+                label={field.label}
+                value={shownBag(section.settings)[field.key] ?? 'all'}
+                onChange={(next: Shown) => {
+                  saveValues(section.id, {
+                    shown: withShown(shownBag(section.settings), field.key, next),
+                  })
+                  sendValues()
+                }}
+              />
+              </>
             )
           }}
           renderImage={(field: Field, value: unknown, set) => (
@@ -606,10 +633,22 @@ export default function Inspector({
             }
 
             if (field.editor === 'spot') {
+              const pair = spotPair(section.settings, field.key)
+              // The phone's place lives beside the desktop's, under its own
+              // key, so moving one can never write the other.
+              const storeAt = deviceKey(field.key, editing)
               return (
                 <SpotPicker
-                  value={value}
+                  pair={pair}
+                  device={editing}
+                  deviceName={DEVICE_LABEL[editing]}
                   label={field.label}
+                  onFollow={() => {
+                    // Null, not a place: following has to stay absent to stay
+                    // following. See `spotPair`.
+                    saveValues(section.id, { [storeAt]: null })
+                    sendValues()
+                  }}
                   onChange={(next) => {
                     /*
                      * Sent at once rather than on the usual debounce.
@@ -621,7 +660,7 @@ export default function Inspector({
                      * top of it is what made this feel broken.
                      */
                     onMoveSpot(field.key, next)
-                    saveValues(section.id, { [field.key]: next })
+                    saveValues(section.id, { [storeAt]: next })
                     sendValues()
                   }}
                 />

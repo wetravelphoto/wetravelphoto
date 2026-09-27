@@ -556,6 +556,47 @@
 
 .hero-fixed-cta:hover { background: var(--txt-color, #faf9f6); color: #14100e; }
 
+/* ── WHICH WIDTHS A PIECE OF COPY IS FOR ─────────────────────────────────────
+ *
+ * An element lives inside the container for its place, because that is what
+ * makes two elements sharing a place stack rather than overlap — and CSS
+ * cannot move a node between containers. So a piece of copy that sits
+ * somewhere else on the phone is drawn in BOTH containers and one of them is
+ * removed at each width; a piece shown on only one size is simply not drawn
+ * for the other.
+ *
+ * `display: none` rather than `visibility` or `opacity`: those two leave the
+ * element in the layout AND in the accessibility tree, so a screen reader
+ * would still announce a button nobody can see.
+ *
+ * No attribute at all is the common case — one node, shown everywhere — so
+ * none of this applies to a hero nobody has touched.
+ */
+
+.hero-spot > [data-at='mobile'] { display: none; }
+
+@media (max-width: 760px) {
+  .hero-spot > [data-at='desktop'] { display: none; }
+
+  /* Put back the display each element actually has, rather than `revert`,
+     which would roll back to whatever the previous cascade origin happened to
+     say. The button is inline-block; the other two are blocks. */
+  .hero-spot > .hero-fixed-title[data-at='mobile'],
+  .hero-spot > .hero-fixed-sub[data-at='mobile'] { display: block; }
+  .hero-spot > .hero-fixed-cta[data-at='mobile'] { display: inline-block; }
+}
+
+/* The same, for the rotating hero's overlay copy, which has one place rather
+   than fifteen but the same question about which sizes it appears on. */
+.hero-overlay-copy > [data-at='mobile'] { display: none; }
+
+@media (max-width: 760px) {
+  .hero-overlay-copy > [data-at='desktop'] { display: none; }
+  .hero-overlay-copy > .hero-fixed-title[data-at='mobile'],
+  .hero-overlay-copy > .hero-fixed-sub[data-at='mobile'] { display: block; }
+  .hero-overlay-copy > .hero-fixed-cta[data-at='mobile'] { display: inline-block; }
+}
+
 /* The mark and the copy can no longer collide: there is no mark, and each
    piece of copy has a place of its own. */
 

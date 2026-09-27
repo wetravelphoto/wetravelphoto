@@ -1,4 +1,6 @@
+import type { CSSProperties } from 'react'
 import type { SectionContext } from '@/lib/sections/context'
+import { textStyleFor, textStyleVars } from '@/lib/sections/text-style'
 
 /**
  * MARKS A PIECE OF TEXT AS A SETTING
@@ -52,4 +54,40 @@ export function live(ctx: SectionContext, keys: string[]): Record<string, string
  */
 export function typeRoot(ctx: SectionContext): Record<string, string> {
   return ctx.editable ? { 'data-type-root': '' } : {}
+}
+
+/**
+ * A PIECE OF TEXT THAT CAN BE SELECTED *AND* STYLED
+ * ═════════════════════════════════════════════════
+ *
+ *     <h2 className="intro-heading" {...styledText(ctx, settings, 'heading')}>
+ *
+ * Everything `editable` above does, plus this text's own typography — the
+ * `--txt-*` custom properties chosen in the panel beside its box.
+ *
+ * The two belong in one call because they must land on the SAME element and
+ * neither works alone. The editor finds the text by `data-field`, and the
+ * live-update channel writes the properties to `[data-field="…"]`; put the
+ * style on a wrapper and the first keystroke in the panel would repaint the
+ * wrapper while the save repaints the text, so they would disagree until the
+ * next render. One call, one element, no way to do half of it.
+ *
+ * Note that the STYLE is returned on the public page too, while `data-field`
+ * is not: the typography is the visitor's to see, the field name is the
+ * editor's business.
+ *
+ * Three conditions, all of which the registry's `textStyle` flag documents:
+ * the section's defaults must contain `text: {}`, this key must be flagged,
+ * and the element's CSS rule must read `--txt-*` ahead of its own value. Miss
+ * the last one and the panel stores a choice that changes nothing — which is
+ * the only failure here that is completely silent.
+ */
+export function styledText(
+  ctx: SectionContext,
+  settings: Record<string, unknown>,
+  key: string
+): { 'data-field'?: string; style?: CSSProperties } {
+  const style = textStyleVars(textStyleFor(settings, key)) as CSSProperties
+  const marked = Object.keys(style).length > 0 ? { style } : {}
+  return ctx.editable ? { 'data-field': key, ...marked } : marked
 }

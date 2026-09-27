@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { textStyleVars, type TextStyles } from '@/lib/sections/text-style'
 
 export type HeroItem = {
   slug: string
@@ -26,6 +27,7 @@ export default function HomeHero({
   overlaySubtitle,
   ctaLabel,
   ctaHref,
+  text = {},
   styleVars,
   editable = false,
 }: {
@@ -44,8 +46,19 @@ export default function HomeHero({
    * are overridden through a custom editor, not a plain text field.
    */
   editable?: boolean
+  /**
+   * Typography chosen for these three pieces of copy individually, keyed by
+   * the setting each belongs to. The standing hero takes the same prop — they
+   * are the SAME three settings, drawn by two components depending on the
+   * mode, and somebody who styles a title and then switches the hero to
+   * stories should find their title still styled.
+   */
+  text?: TextStyles
   styleVars?: React.CSSProperties
 }) {
+  /** This piece of copy's own typography, if it has been given any. */
+  const own = (key: string) => textStyleVars(text[key] ?? null) as React.CSSProperties
+
   const [active, setActive] = useState(0)
   // Held here so the rotation can be paused while a story is being edited.
   const [pinned, setPinned] = useState<number | null>(null)
@@ -139,12 +152,20 @@ export default function HomeHero({
       {(overlayTitle || overlaySubtitle || (ctaLabel && ctaHref) || editable) && (
         <div className="hero-overlay-copy">
           {(overlayTitle || editable) && (
-            <p className="hero-fixed-title" {...(editable ? { 'data-field': 'title' } : {})}>
+            <p
+              className="hero-fixed-title"
+              style={own('title')}
+              {...(editable ? { 'data-field': 'title' } : {})}
+            >
               {overlayTitle}
             </p>
           )}
           {(overlaySubtitle || editable) && (
-            <p className="hero-fixed-sub" {...(editable ? { 'data-field': 'subtitle' } : {})}>
+            <p
+              className="hero-fixed-sub"
+              style={own('subtitle')}
+              {...(editable ? { 'data-field': 'subtitle' } : {})}
+            >
               {overlaySubtitle}
             </p>
           )}
@@ -152,6 +173,7 @@ export default function HomeHero({
             <Link
               href={ctaHref}
               className="hero-fixed-cta"
+              style={own('cta_label')}
               {...(editable ? { 'data-field': 'cta_label' } : {})}
             >
               {ctaLabel}

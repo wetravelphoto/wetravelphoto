@@ -6,24 +6,33 @@
 }
 
 .gallery-index-eyebrow {
-  font-family: var(--sec-eyebrow-font, var(--font-display)), sans-serif;
-  font-weight: var(--sec-eyebrow-weight, normal);
-  text-transform: uppercase;
-  letter-spacing: 0.26em;
-  font-size: calc(0.68rem * var(--sec-eyebrow-scale, 1));
-  color: var(--sec-eyebrow-color, var(--ember));
+  font-family: var(--txt-font, var(--sec-eyebrow-font, var(--font-display)), sans-serif);
+  font-weight: var(--txt-weight, var(--sec-eyebrow-weight, normal));
+  text-transform: var(--txt-case, uppercase);
+  letter-spacing: var(--txt-track, 0.26em);
+  font-size: calc(0.68rem * var(--sec-eyebrow-scale, 1) * var(--txt-scale, 1));
+  color: var(--txt-color, var(--sec-eyebrow-color, var(--ember)));
   margin: 0 0 0.85rem;
+  line-height: var(--txt-leading, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 .gallery-index-heading {
-  font-family: var(--sec-font, var(--font-display)), sans-serif;
-  text-transform: var(--sec-case, uppercase);
-  letter-spacing: var(--sec-track, 0.01em);
-  font-weight: var(--sec-weight, 400);
-  font-size: calc(clamp(2rem, 5vw, 3.1rem) * var(--sec-scale, 1));
-  line-height: 1;
+  font-family: var(--txt-font, var(--sec-font, var(--font-display)), sans-serif);
+  text-transform: var(--txt-case, var(--sec-case, uppercase));
+  letter-spacing: var(--txt-track, var(--sec-track, 0.01em));
+  font-weight: var(--txt-weight, var(--sec-weight, 400));
+  font-size: calc(clamp(2rem, 5vw, 3.1rem) * var(--sec-scale, 1) * var(--txt-scale, 1));
+  line-height: var(--txt-leading, 1);
   margin: 0;
-  color: var(--sec-color, var(--ink));
+  color: var(--txt-color, var(--sec-color, var(--ink)));
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 /* An even grid — every gallery the same size, which reads cleaner than a

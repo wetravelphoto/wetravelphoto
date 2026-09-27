@@ -247,13 +247,19 @@
 }
 
 .intro-body p {
-  font-family: var(--sec-body-font, var(--font-body));
-  font-weight: var(--sec-body-weight, 400);
-  color: var(--sec-body-color, var(--ink-soft));
-  font-size: calc(1rem * var(--sec-body-scale, 1));
-  line-height: 1.9;
+  font-family: var(--txt-font, var(--sec-body-font, var(--font-body)));
+  font-weight: var(--txt-weight, var(--sec-body-weight, 400));
+  color: var(--txt-color, var(--sec-body-color, var(--ink-soft)));
+  font-size: calc(1rem * var(--sec-body-scale, 1) * var(--txt-scale, 1));
+  line-height: var(--txt-leading, 1.9);
   margin: 0 0 1.1rem;
   max-width: 48ch;
+  text-transform: var(--txt-case, inherit);
+  letter-spacing: var(--txt-track, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 /* ---------------- DARK CAROUSEL ---------------- */
@@ -584,18 +590,24 @@
 }
 
 .section-cta a {
-  font-family: var(--font-display), sans-serif;
-  text-transform: var(--button-case, uppercase);
+  font-family: var(--txt-font, var(--font-display), sans-serif);
+  text-transform: var(--txt-case, var(--button-case, uppercase));
   border-radius: var(--button-radius, 0px);
-  letter-spacing: 0.14em;
-  font-size: 0.75rem;
+  letter-spacing: var(--txt-track, 0.14em);
+  font-size: calc(0.75rem * var(--txt-scale, 1));
   padding: 0.9em 2.2em;
   border: 1px solid var(--ink);
-  color: var(--ink);
+  color: var(--txt-color, var(--ink));
   transition: background 0.25s ease, color 0.25s ease;
+  font-weight: var(--txt-weight, inherit);
+  line-height: var(--txt-leading, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
-.section-cta a:hover { background: var(--ink); color: var(--surface); }
+.section-cta a:hover { background: var(--txt-color, var(--ink)); color: var(--surface); }
 
 .section-title {
   font-family: var(--font-display), sans-serif;

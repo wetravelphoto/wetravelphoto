@@ -405,6 +405,10 @@ export const SECTIONS: Record<string, SectionDef> = {
     defaults: {
       // This section's own typography (lib/type-styles.ts). Null follows the site.
       type: null,
+      /* Typography for individual pieces of text, keyed by the field they
+         belong to. No field declares it, which is what carries it across a
+         change of look. See `textStyle` on FieldBase. */
+      text: {},
       kicker: null,
       heading: null,
       body: null,
@@ -412,14 +416,15 @@ export const SECTIONS: Record<string, SectionDef> = {
       image_side: 'left',
     },
     fields: [
-      { key: 'kicker', label: 'Over-line', kind: 'text', content: true, help: 'The small line above the heading.' },
-      { key: 'heading', label: 'Heading', kind: 'text', content: true },
+      { key: 'kicker', label: 'Over-line', kind: 'text', content: true, textStyle: true, help: 'The small line above the heading.' },
+      { key: 'heading', label: 'Heading', kind: 'text', content: true, textStyle: true },
       {
         key: 'body',
         label: 'Text',
         kind: 'textarea',
         rows: 6,
         content: true,
+        textStyle: true,
         help: 'Leave a blank line between paragraphs.',
       },
       { key: 'image_path', label: 'Photograph', kind: 'image', content: true },
@@ -447,6 +452,10 @@ export const SECTIONS: Record<string, SectionDef> = {
     defaults: {
       // This section's own typography (lib/type-styles.ts). Null follows the site.
       type: null,
+      /* Typography for individual pieces of text, keyed by the field they
+         belong to. No field declares it, which is what carries it across a
+         change of look. See `textStyle` on FieldBase. */
+      text: {},
       eyebrow: null,
       heading: null,
       body: null,
@@ -456,14 +465,15 @@ export const SECTIONS: Record<string, SectionDef> = {
       cta_href: null,
     },
     fields: [
-      { key: 'eyebrow', label: 'Over-line', kind: 'text', content: true, help: 'The small line above the heading.' },
-      { key: 'heading', label: 'Heading', kind: 'text', content: true },
+      { key: 'eyebrow', label: 'Over-line', kind: 'text', content: true, textStyle: true, help: 'The small line above the heading.' },
+      { key: 'heading', label: 'Heading', kind: 'text', content: true, textStyle: true },
       {
         key: 'body',
         label: 'Text',
         kind: 'textarea',
         rows: 8,
         content: true,
+        textStyle: true,
         help: 'Leave a blank line between paragraphs.',
       },
       { key: 'image_path', label: 'Photograph', kind: 'image', content: true },
@@ -474,6 +484,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         kind: 'text',
         group: 'Button',
         content: true,
+        textStyle: true,
         help: 'Leave empty for no button.',
       },
       {
@@ -513,6 +524,10 @@ export const SECTIONS: Record<string, SectionDef> = {
       // 'carousel': the homepage's draggable row.
       // 'grid': every gallery as a tile, under a page heading (the Galleries
       // page's layout).
+      /* Typography for individual pieces of text, keyed by the field they
+         belong to. No field declares it, which is what carries it across a
+         change of look. See `textStyle` on FieldBase. */
+      text: {},
       layout: 'carousel',
       eyebrow: null,
       heading: 'Recent trips',
@@ -535,9 +550,10 @@ export const SECTIONS: Record<string, SectionDef> = {
         label: 'Over-line',
         kind: 'text',
         content: true,
+        textStyle: true,
         when: { key: 'layout', equals: 'grid' },
       },
-      { key: 'heading', label: 'Heading', kind: 'text', content: true },
+      { key: 'heading', label: 'Heading', kind: 'text', content: true, textStyle: true },
       {
         key: 'limit',
         label: 'How many',
@@ -587,6 +603,10 @@ export const SECTIONS: Record<string, SectionDef> = {
       type: null,
       // 'row': the latest few, with a link to the rest (the homepage's).
       // 'grid': every story, the newest drawn large (the Journal page's).
+      /* Typography for individual pieces of text, keyed by the field they
+         belong to. No field declares it, which is what carries it across a
+         change of look. See `textStyle` on FieldBase. */
+      text: {},
       layout: 'row',
       eyebrow: null,
       heading: 'From the journal',
@@ -617,9 +637,10 @@ export const SECTIONS: Record<string, SectionDef> = {
         label: 'Over-line',
         kind: 'text',
         content: true,
+        textStyle: true,
         when: { key: 'layout', equals: 'grid' },
       },
-      { key: 'heading', label: 'Heading', kind: 'text', content: true },
+      { key: 'heading', label: 'Heading', kind: 'text', content: true, textStyle: true },
       {
         key: 'count',
         label: 'How many stories',
@@ -633,6 +654,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         label: 'Link',
         kind: 'text',
         content: true,
+        textStyle: true,
         help: 'Leave empty to hide it.',
         when: { key: 'layout', equals: 'row' },
       },
@@ -720,6 +742,10 @@ export const SECTIONS: Record<string, SectionDef> = {
     defaults: {
       // This section's own typography (lib/type-styles.ts). Null follows the site.
       type: null,
+      /* Typography for individual pieces of text, keyed by the field they
+         belong to. No field declares it, which is what carries it across a
+         change of look. See `textStyle` on FieldBase. */
+      text: {},
       eyebrow: null,
       heading: 'Prints',
       subheading: null,
@@ -730,15 +756,16 @@ export const SECTIONS: Record<string, SectionDef> = {
       show_price: true,
     },
     fields: [
-      { key: 'eyebrow', label: 'Line above the title', kind: 'text', content: true },
-      { key: 'heading', label: 'Title', kind: 'text', content: true },
-      { key: 'subheading', label: 'Line below the title', kind: 'text', content: true },
+      { key: 'eyebrow', label: 'Line above the title', kind: 'text', content: true, textStyle: true },
+      { key: 'heading', label: 'Title', kind: 'text', content: true, textStyle: true },
+      { key: 'subheading', label: 'Line below the title', kind: 'text', content: true, textStyle: true },
       {
         key: 'intro',
         label: 'Intro',
         kind: 'textarea',
         rows: 3,
         content: true,
+        textStyle: true,
         help: 'Sits under the categories, above the wall. Optional.',
       },
       {
@@ -794,11 +821,15 @@ export const SECTIONS: Record<string, SectionDef> = {
     needs: ['instagram'],
     requires: 'Instagram connected in Settings',
     defaults: {
+      /* Typography for individual pieces of text, keyed by the field they
+         belong to. No field declares it, which is what carries it across a
+         change of look. See `textStyle` on FieldBase. */
+      text: {},
       heading: null,
       count: 9,
     },
     fields: [
-      { key: 'heading', label: 'Heading', kind: 'text', content: true },
+      { key: 'heading', label: 'Heading', kind: 'text', content: true, textStyle: true },
       { key: 'count', label: 'How many posts', kind: 'number', min: 3, max: 24, step: 3 },
     ],
   },
@@ -821,6 +852,10 @@ export const SECTIONS: Record<string, SectionDef> = {
       // 'centered': the form and its words in the middle, no photograph (the
       // Contact page's). The first of the per-section layouts; more options
       // per section are planned — see claude/the-canvas.md.
+      /* Typography for individual pieces of text, keyed by the field they
+         belong to. No field declares it, which is what carries it across a
+         change of look. See `textStyle` on FieldBase. */
+      text: {},
       layout: 'split',
       eyebrow: null,
       heading: null,
@@ -840,14 +875,15 @@ export const SECTIONS: Record<string, SectionDef> = {
           { value: 'centered', label: 'Centred, no photograph' },
         ],
       },
-      { key: 'eyebrow', label: 'Over-line', kind: 'text', content: true },
-      { key: 'heading', label: 'Heading', kind: 'text', content: true },
-      { key: 'intro', label: 'Text', kind: 'textarea', rows: 4, content: true },
+      { key: 'eyebrow', label: 'Over-line', kind: 'text', content: true, textStyle: true },
+      { key: 'heading', label: 'Heading', kind: 'text', content: true, textStyle: true },
+      { key: 'intro', label: 'Text', kind: 'textarea', rows: 4, content: true, textStyle: true },
       {
         key: 'note',
         label: 'Small print',
         kind: 'text',
         content: true,
+        textStyle: true,
         help: 'Under the links — response times, where you are.',
       },
       {
@@ -855,6 +891,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         label: 'Caption over the photograph',
         kind: 'text',
         content: true,
+        textStyle: true,
         when: { key: 'layout', equals: 'split' },
       },
       {

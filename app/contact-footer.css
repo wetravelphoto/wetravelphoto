@@ -49,12 +49,18 @@
 }
 
 .contact-media-caption p {
-  font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: clamp(0.95rem, 1.7vw, 1.35rem);
-  line-height: 1.75;
+  font-family: var(--txt-font, var(--font-display), sans-serif);
+  text-transform: var(--txt-case, uppercase);
+  letter-spacing: var(--txt-track, 0.2em);
+  font-size: calc(clamp(0.95rem, 1.7vw, 1.35rem) * var(--txt-scale, 1));
+  line-height: var(--txt-leading, 1.75);
   margin: 0;
+  font-weight: var(--txt-weight, inherit);
+  color: var(--txt-color, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 .contact-panel {
@@ -70,34 +76,49 @@
 .contact-panel-inner { width: 100%; max-width: 620px; }
 
 .contact-eyebrow {
-  font-family: var(--sec-eyebrow-font, var(--font-display)), sans-serif;
-  font-weight: var(--sec-eyebrow-weight, normal);
-  text-transform: uppercase;
-  letter-spacing: 0.26em;
-  font-size: calc(0.72rem * var(--sec-eyebrow-scale, 1));
-  color: var(--sec-eyebrow-color, var(--ink-mute));
+  font-family: var(--txt-font, var(--sec-eyebrow-font, var(--font-display)), sans-serif);
+  font-weight: var(--txt-weight, var(--sec-eyebrow-weight, normal));
+  text-transform: var(--txt-case, uppercase);
+  letter-spacing: var(--txt-track, 0.26em);
+  font-size: calc(0.72rem * var(--sec-eyebrow-scale, 1) * var(--txt-scale, 1));
+  color: var(--txt-color, var(--sec-eyebrow-color, var(--ink-mute)));
   margin: 0 0 0.9rem;
+  line-height: var(--txt-leading, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 .contact-heading {
-  font-family: var(--sec-font, var(--font-display));
-  font-weight: var(--sec-weight, 400);
-  text-transform: var(--sec-case, uppercase);
-  letter-spacing: var(--sec-track, 0.01em);
-  color: var(--sec-color, #14100e);
-  font-size: calc(clamp(1.9rem, 4.4vw, 3.1rem) * var(--sec-scale, 1));
-  line-height: 1;
+  font-family: var(--txt-font, var(--sec-font, var(--font-display)));
+  font-weight: var(--txt-weight, var(--sec-weight, 400));
+  text-transform: var(--txt-case, var(--sec-case, uppercase));
+  letter-spacing: var(--txt-track, var(--sec-track, 0.01em));
+  color: var(--txt-color, var(--sec-color, #14100e));
+  font-size: calc(clamp(1.9rem, 4.4vw, 3.1rem) * var(--sec-scale, 1) * var(--txt-scale, 1));
+  line-height: var(--txt-leading, 1);
   margin: 0 0 0.7rem;
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 .contact-copy {
-  font-family: var(--sec-body-font, var(--font-body)), system-ui, sans-serif;
-  font-weight: var(--sec-body-weight, normal);
-  color: var(--sec-body-color, var(--ink-soft));
-  line-height: 1.7;
+  font-family: var(--txt-font, var(--sec-body-font, var(--font-body)), system-ui, sans-serif);
+  font-weight: var(--txt-weight, var(--sec-body-weight, normal));
+  color: var(--txt-color, var(--sec-body-color, var(--ink-soft)));
+  line-height: var(--txt-leading, 1.7);
   margin: 0 0 1.75rem;
-  font-size: calc(0.98rem * var(--sec-body-scale, 1));
+  font-size: calc(0.98rem * var(--sec-body-scale, 1) * var(--txt-scale, 1));
   max-width: 44ch;
+  text-transform: var(--txt-case, inherit);
+  letter-spacing: var(--txt-track, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 /* ---------- CONTACT: centred, no photograph ----------
@@ -121,7 +142,7 @@
 
 .contact-centred .contact-eyebrow,
 .contact-centred .contact-heading,
-.contact-centred .contact-copy { text-align: center; }
+.contact-centred .contact-copy { text-align: var(--txt-align, center); }
 
 .contact-centred .contact-copy { margin-left: auto; margin-right: auto; }
 
@@ -187,7 +208,16 @@
 .contact-submit-row button svg { transition: transform 0.25s ease; }
 .contact-submit-row button:hover svg { transform: translateX(3px); }
 
-.contact-note { font-size: 0.8rem; font-style: italic; color: var(--ink-mute); }
+.contact-note { font-size: calc(0.8rem * var(--txt-scale, 1)); font-style: var(--txt-style, italic); color: var(--txt-color, var(--ink-mute));
+  font-family: var(--txt-font, inherit);
+  font-weight: var(--txt-weight, inherit);
+  text-transform: var(--txt-case, inherit);
+  letter-spacing: var(--txt-track, inherit);
+  line-height: var(--txt-leading, inherit);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
+}
 
 .contact-sent { border: 0.5px solid var(--line); padding: 2rem; text-align: center; }
 

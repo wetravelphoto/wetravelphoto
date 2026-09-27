@@ -46,6 +46,14 @@ import type { CanvasSection } from '@/components/canvas/Canvas'
  * governs how soon the draft is durable — and a slightly longer wait means
  * fewer writes for a sentence typed straight through.
  */
+/**
+ * Which of the section's three typography roles each piece of text follows —
+ * for the "Following (…)" labels in its panel, and nothing else. Anything not
+ * listed reads as body text, which is the common case.
+ */
+const HEADINGS = new Set(['title', 'heading'])
+const OVERLINES = new Set(['eyebrow', 'kicker', 'subheading'])
+
 const DEBOUNCE_MS = 450
 
 /**
@@ -444,19 +452,37 @@ export default function Inspector({
             // What it falls back to, for the "Following (…)" labels. The
             // section's own typography wins over the site's, which is the same
             // order the CSS cascade puts them in.
+            //
+            // This is a LABEL, not a value: nothing here is stored, and a
+            // wrong guess shows the wrong name beside "Following" rather than
+            // changing anything. Which is why a key list is enough — the three
+            // roles are a property of how each renderer draws its text, and
+            // the registry does not record it.
             const own = sectionStyle(section.type, section.settings, typeStyles)
-            const heading = field.key === 'title' || field.key === 'kicker'
+            const role = HEADINGS.has(field.key)
+              ? 'heading'
+              : OVERLINES.has(field.key)
+                ? 'eyebrow'
+                : 'body'
+
+            const base =
+              role === 'heading'
+                ? { font: own.font ?? styleBase.font, color: own.color ?? styleBase.color }
+                : role === 'eyebrow'
+                  ? {
+                      font: own.eyebrowFont ?? own.font ?? styleBase.font,
+                      color: own.eyebrowColor ?? styleBase.color,
+                    }
+                  : {
+                      font: own.bodyFont ?? styleBase.bodyFont,
+                      color: own.bodyColor ?? styleBase.bodyColor,
+                    }
 
             return (
               <TextStylePanel
                 label={field.label}
                 value={bag[field.key] ?? null}
-                base={{
-                  font: (heading ? own.font : own.bodyFont) ?? (heading ? styleBase.font : styleBase.bodyFont),
-                  color:
-                    (heading ? own.color : own.bodyColor) ??
-                    (heading ? styleBase.color : styleBase.bodyColor),
-                }}
+                base={base}
                 onChange={(next) => {
                   // Painted on the page first: textStyleVars is what the
                   // renderer writes, so setting the same properties to the

@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { photoUrl } from '@/lib/images'
 import { srcSetFromPath, SIZES_ATTR } from '@/lib/srcset'
-import { sectionVars } from '@/lib/type-styles'
+import { allFonts, sectionVars } from '@/lib/type-styles'
 import { num, str, type SectionSettings } from '@/lib/sections/registry'
-import { editable, live, typeRoot } from '@/lib/sections/editable'
+import { live, styledText, typeRoot } from '@/lib/sections/editable'
+import TextFonts from '@/components/sections/TextFonts'
 import type { SectionContext } from '@/lib/sections/context'
 import { formatTripDate } from '@/lib/dates'
 import JournalCard from '@/components/blog/JournalCard'
@@ -26,9 +27,10 @@ export default function JournalSection({
 
   return (
     <section className="home-section" style={sectionVars('journal', settings, ctx.styles)} {...typeRoot(ctx)}>
+      <TextFonts names={allFonts('journal', settings, ctx.styles)} />
       <div className="home-inner">
         <div className="journal-section-head">
-          <h2 className="section-title" {...editable(ctx, 'heading')}>
+          <h2 className="section-title" {...styledText(ctx, settings, 'heading')}>
             {str(settings, 'heading') || 'From the journal'}
           </h2>
         </div>
@@ -61,7 +63,9 @@ export default function JournalSection({
 
         {cta && (
           <div className="section-cta">
-            <Link href="/journal">{cta}</Link>
+            <Link href="/journal" {...styledText(ctx, settings, 'cta_label')}>
+              {cta}
+            </Link>
           </div>
         )}
       </div>
@@ -84,6 +88,7 @@ const GRID_STYLES = ['feature', 'single', 'columns'] as const
 
 function JournalGrid({ settings, ctx }: { settings: SectionSettings; ctx: SectionContext }) {
   const eyebrow = str(settings, 'eyebrow')
+  const over = styledText(ctx, settings, 'eyebrow')
   const scale = num(settings, 'title_scale', 1)
   const cover = (path: string | null) => (path ? photoUrl(path) : null)
   const arrangement = GRID_STYLES.includes(settings.grid_style as (typeof GRID_STYLES)[number])
@@ -101,13 +106,21 @@ function JournalGrid({ settings, ctx }: { settings: SectionSettings; ctx: Sectio
       }}
       {...typeRoot(ctx)}
     >
+      <TextFonts names={allFonts('journal', settings, ctx.styles)} />
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         {(eyebrow || ctx.editable) && (
-          <p className="eyebrow" style={{ margin: '0 0 0.75rem' }} {...editable(ctx, 'eyebrow')}>
+          // The margin is this element's own layout and the typography is the
+          // photographer's, so the two are merged rather than one winning:
+          // spread first, then re-state `style` with both in it.
+          <p
+            className="eyebrow journal-page-eyebrow"
+            {...over}
+            style={{ margin: '0 0 0.75rem', ...over.style }}
+          >
             {eyebrow}
           </p>
         )}
-        <h1 className="display journal-page-title" {...editable(ctx, 'heading')}>
+        <h1 className="display journal-page-title" {...styledText(ctx, settings, 'heading')}>
           {str(settings, 'heading') || 'Journal'}
         </h1>
 

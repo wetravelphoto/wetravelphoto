@@ -1,8 +1,9 @@
 import { photoUrl } from '@/lib/images'
 import { formatTripDate } from '@/lib/dates'
-import { sectionVars } from '@/lib/type-styles'
+import { allFonts, sectionVars } from '@/lib/type-styles'
 import { num, str, type SectionSettings } from '@/lib/sections/registry'
-import { editable, live, typeRoot } from '@/lib/sections/editable'
+import { live, styledText, typeRoot } from '@/lib/sections/editable'
+import TextFonts from '@/components/sections/TextFonts'
 import type { SectionContext } from '@/lib/sections/context'
 import Link from 'next/link'
 import DragCarousel, { type CarouselItem } from '@/components/home/DragCarousel'
@@ -55,6 +56,7 @@ export default function GalleriesSection({
   })
 
   const vars = sectionVars('galleries', settings, ctx.styles)
+  const fonts = <TextFonts names={allFonts('galleries', settings, ctx.styles)} />
 
   if (str(settings, 'layout') === 'grid') {
     // The Galleries page: every gallery as a tile under a page heading. This is
@@ -75,13 +77,14 @@ export default function GalleriesSection({
         }}
         {...typeRoot(ctx)}
       >
+        {fonts}
         <div className="gallery-index-head">
           {(eyebrow || ctx.editable) && (
-            <p className="gallery-index-eyebrow" {...editable(ctx, 'eyebrow')}>
+            <p className="gallery-index-eyebrow" {...styledText(ctx, settings, 'eyebrow')}>
               {eyebrow}
             </p>
           )}
-          <h1 className="gallery-index-heading" {...editable(ctx, 'heading')}>
+          <h1 className="gallery-index-heading" {...styledText(ctx, settings, 'heading')}>
             {str(settings, 'heading') || 'Galleries'}
           </h1>
         </div>
@@ -112,8 +115,9 @@ export default function GalleriesSection({
 
   return (
     <section className="carousel-section" style={vars} {...typeRoot(ctx)}>
+      {fonts}
       <div className="carousel-head">
-        <h2 {...editable(ctx, 'heading')}>{str(settings, 'heading') || 'Recent trips'}</h2>
+        <h2 {...styledText(ctx, settings, 'heading')}>{str(settings, 'heading') || 'Recent trips'}</h2>
       </div>
 
       {items.length > 0 ? (

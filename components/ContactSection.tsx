@@ -1,5 +1,6 @@
 import Icon from '@/components/SocialIcons'
 import ContactForm from '@/components/ContactForm'
+import { textStyleVars, type TextStyles } from '@/lib/sections/text-style'
 
 export type ContactSettings = {
   /** Photograph beside the form, or the form centred on its own. */
@@ -21,10 +22,16 @@ export type ContactSettings = {
 /** Photo on one side, form on the other, with a contact row beneath. */
 export default function ContactSection({
   settings,
+  text = {},
   styleVars,
   editable = false,
 }: {
   settings: ContactSettings
+  /**
+   * Typography chosen for each piece of this section's writing, keyed by the
+   * setting it belongs to. Absent entries follow the section, then the look.
+   */
+  text?: TextStyles
   styleVars?: React.CSSProperties
   /**
    * True only inside the editor's preview: tags the four pieces of writing
@@ -36,26 +43,28 @@ export default function ContactSection({
   editable?: boolean
 }) {
   const field = (key: string) => (editable ? { 'data-field': key } : {})
+  /** This piece of writing's own typography, if it has been given any. */
+  const own = (key: string) => textStyleVars(text[key] ?? null) as React.CSSProperties
 
   // The words, the form and the direct links — the same in both layouts, so
   // they are written once.
   const words = (
     <>
       {(settings.eyebrow || editable) && (
-        <p className="contact-eyebrow" {...field('eyebrow')}>
+        <p className="contact-eyebrow" style={own('eyebrow')} {...field('eyebrow')}>
           {settings.eyebrow}
         </p>
       )}
-      <h2 className="contact-heading" {...field('heading')}>
+      <h2 className="contact-heading" style={own('heading')} {...field('heading')}>
         {settings.heading || 'Let’s connect'}
       </h2>
       {(settings.intro || editable) && (
-        <p className="contact-copy" {...field('intro')}>
+        <p className="contact-copy" style={own('intro')} {...field('intro')}>
           {settings.intro}
         </p>
       )}
 
-      <ContactForm note={settings.note} editable={editable} />
+      <ContactForm note={settings.note} noteStyle={own('note')} editable={editable} />
 
       <div className="contact-direct">
         {settings.instagramUrl && (
@@ -131,7 +140,9 @@ export default function ContactSection({
           {settings.tagline && (
             <div className="contact-media-caption">
               <span className="contact-media-rule" />
-              <p {...field('tagline')}>{settings.tagline}</p>
+              <p style={own('tagline')} {...field('tagline')}>
+                {settings.tagline}
+              </p>
             </div>
           )}
         </div>

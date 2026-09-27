@@ -4,8 +4,9 @@ import { displayTitle } from '@/lib/catalog'
 import { srcSetFor, displayUrl } from '@/lib/srcset'
 import { pieceStyle } from '@/lib/frame'
 import { num, str, type SectionSettings } from '@/lib/sections/registry'
-import { editable, live, typeRoot } from '@/lib/sections/editable'
-import { sectionVars } from '@/lib/type-styles'
+import { live, styledText, typeRoot } from '@/lib/sections/editable'
+import { allFonts, sectionVars } from '@/lib/type-styles'
+import TextFonts from '@/components/sections/TextFonts'
 import type { SectionContext } from '@/lib/sections/context'
 import FramedArt from '@/components/shop/FramedArt'
 import '@/app/frame.css'
@@ -42,20 +43,21 @@ export default function ShopSection({
 
   return (
     <div className="shop-body" style={sectionVars('shop', settings, ctx.styles)} {...typeRoot(ctx)}>
+      <TextFonts names={allFonts('shop', settings, ctx.styles)} />
       <div className="shop-inner">
         <header className="wall-head">
           {(eyebrow || ctx.editable) && (
-            <p className="wall-overline" {...editable(ctx, 'eyebrow')}>
+            <p className="wall-overline" {...styledText(ctx, settings, 'eyebrow')}>
               {eyebrow}
             </p>
           )}
 
-          <h1 className="wall-title" {...editable(ctx, 'heading')}>
+          <h1 className="wall-title" {...styledText(ctx, settings, 'heading')}>
             {heading || 'Prints'}
           </h1>
 
           {(subheading || ctx.editable) && (
-            <p className="wall-subhead" {...editable(ctx, 'subheading')}>
+            <p className="wall-subhead" {...styledText(ctx, settings, 'subheading')}>
               {subheading}
             </p>
           )}
@@ -81,7 +83,7 @@ export default function ShopSection({
         </header>
 
         {(intro || ctx.editable) && (
-          <p className="wall-intro" {...editable(ctx, 'intro')}>
+          <p className="wall-intro" {...styledText(ctx, settings, 'intro')}>
             {intro}
           </p>
         )}

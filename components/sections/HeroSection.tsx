@@ -5,8 +5,8 @@ import { list, map, str, type SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
 import { spot } from '@/lib/sections/spots'
-import { textStyles, textFonts } from '@/lib/sections/text-style'
-import { sectionFonts } from '@/lib/type-styles'
+import { textStyles } from '@/lib/sections/text-style'
+import { allFonts } from '@/lib/type-styles'
 import TextFonts from '@/components/sections/TextFonts'
 import FixedHero from '@/components/home/FixedHero'
 
@@ -56,9 +56,7 @@ export default function HeroSection({
 
   // Both the section's own typefaces and any a single piece of text asked
   // for. Neither was being loaded before.
-  const needed = Array.from(
-    new Set([...sectionFonts('hero', settings, ctx.styles), ...textFonts(settings)])
-  )
+  const needed = allFonts('hero', settings, ctx.styles)
 
   return (
     <>
@@ -88,6 +86,7 @@ export default function HeroSection({
           overlaySubtitle={str(settings, 'subtitle')}
           ctaLabel={str(settings, 'cta_label')}
           ctaHref={str(settings, 'cta_href')}
+          text={textStyles(settings)}
           styleVars={vars}
           editable={ctx.editable}
         />

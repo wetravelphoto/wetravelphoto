@@ -41,51 +41,72 @@
 .about-inner { width: 100%; max-width: 560px; }
 
 .about-eyebrow {
-  font-family: var(--sec-eyebrow-font, var(--font-display)), sans-serif;
-  font-weight: var(--sec-eyebrow-weight, normal);
-  text-transform: uppercase;
-  letter-spacing: 0.28em;
-  font-size: calc(0.68rem * var(--sec-eyebrow-scale, 1));
-  color: var(--sec-eyebrow-color, var(--ember));
+  font-family: var(--txt-font, var(--sec-eyebrow-font, var(--font-display)), sans-serif);
+  font-weight: var(--txt-weight, var(--sec-eyebrow-weight, normal));
+  text-transform: var(--txt-case, uppercase);
+  letter-spacing: var(--txt-track, 0.28em);
+  font-size: calc(0.68rem * var(--sec-eyebrow-scale, 1) * var(--txt-scale, 1));
+  color: var(--txt-color, var(--sec-eyebrow-color, var(--ember)));
   margin: 0 0 1.1rem;
+  line-height: var(--txt-leading, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 .about-heading {
-  font-family: var(--sec-font, var(--font-display));
-  font-weight: var(--sec-weight, 400);
-  text-transform: var(--sec-case, uppercase);
-  letter-spacing: var(--sec-track, 0.01em);
-  color: var(--sec-color, #14100e);
-  font-size: calc(clamp(2rem, 5vw, 3.4rem) * var(--sec-scale, 1));
-  line-height: 1.02;
+  font-family: var(--txt-font, var(--sec-font, var(--font-display)));
+  font-weight: var(--txt-weight, var(--sec-weight, 400));
+  text-transform: var(--txt-case, var(--sec-case, uppercase));
+  letter-spacing: var(--txt-track, var(--sec-track, 0.01em));
+  color: var(--txt-color, var(--sec-color, #14100e));
+  font-size: calc(clamp(2rem, 5vw, 3.4rem) * var(--sec-scale, 1) * var(--txt-scale, 1));
+  line-height: var(--txt-leading, 1.02);
   margin: 0 0 1.5rem;
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 .about-body p {
-  font-family: var(--sec-body-font, var(--font-body));
-  font-weight: var(--sec-body-weight, 400);
-  color: var(--sec-body-color, var(--ink-soft));
-  font-size: calc(1.02rem * var(--sec-body-scale, 1));
-  line-height: 1.9;
+  font-family: var(--txt-font, var(--sec-body-font, var(--font-body)));
+  font-weight: var(--txt-weight, var(--sec-body-weight, 400));
+  color: var(--txt-color, var(--sec-body-color, var(--ink-soft)));
+  font-size: calc(1.02rem * var(--sec-body-scale, 1) * var(--txt-scale, 1));
+  line-height: var(--txt-leading, 1.9);
   margin: 0 0 1.2rem;
   max-width: 46ch;
+  text-transform: var(--txt-case, inherit);
+  letter-spacing: var(--txt-track, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 .about-cta {
   display: inline-block;
   margin-top: 0.75rem;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--txt-font, var(--font-display), sans-serif);
   border-radius: var(--button-radius, 0px);
-  text-transform: var(--button-case, uppercase);
-  letter-spacing: 0.16em;
-  font-size: 0.74rem;
+  text-transform: var(--txt-case, var(--button-case, uppercase));
+  letter-spacing: var(--txt-track, 0.16em);
+  font-size: calc(0.74rem * var(--txt-scale, 1));
   padding: 0.85em 2.1em;
   border: 1px solid var(--ink);
-  color: var(--ink);
+  color: var(--txt-color, var(--ink));
   transition: background 0.25s ease, color 0.25s ease;
+  font-weight: var(--txt-weight, inherit);
+  line-height: var(--txt-leading, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
-.about-cta:hover { background: var(--ink); color: var(--surface); }
+.about-cta:hover { background: var(--txt-color, var(--ink)); color: var(--surface); }
 
 .about-contact {
   margin-top: 2.5rem;

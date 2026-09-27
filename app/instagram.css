@@ -22,13 +22,18 @@
 }
 
 .ig-heading {
-  font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-  font-weight: 400;
-  font-size: clamp(0.85rem, 1.6vw, 1.05rem);
-  color: var(--ink);
+  font-family: var(--txt-font, var(--font-display), sans-serif);
+  text-transform: var(--txt-case, uppercase);
+  letter-spacing: var(--txt-track, 0.22em);
+  font-weight: var(--txt-weight, 400);
+  font-size: calc(clamp(0.85rem, 1.6vw, 1.05rem) * var(--txt-scale, 1));
+  color: var(--txt-color, var(--ink));
   margin: 0;
+  line-height: var(--txt-leading, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
 }
 
 .ig-handle {
@@ -124,7 +129,10 @@
     gap: 0.4rem;
   }
 
-  .ig-heading { font-size: 0.82rem; letter-spacing: 0.2em; }
+  .ig-heading {
+    font-size: calc(0.82rem * var(--txt-scale, 1));
+    letter-spacing: var(--txt-track, 0.2em);
+  }
   .ig-handle { font-size: 0.8rem; }
 
   /* A badge over a small tile just obscures the photograph */

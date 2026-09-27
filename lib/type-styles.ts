@@ -1,4 +1,5 @@
 import { getFont } from '@/lib/fonts'
+import { textFonts } from '@/lib/sections/text-style'
 
 /**
  * A section's typography: what it has chosen for its heading, its body text and
@@ -247,4 +248,24 @@ export function sectionFonts(
   return Array.from(
     new Set([style.font, style.bodyFont, style.eyebrowFont].filter((f): f is string => !!f))
   )
+}
+
+/**
+ * EVERY TYPEFACE A SECTION HAS TO FETCH.
+ *
+ * The section's own three, plus one for each piece of text that asked for a
+ * face of its own. A font chosen in a panel and never fetched is a control
+ * that does nothing: the browser falls back to whatever the page was already
+ * using, and the choice looks like it was ignored.
+ *
+ * Deduplicated here as well as by React's `precedence` in TextFonts, because a
+ * section whose heading and title both use Oswald should produce one link, not
+ * two, before the two ever reach the renderer.
+ */
+export function allFonts(
+  type: string,
+  settings: Record<string, unknown>,
+  styles: TypeStyles | null
+): string[] {
+  return Array.from(new Set([...sectionFonts(type, settings, styles), ...textFonts(settings)]))
 }

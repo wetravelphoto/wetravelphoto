@@ -1,8 +1,9 @@
 import { photoUrl } from '@/lib/images'
 import { srcSetFromPath, SIZES_ATTR } from '@/lib/srcset'
-import { sectionVars } from '@/lib/type-styles'
+import { allFonts, sectionVars } from '@/lib/type-styles'
 import { str, type SectionSettings } from '@/lib/sections/registry'
-import { editable, live, typeRoot } from '@/lib/sections/editable'
+import { live, styledText, typeRoot } from '@/lib/sections/editable'
+import TextFonts from '@/components/sections/TextFonts'
 import type { SectionContext } from '@/lib/sections/context'
 
 export default function IntroSection({
@@ -21,6 +22,7 @@ export default function IntroSection({
 
   return (
     <section className="home-section" style={sectionVars('intro', settings, ctx.styles)} {...typeRoot(ctx)}>
+      <TextFonts names={allFonts('intro', settings, ctx.styles)} />
       <div className="home-inner intro-grid" data-side={settings.image_side} {...live(ctx, ['image_side'])}>
         {image && (
           <div className="intro-media">
@@ -38,16 +40,16 @@ export default function IntroSection({
 
         <div>
           {(kicker || ctx.editable) && (
-            <p className="intro-kicker" {...editable(ctx, 'kicker')}>
+            <p className="intro-kicker" {...styledText(ctx, settings, 'kicker')}>
               {kicker}
             </p>
           )}
           {(heading || ctx.editable) && (
-            <h2 className="intro-heading" {...editable(ctx, 'heading')}>
+            <h2 className="intro-heading" {...styledText(ctx, settings, 'heading')}>
               {heading}
             </h2>
           )}
-          <div className="intro-body" {...editable(ctx, 'body')}>
+          <div className="intro-body" {...styledText(ctx, settings, 'body')}>
             {paragraphs.map((para, i) => (
               <p key={i}>{para}</p>
             ))}

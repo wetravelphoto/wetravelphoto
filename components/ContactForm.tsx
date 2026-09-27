@@ -6,9 +6,12 @@ import Turnstile from '@/components/Turnstile'
 
 export default function ContactForm({
   note,
+  noteStyle,
   editable = false,
 }: {
   note?: string | null
+  /** The note's own typography, chosen beside its box in the editor. */
+  noteStyle?: React.CSSProperties
   /** True only in the editor's preview, so the note can be selected on its own. */
   editable?: boolean
 }) {
@@ -76,7 +79,11 @@ export default function ContactForm({
         </button>
 
         {note && (
-          <span className="contact-note" {...(editable ? { 'data-field': 'note' } : {})}>
+          <span
+            className="contact-note"
+            style={noteStyle}
+            {...(editable ? { 'data-field': 'note' } : {})}
+          >
             {note}
           </span>
         )}

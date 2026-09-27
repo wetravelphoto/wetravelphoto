@@ -1,4 +1,5 @@
 import type { InstagramPost } from '@/lib/instagram'
+import { textStyleVars, type TextStyle } from '@/lib/sections/text-style'
 
 /**
  * Nine recent posts across a 5×3 grid. The first and sixth span 2×2, giving
@@ -9,11 +10,14 @@ export default function InstagramFeed({
   posts,
   heading,
   handle,
+  headingStyle = null,
   editable = false,
 }: {
   posts: InstagramPost[]
   heading: string | null
   handle: string | null
+  /** The heading's own typography, chosen beside its box in the editor. */
+  headingStyle?: TextStyle | null
   /** True only in the editor's preview. The handle comes from Settings, so it
    *  is not tagged — only the heading belongs to this section. */
   editable?: boolean
@@ -29,7 +33,11 @@ export default function InstagramFeed({
   return (
     <section className="ig-section">
       <div className="ig-head">
-        <h2 className="ig-heading" {...(editable ? { 'data-field': 'heading' } : {})}>
+        <h2
+          className="ig-heading"
+          style={textStyleVars(headingStyle) as React.CSSProperties}
+          {...(editable ? { 'data-field': 'heading' } : {})}
+        >
           {heading || 'Instagram'}
         </h2>
         {profileUrl && (
@@ -50,10 +58,10 @@ export default function InstagramFeed({
             data-feature={featureIndexes.includes(i)}
             aria-label={post.caption ? post.caption.slice(0, 80) : 'View on Instagram'}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             {/* Instagram serves one size only, so there's no srcset to offer.
                 The square ratio at least reserves the space so the page below
                 doesn't jump as tiles arrive. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={post.media_url}
               alt={post.caption?.slice(0, 120) ?? ''}

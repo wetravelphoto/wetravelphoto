@@ -546,6 +546,7 @@
   border-radius: var(--button-radius, 0px);
   text-transform: var(--txt-case, var(--button-case, uppercase));
   letter-spacing: var(--txt-track, 0.16em);
+  text-align: var(--txt-align, inherit);
   font-size: calc(0.74rem * var(--txt-scale, 1));
   padding: 0.8em 2em;
   border: 1px solid rgba(250, 249, 246, 0.6);
@@ -553,7 +554,7 @@
   transition: background 0.25s ease, color 0.25s ease;
 }
 
-.hero-fixed-cta:hover { background: #faf9f6; color: #14100e; }
+.hero-fixed-cta:hover { background: var(--txt-color, #faf9f6); color: #14100e; }
 
 /* The mark and the copy can no longer collide: there is no mark, and each
    piece of copy has a place of its own. */

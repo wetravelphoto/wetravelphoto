@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import { photoUrl } from '@/lib/images'
-import { sectionVars } from '@/lib/type-styles'
+import { allFonts, sectionVars } from '@/lib/type-styles'
 import { str, type SectionSettings } from '@/lib/sections/registry'
-import { editable, live, typeRoot } from '@/lib/sections/editable'
+import { live, styledText, typeRoot } from '@/lib/sections/editable'
+import TextFonts from '@/components/sections/TextFonts'
 import type { SectionContext } from '@/lib/sections/context'
 import '@/app/about/about.css'
 
@@ -40,6 +41,7 @@ export default function AboutSection({
       {...live(ctx, ['image_side'])}
       {...typeRoot(ctx)}
     >
+      <TextFonts names={allFonts('about', settings, ctx.styles)} />
       {image && (
         <div className="about-media">
           <img src={photoUrl(image)} alt="" />
@@ -49,19 +51,19 @@ export default function AboutSection({
       <div className="about-panel">
         <div className="about-inner">
           {(eyebrow || ctx.editable) && (
-            <p className="about-eyebrow" {...editable(ctx, 'eyebrow')}>
+            <p className="about-eyebrow" {...styledText(ctx, settings, 'eyebrow')}>
               {eyebrow}
             </p>
           )}
 
           {(heading || ctx.editable) && (
-            <h1 className="about-heading" {...editable(ctx, 'heading')}>
+            <h1 className="about-heading" {...styledText(ctx, settings, 'heading')}>
               {heading}
             </h1>
           )}
 
           {paragraphs.length > 0 || ctx.editable ? (
-            <div className="about-body" {...editable(ctx, 'body')}>
+            <div className="about-body" {...styledText(ctx, settings, 'body')}>
               {paragraphs.map((para, i) => (
                 <p key={i}>{para}</p>
               ))}
@@ -75,7 +77,7 @@ export default function AboutSection({
           {/* In the editor the button shows once it has a label, so there is
               something to click; in public it also needs somewhere to go. */}
           {ctaLabel && (ctaHref || ctx.editable) && (
-            <Link href={ctaHref ?? '#'} className="about-cta" {...editable(ctx, 'cta_label')}>
+            <Link href={ctaHref ?? '#'} className="about-cta" {...styledText(ctx, settings, 'cta_label')}>
               {ctaLabel}
             </Link>
           )}

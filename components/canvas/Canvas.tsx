@@ -103,6 +103,26 @@ function editedAt(device: Device): EditDevice {
  * what is actually in the draft. A few hundred milliseconds slower than
  * optimistic patching, and it cannot lie.
  */
+/** The mark beside "Published". Drawn, so it is the same size in every font. */
+function Tick() {
+  return (
+    <svg
+      className="cv-tick"
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 12.5l5.5 5.5L20 6.5" />
+    </svg>
+  )
+}
+
 export default function Canvas({
   page,
   title,
@@ -206,6 +226,20 @@ export default function Canvas({
   const [picking, setPicking] = useState<{ after: string | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  /**
+   * HAS PUBLISH BEEN PRESSED SINCE THE LAST CHANGE?
+   *
+   * The button went from "Publish" to "Publish, greyed out", which is the same
+   * thing it looks like before you have made any changes at all — so the one
+   * moment you most want confirmation is the moment the interface says least.
+   *
+   * A flag rather than a timer, and read ALONGSIDE `hasDraft` rather than
+   * cleared by an effect: the instant anything is edited, `hasDraft` is true
+   * again and the label is "Publish" again, with nothing to schedule, nothing
+   * to cancel, and no window in which the two disagree.
+   */
+  const [didPublish, setDidPublish] = useState(false)
+  const published = didPublish && !hasDraft
   /** The Pages & menu window. */
   const [managing, setManaging] = useState(false)
   /** The version history and share-a-preview windows. */
@@ -723,6 +757,9 @@ export default function Canvas({
               if (confirm('Throw away every unpublished change and go back to the live page?')) {
                 run(() => discard(), () => {
                   setSelected(null)
+                  // Not "Published" — nothing was. The live page is simply
+                  // what it already was.
+                  setDidPublish(false)
                   setNote('Draft discarded. This is the live page again.')
                 })
               }
@@ -733,15 +770,26 @@ export default function Canvas({
           <button
             type="button"
             className="cv-btn cv-btn-go"
+            data-done={published || undefined}
             disabled={!hasDraft || pending}
             onClick={() =>
               run(
                 () => publish(),
-                () => setNote('Published. The live site now matches this.')
+                () => {
+                  setDidPublish(true)
+                  setNote('Published. The live site now matches this.')
+                }
               )
             }
           >
-            Publish
+            {published ? (
+              <>
+                <Tick />
+                Published
+              </>
+            ) : (
+              'Publish'
+            )}
           </button>
         </div>
       </header>

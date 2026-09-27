@@ -678,16 +678,26 @@
    * of its own stops following the look for that one property and nothing
    * else.
    *
-   * The padding is in `em` so the gap round the words grows with the words.
-   * Set in pixels it would look right at one size and wrong at every other,
-   * which is the same reason the size control is a multiplier.
+   * ── THE GAP DOES NOT GROW WITH THE TEXT ──────────────────────────────────
+   *
+   * The padding is in `em`, so a photographer setting it thinks in "half a
+   * line of space" rather than in pixels, and it survives a change of look.
+   * But `em` on this element means ITS font-size, which already carries
+   * `--txt-scale` — so turning the text up to 200% doubled the gap as well and
+   * the whole button ballooned instead of the words growing inside it.
+   *
+   * Dividing the scale back out fixes that without giving up the unit: the gap
+   * is `em` of the button's UNSCALED size, so it holds still while the text
+   * grows. At the default scale of 1 the division is the identity, so nothing
+   * moves for a button nobody has touched.
    */
   border-radius: var(--txt-radius, var(--button-radius, 0px));
   text-transform: var(--txt-case, var(--button-case, uppercase));
   letter-spacing: var(--txt-track, 0.16em);
   text-align: var(--txt-align, inherit);
   font-size: calc(0.74rem * var(--txt-scale, 1));
-  padding: var(--txt-pad-y, 0.8em) var(--txt-pad-x, 2em);
+  padding: calc(var(--txt-pad-y, 0.8em) / var(--txt-scale, 1))
+    calc(var(--txt-pad-x, 2em) / var(--txt-scale, 1));
   border: var(--txt-border-w, 1px) solid var(--txt-border-c, rgba(250, 249, 246, 0.6));
   color: var(--txt-color, #faf9f6);
   transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;

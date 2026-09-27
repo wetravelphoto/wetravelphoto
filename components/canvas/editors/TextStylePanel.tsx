@@ -45,6 +45,40 @@ import {
  * rather than waiting for a round trip; the stored value takes over again the
  * moment it changes underneath, which is how Undo reaches these.
  */
+/**
+ * How much shorter than it is wide a button's gap is, by default: 0.8em over
+ * 2em. It is the proportion the stylesheet has always used, so a button set
+ * with the single slider looks like the ones that came before it.
+ */
+const PAD_RATIO = 0.8 / 2
+
+/** Are the two spacing values still in that proportion — within rounding? */
+function proportional(style: TextStyle | null): boolean {
+  if (!style || style.padX === undefined) return style?.padY === undefined
+  if (style.padY === undefined) return false
+  return Math.abs(style.padY - style.padX * PAD_RATIO) < 0.02
+}
+
+/** Two links, joined or parted. One icon, one state, no second glyph to keep in step. */
+function ChainIcon({ broken }: { broken: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M10 14a4 4 0 0 1 0-5.66l2-2" />
+      <path d="M14 10a4 4 0 0 1 0 5.66l-2 2" />
+      {broken ? <path d="M4 4l16 16" opacity="0.85" /> : <path d="M9.2 14.8l5.6-5.6" />}
+    </svg>
+  )
+}
+
 export default function TextStylePanel({
   label,
   value,
@@ -106,6 +140,19 @@ export default function TextStylePanel({
     setLocal(next)
     onChange(Object.keys(next).length > 0 ? next : null)
   }
+
+  /*
+   * ARE THE TWO SPACING CONTROLS MOVING TOGETHER?
+   *
+   * Seeded from the values rather than stored: if the top is the sides at
+   * PAD_RATIO — which is true of every button that has only ever used the one
+   * slider, and of every button that has never been touched — then they are
+   * linked. Adding a settings key for it would put a piece of EDITOR state in
+   * the photographer's data, where it would have to be sanitised, carried
+   * across looks and kept per size, all to remember which of two layouts a
+   * panel was in.
+   */
+  const [linked, setLinked] = useState(() => proportional(value))
 
   const set = Object.keys(local).length
 
@@ -282,21 +329,71 @@ export default function TextStylePanel({
               onChange={(v) => change({ radius: v })}
             />
 
-            <Slider
-              name="Space, sides"
-              value={local.padX}
-              limits={LIMITS.padX}
-              format={(v) => `${v.toFixed(1)}em`}
-              onChange={(v) => change({ padX: v })}
-            />
+            {/*
+              * ── THE GAP, AS ONE CONTROL UNTIL IT NEEDS TO BE TWO ───────────
+              *
+              * Nearly every button wants the sides and the top to move
+              * together, in the proportion the design already uses — wider
+              * than it is tall. Two sliders make that the fiddly case and a
+              * lopsided button the easy one.
+              *
+              * So one slider, and a chain to break it. Linked, the sides are
+              * what you set and the top follows at PAD_RATIO; unlinked, the
+              * two are exactly what they were at the moment you unlinked, so
+              * nothing jumps.
+              */}
+            <div className="txt-linked">
+              <button
+                type="button"
+                className="txt-link"
+                data-on={linked || undefined}
+                aria-pressed={linked}
+                title={linked ? 'Set the sides and the top separately' : 'Move them together again'}
+                onClick={() => {
+                  // Relinking takes the sides as the truth and brings the top
+                  // back to the proportion — otherwise "linked" would be a
+                  // label over two numbers that are not linked at all.
+                  if (!linked && local.padX !== undefined) {
+                    change({ padY: Number((local.padX * PAD_RATIO).toFixed(2)) })
+                  }
+                  setLinked(!linked)
+                }}
+              >
+                <ChainIcon broken={!linked} />
+                <span className="cv-sr">{linked ? 'Unlink' : 'Link'} the spacing</span>
+              </button>
 
-            <Slider
-              name="Space, top and bottom"
-              value={local.padY}
-              limits={LIMITS.padY}
-              format={(v) => `${v.toFixed(2)}em`}
-              onChange={(v) => change({ padY: v })}
-            />
+              <div className="txt-linked-rows">
+                <Slider
+                  name={linked ? 'Space round the words' : 'Space, sides'}
+                  value={local.padX}
+                  limits={LIMITS.padX}
+                  format={(v) => `${v.toFixed(1)}em`}
+                  onChange={(v) =>
+                    change(
+                      linked
+                        ? {
+                            padX: v,
+                            // Null when the slider was handed back, so both
+                            // follow again rather than one being stranded.
+                            padY: v === null ? null : Number((v * PAD_RATIO).toFixed(2)),
+                          }
+                        : { padX: v }
+                    )
+                  }
+                />
+
+                {!linked && (
+                  <Slider
+                    name="Space, top and bottom"
+                    value={local.padY}
+                    limits={LIMITS.padY}
+                    format={(v) => `${v.toFixed(2)}em`}
+                    onChange={(v) => change({ padY: v })}
+                  />
+                )}
+              </div>
+            </div>
 
             <Slider
               name="Border"

@@ -125,16 +125,46 @@
    outline and outline-offset so nothing reflows: an editor that nudges the
    page every time the cursor crosses it is unusable. */
 
+/*
+ * ── THE EDITOR MUST NOT SET ANYTHING THE PANEL CAN SET ──────────────────────
+ *
+ * This file is the last stylesheet the preview loads, so a property declared
+ * here beats the site's own at equal specificity — and everything an editable
+ * element is, is at equal specificity, because `[data-field]` and
+ * `.hero-fixed-cta` are both one selector deep.
+ *
+ * That cost two real controls. `border-radius: 1px` lived on this rule as a
+ * cosmetic touch for the hover tint's corners, and quietly held every editable
+ * element at 1px — so the button's new Roundness slider did nothing in the
+ * preview and worked perfectly on the published page, which is about the worst
+ * way for a control to fail. The hover tint below did the same to the Hover
+ * fill colour.
+ *
+ * So: this rule may only use properties nothing else draws with — `outline`,
+ * `outline-offset`, `cursor`. Not radius, not padding, not border, not
+ * background, not anything typographic. `.mk/preview-chrome.ts` fails the
+ * build if that slips.
+ */
 [data-field] {
   cursor: text;
   transition: outline-color 0.1s ease, background-color 0.1s ease;
   outline: 1.5px solid transparent;
   outline-offset: 3px;
-  border-radius: 1px;
 }
 
 [data-field]:hover {
   outline-color: var(--pv-accent);
+}
+
+/*
+ * The tint, on everything that does not draw a hover of its own.
+ *
+ * A link or a button has its own hover, and on a hero button that hover is
+ * two colours the photographer chose in the panel. Tinting over it meant the
+ * one place you would go to look at your hover colours was the one place they
+ * could not be seen. The outline above already says the element is selectable.
+ */
+[data-field]:hover:not(a):not(button) {
   background-color: color-mix(in srgb, var(--pv-accent) 9%, transparent);
 }
 
@@ -166,7 +196,6 @@ button[data-field]:hover {
   min-width: 7rem;
   outline: 1px dashed color-mix(in srgb, var(--pv-accent) 55%, transparent);
   outline-offset: 3px;
-  border-radius: 1px;
   opacity: 0.75;
 }
 
@@ -187,6 +216,9 @@ button[data-field]:hover {
 [data-field]:empty:hover {
   opacity: 1;
   outline-style: solid;
+}
+
+[data-field]:empty:hover:not(a):not(button) {
   background-color: color-mix(in srgb, var(--pv-accent) 9%, transparent);
 }
 

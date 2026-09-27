@@ -821,6 +821,9 @@ export default function Canvas({
                 bodyColor: tokens.ink_soft,
               }}
               onTypeVars={(id, vars, fonts) => tell({ type: 'type-vars', id, vars, fonts })}
+              onTextVars={(id, field, vars, fonts) =>
+                tell({ type: 'text-vars', id, field, vars, fonts })
+              }
               // Cropping for the phone while looking at the desktop layout is
               // guessing, so the preview follows the crop being edited.
               onDevice={(d) => setDevice(d === 'mobile' ? 'phone' : 'desktop')}

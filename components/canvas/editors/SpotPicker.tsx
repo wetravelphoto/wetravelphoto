@@ -63,6 +63,17 @@ export default function SpotPicker({
 
   return (
     <div className="spot-field" ref={box}>
+      {/*
+       * Named on screen, not only to a screen reader.
+       *
+       * Sitting under its own text box already says WHICH text this moves, and
+       * that was the fix that mattered. It did not say what the control IS:
+       * a button reading "Bottom centre" under a title box is a fact about the
+       * title, not an invitation to change where it sits. Now there are two
+       * controls under each box — this and the typography one — and each says
+       * its own name, so the pair reads as a list rather than as two mysteries.
+       */}
+      <p className="spot-label">Position</p>
       <button
         type="button"
         className="spot-open"

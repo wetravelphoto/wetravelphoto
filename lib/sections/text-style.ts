@@ -141,19 +141,52 @@ export function sanitizeTextStyle(input: unknown): TextStyle | null {
 /** Where a section keeps them: `settings.text`, keyed by the field's own name. */
 export type TextStyles = Record<string, TextStyle>
 
-export function textStyles(settings: Record<string, unknown>): TextStyles {
-  const bag = settings.text
-  if (!bag || typeof bag !== 'object' || Array.isArray(bag)) return {}
+/** A key must look like a field name — this ends up in a CSS attribute selector. */
+const FIELD_KEY = /^[a-z][a-z0-9_]*$/
+
+/**
+ * A whole bag, cleaned. The save action runs this before the value is stored
+ * and every reader runs it again on the way out, because a row can also be
+ * written by an older release or by hand. An entry that survives to nothing is
+ * dropped rather than kept as `{}`: an empty override and no override mean the
+ * same thing, and only one of them should be in the database.
+ */
+export function sanitizeTextStyles(input: unknown): TextStyles {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
   const out: TextStyles = {}
-  for (const [key, value] of Object.entries(bag as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (!FIELD_KEY.test(key)) continue
     const clean = sanitizeTextStyle(value)
     if (clean) out[key] = clean
   }
   return out
 }
 
+export function textStyles(settings: Record<string, unknown>): TextStyles {
+  return sanitizeTextStyles(settings.text)
+}
+
 export function textStyleFor(settings: Record<string, unknown>, field: string): TextStyle | null {
   return textStyles(settings)[field] ?? null
+}
+
+/**
+ * The bag with one entry set or removed, as a new object.
+ *
+ * Every piece of text in a section shares one settings key, so saving one
+ * element's typography means writing the WHOLE bag. Removing rather than
+ * storing an empty object is the point: an entry that is absent follows the
+ * section, and `{}` would be a third state meaning the same thing.
+ */
+export function withTextStyle(
+  bag: TextStyles,
+  field: string,
+  next: TextStyle | null
+): TextStyles {
+  const out = { ...bag }
+  if (next && Object.keys(next).length > 0) out[field] = next
+  else delete out[field]
+  return out
 }
 
 /**

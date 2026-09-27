@@ -10,7 +10,16 @@ import SpotPicker from '@/components/canvas/editors/SpotPicker'
 import MarkImage from '@/components/canvas/editors/MarkImage'
 import ImageField from '@/components/canvas/ImageField'
 import SectionType from '@/components/canvas/SectionType'
+import TextStylePanel from '@/components/canvas/editors/TextStylePanel'
 import { SEC_VARS, sectionStyle, varsFor, type SectionStyle, type TypeStyles } from '@/lib/type-styles'
+import {
+  TEXT_VARS,
+  textStyleVars,
+  textStyles,
+  withTextStyle,
+  type TextStyle,
+  type TextStyles,
+} from '@/lib/sections/text-style'
 import { fontHref } from '@/lib/fonts'
 import type { CanvasSection } from '@/components/canvas/Canvas'
 
@@ -60,6 +69,7 @@ export default function Inspector({
   onLive,
   onMoveSpot,
   onTypeVars,
+  onTextVars,
   onDevice,
   onShowStory,
   onSaved,
@@ -96,6 +106,18 @@ export default function Inspector({
   onMoveSpot: (field: string, value: string) => void
   /** A section's typography variables, for the page to repaint at once. */
   onTypeVars: (sectionId: string, vars: Record<string, string | null>, fonts: string[]) => void
+  /**
+   * ONE PIECE OF TEXT'S typography, for the page to repaint at once. The same
+   * channel as onTypeVars one line up, scoped to the element rather than the
+   * section: the preview writes exactly the custom properties the renderer
+   * would have written, on the element carrying that field's name.
+   */
+  onTextVars: (
+    sectionId: string,
+    field: string,
+    vars: Record<string, string | null>,
+    fonts: string[]
+  ) => void
   /** Put the preview into the width whose crop is being edited. */
   onDevice: (device: 'desktop' | 'mobile') => void
   /** Bring one of the hero's stories up in the preview. */
@@ -196,6 +218,37 @@ export default function Inspector({
 
     if (valueTimer.current) clearTimeout(valueTimer.current)
     valueTimer.current = setTimeout(sendValues, VALUE_DEBOUNCE_MS)
+  }
+
+  /**
+   * THE `text` BAG AS THIS PANEL LAST LEFT IT.
+   *
+   * Every piece of text in a section shares one settings key, so saving one
+   * element's typography means writing the WHOLE bag — and the obvious way to
+   * build it, reading `section.settings` each time, is wrong by about half a
+   * second. Style the title, then style the sub-heading before the first save
+   * has come back and re-rendered: the second write reads a `section.settings`
+   * that still predates the first, rebuilds the bag without the title in it,
+   * and the title's typography is gone. `saveValues` merges by KEY, so the
+   * second `text` simply replaces the first — the merge cannot save this.
+   *
+   * Holding what was last written closes that window. It is dropped whenever
+   * the panel is rebuilt, which is what Undo does (Canvas keys this component
+   * on `revision`), so it can never outlive the values it describes.
+   */
+  const textBag = useRef<{ id: string; bag: TextStyles } | null>(null)
+
+  const saveTextStyle = (sectionId: string, field: string, next: TextStyle | null) => {
+    const bag = withTextStyle(
+      textBag.current?.id === sectionId
+        ? textBag.current.bag
+        : textStyles(section?.settings ?? {}),
+      field,
+      next
+    )
+
+    textBag.current = { id: sectionId, bag }
+    saveValues(sectionId, { text: bag })
   }
 
   const send = (target: { id: string; data: FormData }) => {
@@ -379,6 +432,48 @@ export default function Inspector({
           settings={section.settings}
           publicUrl={publicUrl}
           collapsible
+          renderTextStyle={(field: Field) => {
+            // Read from the panel's own copy first, for the same reason
+            // saveTextStyle writes to it: two elements styled in quick
+            // succession must not each start from a stale bag.
+            const bag =
+              textBag.current?.id === section.id
+                ? textBag.current.bag
+                : textStyles(section.settings)
+
+            // What it falls back to, for the "Following (…)" labels. The
+            // section's own typography wins over the site's, which is the same
+            // order the CSS cascade puts them in.
+            const own = sectionStyle(section.type, section.settings, typeStyles)
+            const heading = field.key === 'title' || field.key === 'kicker'
+
+            return (
+              <TextStylePanel
+                label={field.label}
+                value={bag[field.key] ?? null}
+                base={{
+                  font: (heading ? own.font : own.bodyFont) ?? (heading ? styleBase.font : styleBase.bodyFont),
+                  color:
+                    (heading ? own.color : own.bodyColor) ??
+                    (heading ? styleBase.color : styleBase.bodyColor),
+                }}
+                onChange={(next) => {
+                  // Painted on the page first: textStyleVars is what the
+                  // renderer writes, so setting the same properties to the
+                  // same values is the identity rather than a second renderer.
+                  // Every property this can set is sent on every change, the
+                  // unset ones as null, or clearing one would leave the last
+                  // value stranded on the element until the re-render.
+                  const vars = textStyleVars(next)
+                  const all: Record<string, string | null> = {}
+                  for (const name of TEXT_VARS) all[name] = vars[name] ?? null
+                  onTextVars(section.id, field.key, all, next?.family ? [fontHref(next.family)] : [])
+
+                  saveTextStyle(section.id, field.key, next)
+                }}
+              />
+            )
+          }}
           renderImage={(field: Field, value: unknown, set) => (
             <ImageField
               name={field.key}

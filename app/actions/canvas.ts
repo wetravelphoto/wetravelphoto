@@ -21,6 +21,7 @@ import { getSiteSettings } from '@/lib/site'
 import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import { sanitizeOwnStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
+import { sanitizeTextStyles } from '@/lib/sections/text-style'
 import { sanitizePageSeo } from '@/lib/seo'
 import { sanitizeChrome } from '@/lib/chrome'
 import {
@@ -318,6 +319,11 @@ export async function updateDraftSectionValues(
   // before it is stored. Typography is the one structured value written here
   // that the page turns straight into CSS.
   if ('type' in values) values = { ...values, type: sanitizeOwnStyle(values.type) }
+  // Per-element typography, the same reasoning one line up: this bag is turned
+  // straight into an inline style attribute, so nothing arbitrary gets in. The
+  // panel sends the WHOLE bag every time — merging one entry server-side would
+  // make deleting an override impossible — so this is the complete new value.
+  if ('text' in values) values = { ...values, text: sanitizeTextStyles(values.text) }
 
   await writeDraftPage(
     page,

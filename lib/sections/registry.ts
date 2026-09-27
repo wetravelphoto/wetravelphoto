@@ -91,6 +91,28 @@ type FieldBase = {
   content?: boolean
   /** Shown on the page instantly while it changes. See LiveSpec. */
   live?: LiveSpec
+  /**
+   * THIS FIELD'S WORDS CAN CARRY THEIR OWN TYPOGRAPHY.
+   *
+   * The editor puts a button under the box — alignment, typeface, size,
+   * weight, spacing, colour — and what is chosen is stored in the section's
+   * `text` bag under this same key, NOT under the key itself. See
+   * lib/sections/text-style.ts.
+   *
+   * Two things have to be true before it is set:
+   *
+   *   · the section's `defaults` contain `text: {}`, or the save action will
+   *     refuse the write as a setting the section does not have;
+   *   · the renderer marks the element with `editable(ctx, '<this key>')` AND
+   *     writes `textStyleVars(...)` on that same element, or the choice is
+   *     stored and nothing on the page changes.
+   *
+   * The `text` bag deliberately has no field of its own, which is what makes
+   * it survive a change of look: `splitSettings` counts a key with no field
+   * behind it as the photographer's. That is the decision — somebody who spent
+   * ten minutes on a title's letter spacing does not lose it to one click.
+   */
+  textStyle?: boolean
 }
 
 type When = { key: string; equals: unknown }
@@ -203,6 +225,16 @@ export const SECTIONS: Record<string, SectionDef> = {
     defaults: {
       // This section's own typography (lib/type-styles.ts). Null follows the site.
       type: null,
+      /*
+       * Typography for INDIVIDUAL pieces of text, keyed by the field they
+       * belong to (lib/sections/text-style.ts). `type` above styles the whole
+       * section at once; this is the finer instrument, and it wins where both
+       * are set. Empty means every piece of text follows the section.
+       *
+       * No field declares it, on purpose — that is what carries it across a
+       * change of look. See `textStyle` on FieldBase.
+       */
+      text: {},
       mode: 'stories',
       title_position: 'center',
       story_align: 'left',
@@ -254,10 +286,10 @@ export const SECTIONS: Record<string, SectionDef> = {
        * Design rather than content: a look may place them, and switching look
        * does not carry a placement across, unlike the words themselves.
        */
-      { key: 'title', label: 'Title', kind: 'text', content: true },
+      { key: 'title', label: 'Title', kind: 'text', content: true, textStyle: true },
       { key: 'title_spot', label: 'Title position', kind: 'custom', editor: 'spot',
         note: 'Where the title sits on the photograph.' },
-      { key: 'subtitle', label: 'Sub-heading', kind: 'text', content: true },
+      { key: 'subtitle', label: 'Sub-heading', kind: 'text', content: true, textStyle: true },
       { key: 'subtitle_spot', label: 'Sub-heading position', kind: 'custom', editor: 'spot',
         note: 'Where the line under the title sits.' },
       {
@@ -266,6 +298,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         kind: 'text',
         group: 'Button',
         content: true,
+        textStyle: true,
         help: 'Leave empty for no button.',
       },
       {

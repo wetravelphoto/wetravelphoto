@@ -580,6 +580,35 @@ export default function PreviewBridge({ page }: { page: string }) {
         return
       }
 
+      if (data.type === 'text-vars' && data.id && data.field && SAFE_WORD.test(data.field)) {
+        // ONE PIECE OF TEXT's typography, on the element that already carries
+        // its field name. The handler above does the same for a whole section;
+        // this is the finer one, and it is the identity for the same reason:
+        // the renderer writes exactly these custom properties on exactly this
+        // element (textStyleVars in lib/sections/text-style.ts), so setting
+        // them here is what the server is about to send back.
+        //
+        // Custom properties rather than the real ones, deliberately — an
+        // inline `font-size` would beat the stylesheet's media query and a
+        // title sized on a desktop would keep that size on a phone.
+        const id = data.id
+        const field = data.field
+        const vars = Object.entries(data.vars ?? {}).filter(([name]) => SAFE_VAR.test(name))
+
+        const apply = () => {
+          document
+            .querySelectorAll<HTMLElement>(
+              `.pv-section[data-section-id="${CSS.escape(id)}"] [data-field="${CSS.escape(field)}"]`
+            )
+            .forEach((el) => vars.forEach(([name, value]) => setVar(el, name, value)))
+        }
+
+        loadFonts(data.fonts)
+        pending.set(`text:${id}:${field}`, { section: id, apply })
+        apply()
+        return
+      }
+
       if (data.type === 'chrome-live' && (data.part === 'header' || data.part === 'footer')) {
         // A header or footer value as it moves: custom properties on the
         // element, or one attribute. Kept as pending like a section's, keyed

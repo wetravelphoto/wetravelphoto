@@ -2888,3 +2888,270 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* ---------------- one piece of text's own typography ---------------- */
+
+/*
+ * Sits under the box it governs, beside the placement picker, and looks like
+ * it: two controls for the same words, the same shape, one saying where and
+ * one saying what it looks like.
+ */
+.txt-field { position: relative; margin-top: 0.35rem; }
+
+.txt-open {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.txt-open:hover { background: rgba(255, 255, 255, 0.1); }
+.txt-open[aria-expanded='true'] { border-color: var(--cv-accent, #b5602c); }
+
+.txt-open-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 2px;
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+.txt-open-text { flex: 1; min-width: 0; }
+
+.txt-open-hint {
+  font-size: 0.68rem;
+  opacity: 0.45;
+  white-space: nowrap;
+}
+
+/* How many things this text no longer takes from the look. */
+.txt-open-count {
+  flex: 0 0 auto;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--cv-accent, #b5602c);
+  color: #fff;
+  font-size: 0.62rem;
+  line-height: 16px;
+  text-align: center;
+}
+
+/*
+ * Wider than the placement grid and scrollable, because this is a long panel
+ * in a narrow column. Anchored to the RIGHT edge so it cannot run off the side
+ * of the inspector on a small screen.
+ */
+.txt-pop {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+  padding: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: #1c1d21;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.txt-pop-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.txt-pop-title {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.txt-clear {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cv-accent, #b5602c);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+  text-decoration: underline;
+  white-space: nowrap;
+  /* A thumb is about 9mm across. Small TEXT is fine; a small TARGET is not,
+     so every control in here is at least 24px tall even where the ink is not. */
+  min-height: 24px;
+}
+
+.txt-block + .txt-block {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.txt-block-name {
+  margin: 0 0 0.3rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.45;
+}
+
+/* Label on the left, control on the right: a column of rows scans far faster
+   than a column of stacked label-over-input pairs, and this panel is long. */
+.txt-row {
+  display: grid;
+  grid-template-columns: 5.4rem 1fr;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+}
+
+.txt-row-name { opacity: 0.7; }
+
+.txt-row select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.25rem 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.txt-seg {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.txt-seg-btn {
+  flex: 1;
+  min-width: 0;
+  /* Touch targets: 22px is comfortable with a mouse and a miss with a thumb. */
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.txt-seg-btn:hover { background: rgba(255, 255, 255, 0.16); }
+
+.txt-seg-btn[data-active] {
+  background: var(--cv-accent, #b5602c);
+  border-color: var(--cv-accent, #b5602c);
+  color: #fff;
+}
+
+.txt-seg-btn[data-italic] { font-style: italic; }
+.txt-seg-btn[data-case='underline'] { text-decoration: underline; }
+.txt-seg-btn[data-case='line-through'] { text-decoration: line-through; }
+.txt-seg-btn[data-case='left'] { text-align: left; padding-left: 0.3rem; }
+.txt-seg-btn[data-case='right'] { text-align: right; padding-right: 0.3rem; }
+
+/* Named for a screen reader and for anyone tabbing through; never drawn. */
+.txt-seg-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.txt-slider-body {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.txt-slider-body input[type='range'] { flex: 1; min-width: 0; height: 26px; }
+
+/* A slider with no value yet still has a thumb somewhere, which reads as a
+   setting. Fading it says the position is a starting point, not a choice. */
+.txt-slider-body input[data-following] { opacity: 0.45; }
+
+.txt-slider-value {
+  flex: 0 0 auto;
+  min-width: 3.4rem;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.66rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.txt-slider-value.is-following {
+  opacity: 0.45;
+  cursor: default;
+  text-decoration: none;
+}
+
+.txt-colour {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+}
+
+.txt-colour input[type='color'] {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+}
+
+.txt-colour-name {
+  flex: 1;
+  min-width: 0;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Says what the control below IS, now that each text box has two of them. */
+.spot-label {
+  margin: 0 0 0.2rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.45;
+}

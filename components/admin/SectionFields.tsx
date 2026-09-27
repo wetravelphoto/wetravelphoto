@@ -28,6 +28,7 @@ export default function SectionFields({
   publicUrl,
   renderCustom,
   renderImage,
+  renderTextStyle,
   collapsible = false,
 }: {
   def: SectionDef
@@ -52,6 +53,15 @@ export default function SectionFields({
     /** Writes the new value into the local copy, so a `when` on it re-evaluates. */
     set: (key: string, value: unknown) => void
   ) => React.ReactNode | null
+  /**
+   * Draws the typography button UNDER a field declared `textStyle`, where a
+   * caller has one. It is not a field of its own — what it edits is stored in
+   * the section's `text` bag, not under the field's key — so it cannot be a
+   * `custom` field in the registry without also becoming a settings key that
+   * changes shape on every look. The canvas passes one; the old admin forms
+   * pass nothing and show the field exactly as before.
+   */
+  renderTextStyle?: (field: Field) => React.ReactNode | null
   /**
    * Groups fold away. The canvas turns this on; the old admin forms are short
    * enough not to need it and keep every group open.
@@ -140,6 +150,7 @@ export default function SectionFields({
               {(field.kind === 'custom' && renderCustom?.(field, values[field.key])) ||
                 (field.kind === 'image' && renderImage?.(field, values[field.key], set)) ||
                 renderField(field, values, set, publicUrl)}
+              {field.textStyle && renderTextStyle?.(field)}
             </div>
           ))}
         </div>

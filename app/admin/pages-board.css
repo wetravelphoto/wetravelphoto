@@ -1,0 +1,500 @@
+/*
+ * THE PAGES SCREEN
+ * ════════════════
+ *
+ * A heading, a toolbar, a grid of miniature websites, and a quiet line at the
+ * bottom. Everything here draws with the tokens in workspace.css.
+ */
+
+.pb {
+  max-width: 1320px;
+}
+
+/* ── Heading ────────────────────────────────────────────────────────────────── */
+
+.pb-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ad-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--ad-6);
+}
+
+.pb-head-words { min-width: 0; }
+
+.pb-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.024em;
+  line-height: 1.12;
+  color: var(--admin-ink);
+}
+
+.pb-sub {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--admin-soft);
+}
+
+/* The address, and whether anybody can see it. Directly under the heading,
+   because "which site am I looking at" is the question the heading raises. */
+.pb-site {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-3);
+  flex-wrap: wrap;
+  margin: var(--ad-4) 0 0;
+  font-size: 13.5px;
+}
+
+.pb-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--admin-ink);
+  font-weight: 500;
+}
+
+.pb-host:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pb-host svg { color: var(--admin-mute); }
+
+.pb-host-none { color: var(--admin-mute); font-weight: 400; }
+
+.pb-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--admin-soft);
+}
+
+.pb-new { flex-shrink: 0; height: var(--ad-control-lg); }
+
+.pb-error {
+  margin: 0 0 var(--ad-4);
+  padding: 10px 12px;
+  border: 1px solid rgba(180, 35, 24, 0.25);
+  border-radius: var(--ad-radius-sm);
+  background: rgba(180, 35, 24, 0.05);
+  font-size: 13px;
+  color: var(--admin-danger);
+}
+
+/* ── Toolbar ────────────────────────────────────────────────────────────────── */
+
+.pb-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--ad-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--ad-5);
+  border-bottom: 1px solid var(--admin-line);
+}
+
+.pb-tabs { display: flex; gap: var(--ad-5); }
+
+.pb-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ad-2);
+  padding: 0 0 10px;
+  border: 0;
+  /* The underline IS the selection, so it has to sit on the toolbar's own
+     rule rather than above it. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  font-family: var(--admin-font);
+  font-size: 13.5px;
+  font-weight: 450;
+  color: var(--admin-mute);
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+
+.pb-tab:hover { color: var(--admin-soft); }
+
+.pb-tab[aria-selected='true'] {
+  color: var(--admin-ink);
+  font-weight: 550;
+  border-bottom-color: var(--admin-ink);
+}
+
+.pb-tab-count {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--admin-selected);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--admin-soft);
+}
+
+.pb-tab[aria-selected='true'] .pb-tab-count { color: var(--admin-ink); }
+
+.pb-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-2);
+  padding-bottom: var(--ad-2);
+}
+
+.pb-find {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-2);
+  height: var(--ad-control);
+  padding: 0 10px;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--ad-radius-sm);
+  background: var(--admin-panel);
+  color: var(--admin-mute);
+}
+
+.pb-find:focus-within {
+  border-color: var(--admin-ink);
+  color: var(--admin-soft);
+}
+
+.pb-find input {
+  width: 200px;
+  border: 0;
+  background: none;
+  font-family: var(--admin-font);
+  font-size: 13px;
+  color: var(--admin-ink);
+}
+
+.pb-find input:focus { outline: none; }
+.pb-find input::placeholder { color: var(--admin-mute); }
+
+.pb-view {
+  display: flex;
+  height: var(--ad-control);
+  padding: 2px;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--ad-radius-sm);
+  background: var(--admin-panel);
+}
+
+.pb-view-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--admin-mute);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.pb-view-btn:hover { color: var(--admin-soft); }
+.pb-view-btn[data-on] { background: var(--admin-selected); color: var(--admin-ink); }
+
+/* ── The grid ───────────────────────────────────────────────────────────────── */
+
+.pb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ad-5);
+}
+
+.pb-grid[data-view='list'] { grid-template-columns: minmax(0, 1fr); gap: var(--ad-3); }
+
+/* Two columns where three would make each card too small to recognise, one
+   where two would. Driven by the CONTENT width, not the window's, so the same
+   rule holds whether or not the rail is a drawer. */
+@media (max-width: 1180px) {
+  .pb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .pb-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── A card ─────────────────────────────────────────────────────────────────── */
+
+.pc {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--ad-radius-lg);
+  background: var(--admin-panel);
+  box-shadow: var(--ad-shadow);
+  transition: border-color 0.14s ease;
+}
+
+/*
+ * NOT `overflow: hidden` ON THE CARD.
+ *
+ * It was, to round the miniature's top corners — and it clipped the card's own
+ * actions menu to the few pixels between the footer and the card's edge, so
+ * the menu opened and was almost entirely invisible. The rounding belongs to
+ * the thing being rounded: the frame clips its own picture, and the card stays
+ * open so what it opens can be seen.
+ */
+.pc-shot {
+  border-radius: var(--ad-radius-lg) var(--ad-radius-lg) 0 0;
+  overflow: hidden;
+}
+
+/* And above the cards that come after it in the grid, or the menu opens
+   underneath the next one along. */
+.pc:has(.ad-menu) { z-index: 5; }
+
+.pc:hover,
+.pc:focus-within { border-color: var(--admin-line-strong); }
+
+/* The site's own front page, marked once and quietly. */
+.pc[data-home] { border-color: var(--admin-line-strong); }
+
+.pc-shot {
+  position: relative;
+  display: block;
+  background: var(--admin-bg);
+}
+
+.pc-frame {
+  position: relative;
+  /* Every card the same shape, whatever the page's real height. Long pages
+     are cropped from the top, which is the part you recognise. */
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-bottom: 1px solid var(--admin-line);
+}
+
+.pc-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 800px;
+  border: 0;
+  /* Set by the card, which measures the frame — see the note there on why a
+     container query cannot do this. Until it is set the miniature is drawn at
+     nothing rather than at full size, so a card can never flash a giant
+     top-left corner of somebody's homepage. */
+  transform: scale(var(--pc-scale, 0));
+  transform-origin: top left;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.pc-iframe[data-ready] { opacity: 1; }
+
+/* Under the frame until it has drawn, and instead of it if it never does. */
+.pc-skeleton {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(105deg, #f4f4f5 30%, #ececed 45%, #f4f4f5 60%);
+  background-size: 300% 100%;
+  animation: pc-shimmer 1.4s linear infinite;
+}
+
+.pc-skeleton-note {
+  font-size: 12px;
+  color: var(--admin-mute);
+}
+
+@keyframes pc-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-skeleton { animation: none; }
+}
+
+/*
+ * The one thing to do with a card, revealed where the pointer already is.
+ *
+ * A span, not a button: it lives inside the link that covers the whole
+ * preview, and a button inside a link is a control whose behaviour depends on
+ * which pixel you hit. It appears on hover AND on keyboard focus, or it would
+ * be a feature only a mouse can find.
+ */
+.pc-open {
+  position: absolute;
+  right: var(--ad-3);
+  bottom: var(--ad-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 32px;
+  border-radius: var(--ad-radius-sm);
+  background: var(--admin-ink);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+
+.pc-shot:hover .pc-open,
+.pc-shot:focus-visible .pc-open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── The footer under the picture ───────────────────────────────────────────── */
+
+.pc-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px var(--ad-3) 11px var(--ad-4);
+  min-height: 52px;
+}
+
+.pc-kind { flex-shrink: 0; color: var(--admin-mute); display: inline-flex; }
+
+.pc-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+
+.pc-name {
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--admin-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-path {
+  font-size: 11.5px;
+  color: var(--admin-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--admin-soft);
+  white-space: nowrap;
+}
+
+/*
+ * The dot answers "can anybody see this". The words beside it are never
+ * optional: two dots three pixels apart in green and amber are the same dot to
+ * a good number of people, and to anyone reading a laptop in sunlight.
+ */
+.pc-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--admin-idle);
+}
+
+.pc-dot[data-tone='live'] { background: var(--admin-live); }
+.pc-dot[data-tone='waiting'] { background: var(--admin-waiting); }
+
+/* Visually distinct from the miniature website's own menu a few pixels above:
+   it is down here, in the admin's own row, on the admin's own surface. */
+.pc-more { width: 30px; height: 30px; flex-shrink: 0; }
+
+/* ── The list view ──────────────────────────────────────────────────────────── */
+
+.pc[data-view='list'] { flex-direction: row; align-items: stretch; }
+
+.pc[data-view='list'] .pc-shot {
+  width: 168px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--admin-line);
+  border-radius: var(--ad-radius-lg) 0 0 var(--ad-radius-lg);
+}
+
+/* The frame keeps its 16:10 and sets the row's height, rather than stretching
+   to whatever the row happens to be — rows of different heights in a LIST is
+   the one thing a list is supposed to fix. */
+.pc[data-view='list'] .pc-frame { border-bottom: 0; }
+.pc[data-view='list'] .pc-open { display: none; }
+.pc[data-view='list'] .pc-foot { flex: 1; min-width: 0; }
+
+@media (max-width: 560px) {
+  .pc[data-view='list'] .pc-shot { width: 108px; }
+  .pc-state { font-size: 11.5px; }
+}
+
+/* ── Nothing to show ────────────────────────────────────────────────────────── */
+
+.pb-empty {
+  padding: 56px var(--ad-6);
+  border: 1px dashed var(--admin-line-strong);
+  border-radius: var(--ad-radius-lg);
+  text-align: center;
+}
+
+.pb-empty-head { margin: 0; font-size: 14.5px; font-weight: 500; color: var(--admin-ink); }
+.pb-empty-note { margin: 6px 0 0; font-size: 13px; color: var(--admin-mute); }
+
+/* ── The quiet line at the bottom ───────────────────────────────────────────── */
+
+.pb-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ad-4);
+  flex-wrap: wrap;
+  margin-top: var(--ad-8);
+  padding-top: var(--ad-4);
+  border-top: 1px solid var(--admin-line);
+  font-size: 12.5px;
+  color: var(--admin-mute);
+}
+
+.pb-foot-facts { display: flex; align-items: center; gap: var(--ad-2); margin: 0; }
+
+.pb-foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--admin-soft);
+  font-weight: 500;
+}
+
+.pb-foot-link:hover { color: var(--admin-ink); }
+
+/* ── Naming a page ──────────────────────────────────────────────────────────── */
+
+.pb-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: var(--ad-4);
+  background: rgba(17, 17, 19, 0.32);
+}
+
+.pb-dialog {
+  width: min(420px, 100%);
+  padding: var(--ad-6);
+  border-radius: var(--ad-radius-lg);
+  background: var(--admin-panel);
+  box-shadow: var(--ad-shadow-pop);
+}
+
+.pb-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ad-2);
+  margin-top: var(--ad-5);
+}

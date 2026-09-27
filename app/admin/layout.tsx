@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import AdminSidebar from '@/components/admin/AdminSidebar'
+import AdminShell from '@/components/admin/AdminShell'
 import SupportingBanner from '@/components/admin/SupportingBanner'
 import { currentEditor } from '@/lib/auth'
+import { getSiteSettings } from '@/lib/site'
+import { photoUrl } from '@/lib/images'
+import { draftStatus } from '@/lib/drafts/store'
 import { UI_FONT_HREF } from '@/lib/fonts'
 import './admin.css'
 import './settings-extra.css'
@@ -23,6 +26,11 @@ import './shop.css'
 import './catalog.css'
 import '../frame.css'
 import './scenes.css'
+// Last, on purpose: the workspace's tokens and shell are a layer OVER the
+// sheets above, so the whole visual language is one file to read and one file
+// to revert. See the note at the top of it.
+import './workspace.css'
+import './pages-board.css'
 
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -45,22 +53,46 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // sidebar, which is a client component and has no business asking.
   const editor = await currentEditor()
 
-  const { count } = await supabase
-    .from('contact_messages')
-    .select('id', { count: 'exact', head: true })
-    .eq('tenant_id', editor?.tenantId ?? '')
-    .eq('is_read', false)
+  const [{ count }, settings, draft] = await Promise.all([
+    supabase
+      .from('contact_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', editor?.tenantId ?? '')
+      .eq('is_read', false),
+    getSiteSettings(),
+    draftStatus(),
+  ])
+
+  /*
+   * HOW MANY THINGS ARE WAITING TO PUBLISH.
+   *
+   * Each edited page counts as one, and style and the site's own settings —
+   * its pages, its menu, its header and footer — count as one each, because
+   * that is how `publishDraft` describes what it did. A page edited twice is
+   * still one thing waiting, which is what somebody looking at the badge
+   * means by the question.
+   *
+   * Search-and-sharing is deliberately not counted on its own: it is edited
+   * inside a page's panel, so it would double-count the page it belongs to.
+   */
+  const waiting =
+    draft.pages.length + (draft.stylesTouched ? 1 : 0) + (draft.siteTouched ? 1 : 0)
 
   return (
-    <div className="admin-shell">
+    <>
       {font}
-      <AdminSidebar
+      <AdminShell
         email={user.email ?? ''}
         unreadCount={count ?? 0}
         platformAdmin={editor?.platformAdmin === true}
-      />
-      <main className="admin-main">{children}</main>
+        siteName={settings.site_title || 'Your site'}
+        siteLogoUrl={settings.logo_header_path ? photoUrl(settings.logo_header_path) : null}
+        role={editor?.role ?? null}
+        waiting={waiting}
+      >
+        {children}
+      </AdminShell>
       <SupportingBanner />
-    </div>
+    </>
   )
 }

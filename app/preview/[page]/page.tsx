@@ -43,8 +43,31 @@ export const metadata = {
   robots: { index: false, follow: false, nocache: true },
 }
 
-export default async function PreviewPage({ params }: { params: Promise<{ page: string }> }) {
+export default async function PreviewPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ page: string }>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
   const { page } = await params
+
+  /*
+   * ── THUMBNAIL MODE ────────────────────────────────────────────────────────
+   *
+   * `?thumb=1` draws the same page with the editor's chrome taken off: no
+   * selection outlines, no click targets, no bridge listening for messages.
+   * It is what the admin's page cards show, in an iframe scaled down.
+   *
+   * A miniature of the REAL page rather than a generic cover photograph,
+   * because the whole point of a card is recognising which page it is — and
+   * six cards each showing "a nice photo" recognise nothing. Rendering it
+   * through this route rather than through a second, simpler miniature
+   * renderer is the same decision the preview itself rests on: a second
+   * implementation eventually disagrees with the first, and then the card is
+   * showing a page that does not exist.
+   */
+  const thumb = (await searchParams)?.thumb === '1'
   // A built-in page, or one of the photographer's — as the draft has them, so
   // a page created a moment ago can be previewed before it is published.
   if (!isPage(page) && !(await currentCustomPages()).some((p) => p.key === page)) notFound()
@@ -66,16 +89,21 @@ export default async function PreviewPage({ params }: { params: Promise<{ page: 
   const vars = cssVariables(tokens) as React.CSSProperties
 
   return (
-    <div className="pv-root" style={vars} data-draft={isDraft ? 'true' : 'false'}>
+    <div
+      className="pv-root"
+      style={vars}
+      data-draft={isDraft ? 'true' : 'false'}
+      data-thumb={thumb || undefined}
+    >
       {/* A draft may have chosen a typeface the root layout did not load.
           React hoists these into <head>. */}
       {fontsToLoad(tokens).map((name) => (
         <link key={name} rel="stylesheet" href={fontHref(name)} />
       ))}
 
-      <PreviewBridge page={page} />
+      {!thumb && <PreviewBridge page={page} />}
 
-      <PageBody sections={sections} settings={settings} selectable page={page} />
+      <PageBody sections={sections} settings={settings} selectable={!thumb} page={page} />
     </div>
   )
 }

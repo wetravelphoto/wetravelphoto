@@ -251,3 +251,37 @@ span[data-field]:empty {
 .pv-root [data-chrome].is-selected {
   outline: 2px solid var(--pv-accent);
 }
+
+/*
+ * ── THUMBNAIL MODE ──────────────────────────────────────────────────────────
+ *
+ * `/preview/<page>?thumb=1`, shown in the admin's page cards inside an iframe
+ * scaled down to card size. The same page, with nothing of the editor on it
+ * and nothing that would spend a visitor's battery on a picture the size of a
+ * postcard.
+ *
+ * `selectable={false}` already removes the chrome; this removes the rest:
+ *
+ *   · nothing is clickable, so a card is one target rather than forty;
+ *   · a film does not play — six autoplaying heroes on one screen is several
+ *     megabytes and a warm laptop, and at this size a still says the same
+ *     thing;
+ *   · nothing animates, for the same reason and because a card that is
+ *     quietly moving draws the eye away from the one you are looking at.
+ */
+.pv-root[data-thumb] {
+  pointer-events: none;
+  user-select: none;
+}
+
+.pv-root[data-thumb] video {
+  display: none;
+}
+
+.pv-root[data-thumb] *,
+.pv-root[data-thumb] *::before,
+.pv-root[data-thumb] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

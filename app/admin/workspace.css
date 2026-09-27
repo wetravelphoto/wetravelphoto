@@ -1,0 +1,659 @@
+/*
+ * THE WORKSPACE
+ * ═════════════
+ *
+ * The admin's shell — tokens, sidebar, top bar — and the retuning of the
+ * shared primitives every other admin screen already uses.
+ *
+ * ── Why the tokens are redefined here rather than edited in admin.css ───────
+ *
+ * admin.css declares them and two dozen screens read them. Changing the VALUES
+ * there would have been the same edit; keeping the new ones in their own file,
+ * imported last, means the whole visual change is one file to read, one file
+ * to revert, and one file for the next admin screen to look at to find out
+ * what the vocabulary is. admin.css keeps its declarations so nothing breaks
+ * if this file is ever dropped.
+ *
+ * ── The direction ──────────────────────────────────────────────────────────
+ *
+ * White surfaces, a very slightly warm off-white behind them, near-black text,
+ * hairline borders, small radii, almost no shadow. The photographs supply the
+ * colour; the interface's job is to get out of their way. Colour is spent on
+ * exactly one thing — saying what state something is in.
+ *
+ * The old admin was a dark sidebar over a beige page with uppercase headings.
+ * It read as a theme rather than as a tool, and a beige panel beside a
+ * photograph tints the photograph.
+ */
+
+.admin-shell {
+  /* ── Surfaces ───────────────────────────────────────────────────────────── */
+  /* Not #fff: a pure-white page behind pure-white cards leaves the cards with
+     nothing to sit on but their border. This is the least colour that still
+     separates them. */
+  --admin-bg: #fafafa;
+  --admin-panel: #ffffff;
+  /* The sidebar is a surface, not a statement. */
+  --admin-rail: #ffffff;
+  /* What a selected row or a hovered control sits on. Neutral grey, no tint. */
+  --admin-hover: rgba(17, 17, 19, 0.04);
+  --admin-selected: rgba(17, 17, 19, 0.06);
+
+  /* ── Text ───────────────────────────────────────────────────────────────── */
+  /* Near-black rather than black: #000 on white is harsher than any printed
+     page and makes hairline borders look grey by comparison. */
+  --admin-ink: #111113;
+  --admin-soft: #52525b;
+  --admin-mute: #8b8b94;
+
+  /* ── Lines ──────────────────────────────────────────────────────────────── */
+  --admin-line: rgba(17, 17, 19, 0.10);
+  --admin-line-strong: rgba(17, 17, 19, 0.18);
+
+  /* ── Meaning ────────────────────────────────────────────────────────────── */
+  /* The only colours in the interface, and each one says something:
+     live / waiting to publish / not published / gone wrong. */
+  --admin-live: #16a34a;
+  --admin-waiting: #d97706;
+  --admin-idle: #a1a1aa;
+  --admin-danger: #b42318;
+  /* Kept for the screens that still paint with it. */
+  --admin-accent: #111113;
+
+  /* ── Rhythm ─────────────────────────────────────────────────────────────── */
+  /* Eight, with four where eight is too much. Written down so a new screen
+     does not have to guess, and so "a bit more room" is a token and not a
+     number somebody invented at 2am. */
+  --ad-1: 4px;
+  --ad-2: 8px;
+  --ad-3: 12px;
+  --ad-4: 16px;
+  --ad-5: 20px;
+  --ad-6: 24px;
+  --ad-8: 32px;
+  --ad-10: 40px;
+
+  --ad-radius-sm: 6px;
+  --ad-radius: 8px;
+  --ad-radius-lg: 10px;
+  /* One shadow, and it is nearly invisible. Anything heavier reads as a
+     template rather than as a tool. */
+  --ad-shadow: 0 1px 2px rgba(17, 17, 19, 0.04);
+  --ad-shadow-pop: 0 8px 24px rgba(17, 17, 19, 0.10), 0 1px 2px rgba(17, 17, 19, 0.06);
+
+  --ad-control: 36px;
+  --ad-control-lg: 40px;
+  --ad-rail: 236px;
+
+  display: grid;
+  grid-template-columns: var(--ad-rail) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+  letter-spacing: -0.006em;
+}
+
+/* Where every focus ring in the workspace comes from, so there is exactly one. */
+.admin-shell :focus-visible {
+  outline: 2px solid var(--admin-ink);
+  outline-offset: 2px;
+  border-radius: var(--ad-radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell *,
+  .admin-shell *::before,
+  .admin-shell *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ── The main column ────────────────────────────────────────────────────────
+   A slim bar pinned to the top, and the screen beneath it. The bar is sticky
+   rather than fixed for the same reason the site's header is: it then reserves
+   its own height and nothing has to be told how tall it is. */
+
+.admin-main {
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ad-top {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ad-4);
+  min-height: 62px;
+  padding: 0 var(--ad-8);
+  background: var(--admin-bg);
+  border-bottom: 1px solid var(--admin-line);
+}
+
+.ad-crumb {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-2);
+  margin: 0;
+  font-size: 13px;
+  color: var(--admin-mute);
+  min-width: 0;
+}
+
+.ad-crumb a { color: inherit; }
+.ad-crumb a:hover { color: var(--admin-ink); }
+.ad-crumb-here { color: var(--admin-ink); }
+.ad-crumb-sep { color: var(--admin-line-strong); }
+
+.ad-top-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-2);
+  flex-shrink: 0;
+}
+
+.ad-screen {
+  flex: 1;
+  min-width: 0;
+  padding: var(--ad-8);
+}
+
+@media (max-width: 860px) {
+  .ad-top { padding: 0 var(--ad-4); }
+  .ad-screen { padding: var(--ad-5) var(--ad-4) var(--ad-8); }
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────────
+   Three, and no more: the one thing to do, the things beside it, and the one
+   that destroys something. A fourth weight is a decision nobody can make
+   consistently twice. */
+
+.ad-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ad-2);
+  height: var(--ad-control);
+  padding: 0 14px;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--ad-radius-sm);
+  background: var(--admin-panel);
+  color: var(--admin-ink);
+  font-family: var(--admin-font);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.ad-btn:hover:not(:disabled) { background: var(--admin-hover); }
+.ad-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.ad-btn-primary {
+  background: var(--admin-ink);
+  border-color: var(--admin-ink);
+  color: #fff;
+}
+
+.ad-btn-primary:hover:not(:disabled) { background: #26262b; border-color: #26262b; }
+
+.ad-btn-quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--admin-soft);
+}
+
+.ad-btn-quiet:hover:not(:disabled) { background: var(--admin-hover); color: var(--admin-ink); }
+
+.ad-btn-danger { color: var(--admin-danger); }
+
+/* The count on Publish. Inside a dark button, so it inverts. */
+.ad-btn-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nothing waiting: it is not an action, it is a statement. */
+.ad-published-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ad-2);
+  height: var(--ad-control);
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--admin-soft);
+}
+
+/* ── Icon-only ─────────────────────────────────────────────────────────────── */
+
+.ad-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ad-control);
+  height: var(--ad-control);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--ad-radius-sm);
+  background: none;
+  color: var(--admin-soft);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.ad-ico:hover { background: var(--admin-hover); color: var(--admin-ink); }
+
+/* ── The rail ───────────────────────────────────────────────────────────────
+   Branding at the top, account at the bottom, and only the navigation between
+   them scrolls — so on a short screen the two things you always want are the
+   two things that never move. */
+
+.ad-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-height: 100vh;
+  position: sticky;
+  top: 0;
+  background: var(--admin-rail);
+  border-right: 1px solid var(--admin-line);
+}
+
+.ad-rail-head {
+  flex-shrink: 0;
+  padding: var(--ad-5) var(--ad-4) var(--ad-3);
+}
+
+.ad-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--admin-ink);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.ad-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--ad-radius-sm);
+  background: var(--admin-ink);
+  color: #fff;
+}
+
+/* ── Whose site this is ─────────────────────────────────────────────────────
+   Directly under the platform's name, because the first question in a
+   multi-site tool is always "which one am I in". */
+
+.ad-site {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-2);
+  width: 100%;
+  margin-top: var(--ad-4);
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--ad-radius-sm);
+  background: none;
+  font-family: var(--admin-font);
+  text-align: left;
+  color: var(--admin-ink);
+}
+
+button.ad-site { cursor: pointer; }
+button.ad-site:hover { background: var(--admin-hover); }
+
+.ad-site-avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--admin-selected);
+  color: var(--admin-soft);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.ad-site-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.ad-site-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ad-site-chev { flex-shrink: 0; color: var(--admin-mute); }
+
+/* ── Navigation ─────────────────────────────────────────────────────────────── */
+
+.ad-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--ad-2) var(--ad-3) var(--ad-4);
+}
+
+.ad-nav-group + .ad-nav-group { margin-top: var(--ad-5); }
+
+.ad-nav-label {
+  margin: 0 0 var(--ad-1);
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--admin-mute);
+}
+
+.ad-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: var(--ad-radius-sm);
+  font-size: 13.5px;
+  font-weight: 450;
+  color: var(--admin-soft);
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.ad-nav-item svg { flex-shrink: 0; color: var(--admin-mute); }
+.ad-nav-item:hover { background: var(--admin-hover); color: var(--admin-ink); }
+.ad-nav-item:hover svg { color: var(--admin-soft); }
+
+/* Selected: a pale neutral panel, dark text, dark icon. No accent bar, no
+   colour — the page you are on is not a state that needs a hue. */
+.ad-nav-item[aria-current='page'] {
+  background: var(--admin-selected);
+  color: var(--admin-ink);
+  font-weight: 550;
+}
+
+.ad-nav-item[aria-current='page'] svg { color: var(--admin-ink); }
+
+.ad-nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A real number of unread messages, or nothing at all. */
+.ad-nav-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--admin-selected);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--admin-soft);
+}
+
+/*
+ * A DESTINATION THIS BUILD DOES NOT HAVE YET.
+ *
+ * Drawn, and plainly not available — rather than linked to a page that does
+ * not exist. A dead link in a sidebar is worse than an honest gap: it is
+ * discovered by clicking, at which point the whole workspace is suspect.
+ */
+.ad-nav-item[data-soon] {
+  color: var(--admin-mute);
+  cursor: not-allowed;
+}
+
+.ad-nav-item[data-soon]:hover { background: none; color: var(--admin-mute); }
+
+.ad-nav-soon {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--admin-line);
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--admin-mute);
+}
+
+/* ── The account, at the foot ───────────────────────────────────────────────── */
+
+.ad-rail-foot {
+  flex-shrink: 0;
+  padding: var(--ad-2) var(--ad-3) var(--ad-3);
+  border-top: 1px solid var(--admin-line);
+}
+
+.ad-account {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-2);
+  width: 100%;
+  margin-top: var(--ad-2);
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--ad-radius-sm);
+  background: none;
+  font-family: var(--admin-font);
+  text-align: left;
+  color: var(--admin-ink);
+  cursor: pointer;
+}
+
+.ad-account:hover { background: var(--admin-hover); }
+
+.ad-account-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The account's ROLE, which is real. There are no plans in this build, so
+   there is no plan badge to show — see lib/entitlements.ts. */
+.ad-account-role {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid var(--admin-line);
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--admin-soft);
+  text-transform: capitalize;
+}
+
+/* ── Menus ──────────────────────────────────────────────────────────────────── */
+
+.ad-menu-wrap { position: relative; }
+
+.ad-menu {
+  position: absolute;
+  z-index: 60;
+  min-width: 200px;
+  padding: var(--ad-1);
+  border: 1px solid var(--admin-line);
+  border-radius: var(--ad-radius);
+  background: var(--admin-panel);
+  box-shadow: var(--ad-shadow-pop);
+}
+
+.ad-menu[data-at='up'] { bottom: calc(100% + 6px); left: 0; }
+.ad-menu[data-at='down'] { top: calc(100% + 6px); left: 0; }
+.ad-menu[data-at='down-end'] { top: calc(100% + 6px); right: 0; }
+
+.ad-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-2);
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--ad-radius-sm);
+  background: none;
+  font-family: var(--admin-font);
+  font-size: 13px;
+  color: var(--admin-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ad-menu-item:hover { background: var(--admin-hover); }
+.ad-menu-item:disabled { color: var(--admin-mute); cursor: not-allowed; }
+.ad-menu-item:disabled:hover { background: none; }
+.ad-menu-item[data-danger] { color: var(--admin-danger); }
+
+.ad-menu-sep {
+  height: 1px;
+  margin: var(--ad-1) 6px;
+  background: var(--admin-line);
+}
+
+.ad-menu-note {
+  padding: 6px 10px 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--admin-mute);
+}
+
+/* ── Small screens: the rail becomes a drawer ───────────────────────────────── */
+
+.ad-rail-toggle { display: none; }
+.ad-rail-scrim { display: none; }
+
+@media (max-width: 860px) {
+  .admin-shell { grid-template-columns: minmax(0, 1fr); }
+
+  .ad-rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 70;
+    width: min(300px, 86vw);
+    max-height: none;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: var(--ad-shadow-pop);
+  }
+
+  .ad-rail[data-open] { transform: translateX(0); }
+
+  .ad-rail-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    border: 0;
+    padding: 0;
+    background: rgba(17, 17, 19, 0.35);
+  }
+
+  .ad-rail-toggle { display: inline-flex; }
+
+  /* The drawer's own close button, so it can be dismissed from inside it. */
+  .ad-rail-close { display: inline-flex !important; }
+}
+
+.ad-rail-close { display: none; }
+
+/* ── The shared primitives, retuned ─────────────────────────────────────────
+   Every other admin screen draws with these. Uppercase headings and square
+   corners were the two things that made the old admin read as a theme; both
+   go, and every screen improves without being touched. */
+
+.admin-shell .admin-h1 {
+  text-transform: none;
+  letter-spacing: -0.021em;
+  font-weight: 600;
+  font-size: 29px;
+  line-height: 1.15;
+}
+
+.admin-shell .admin-h2 {
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--admin-ink);
+}
+
+.admin-shell .admin-panel {
+  border: 1px solid var(--admin-line);
+  border-radius: var(--ad-radius-lg);
+  box-shadow: var(--ad-shadow);
+}
+
+.admin-shell .admin-meta { font-size: 12.5px; color: var(--admin-mute); }
+
+.admin-shell .admin-btn {
+  border-radius: var(--ad-radius-sm);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.admin-shell .admin-input,
+.admin-shell .admin-select {
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--ad-radius-sm);
+}
+
+/* ── The top bar on a small screen ──────────────────────────────────────────
+ *
+ * Three things want the same row and only two fit. The order they give way in
+ * is the order of how much they are worth: the breadcrumb's AREA first (the
+ * page's own name is the part that is news), then the Preview button's label
+ * (the icon and its accessible name carry it), then "changes" off Publish.
+ *
+ * Nothing shrinks its type. A label at 11px to make it fit is a label nobody
+ * reads, which is the same as removing it while still paying for the space.
+ */
+@media (max-width: 640px) {
+  .ad-crumb-area { display: none; }
+  .ad-btn-label { display: none; }
+  .ad-btn-shrink { width: var(--ad-control); padding: 0; }
+}
+
+.ad-btn-label-narrow { display: none; }
+
+@media (max-width: 520px) {
+  .ad-btn-label-wide { display: none; }
+  .ad-btn-label-narrow { display: inline; }
+  .ad-top { padding: 0 var(--ad-3); gap: var(--ad-2); }
+}
+
+/* The two halves of the breadcrumb need the same gap as the rest of the row,
+   which they lost when the area was wrapped so it could be dropped on a
+   phone. */
+.ad-crumb-area {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ad-2);
+}

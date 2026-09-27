@@ -9,6 +9,8 @@ import {
   type SectionSettings,
 } from '@/lib/sections/registry'
 import { currentSiteTenantId } from '@/lib/tenant'
+import { normalizeRow } from '@/lib/sections/retired'
+
 
 /** A row as it sits in the database, or as the legacy adapter fakes one. */
 export type StoredSection = {
@@ -91,31 +93,13 @@ export async function loadPageSections(page = 'home'): Promise<PageSections> {
  * worse than no preview.
  */
 /**
- * Section types that have been folded into another, and how to read a row
- * written under the old name.
- *
- * Rows are converted as they are READ, never rewritten in place: the database
- * keeps what was written, the page draws the new type, and the next Publish of
- * that page stores the new type naturally. So an old deploy reading the same
- * rows still finds what it expects, and there is no migration to run first.
+ * Re-exported so the draft layer and anything else reading rows keeps one
+ * import path. The conversion itself lives in lib/sections/retired.ts, which
+ * imports nothing from the server — this file reaches the database, and a
+ * pure function that decides how a row is READ should not need a database to
+ * be tested.
  */
-const RETIRED: Record<string, (settings: SectionSettings) => { type: string; settings: SectionSettings }> = {
-  // 2026-09-21: the Contact page's own "Contact form" became the Contact
-  // section's centred layout, so a site has one contact section with two looks
-  // rather than two sections that do the same job.
-  'contact-form': (s) => ({
-    type: 'contact',
-    settings: { ...s, layout: 'centered', heading: s.heading ?? 'Contact' },
-  }),
-}
-
-/** A stored row, with a retired type read as the type that replaced it. */
-export function normalizeRow<T extends { type: string; settings: SectionSettings }>(row: T): T {
-  const convert = RETIRED[row.type]
-  if (!convert) return row
-  const next = convert(row.settings ?? {})
-  return { ...row, type: next.type, settings: next.settings }
-}
+export { normalizeRow } from '@/lib/sections/retired'
 
 export function resolveRows(rows: StoredSection[], legacy = false): LoadedSection[] {
   return rows

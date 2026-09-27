@@ -3,6 +3,7 @@ import type { LoadedSection } from '@/lib/sections/load'
 import type { SectionContext } from '@/lib/sections/context'
 
 import HeroSection from '@/components/sections/HeroSection'
+import SequenceHeroSection from '@/components/sections/SequenceHeroSection'
 import IntroSection from '@/components/sections/IntroSection'
 import GalleriesSection from '@/components/sections/GalleriesSection'
 import JournalSection from '@/components/sections/JournalSection'
@@ -26,6 +27,7 @@ type SectionProps = { settings: SectionSettings; ctx: SectionContext }
  */
 const RENDERERS: Record<string, (props: SectionProps) => React.ReactNode> = {
   hero: HeroSection,
+  'hero-sequence': SequenceHeroSection,
   mark: MarkSection,
   intro: IntroSection,
   galleries: GalleriesSection,

@@ -1,6 +1,7 @@
 import { buildContext } from '@/lib/sections/context'
 import { renderSection } from '@/components/sections'
 import { heroIsEmpty } from '@/components/sections/HeroSection'
+import { sequenceHeroIsEmpty } from '@/components/sections/SequenceHeroSection'
 import SiteHeader from '@/components/SiteHeader'
 import SiteFooter from '@/components/SiteFooter'
 import type { LoadedSection } from '@/lib/sections/load'
@@ -127,8 +128,15 @@ export default async function PageBody({
 
   // The header goes transparent only when something full-bleed is actually
   // drawn underneath it.
-  const hero = visible.find((s) => s.type === 'hero')
-  const overHero = !!hero && !heroIsEmpty(hero.settings, ctx)
+  // Two blocks can open a page now — one standing backdrop, or a sequence of
+  // stories — and either makes the header transparent, so this asks whichever
+  // one is there whether it is actually drawing anything.
+  const hero = visible.find((s) => s.type === 'hero' || s.type === 'hero-sequence')
+  const overHero =
+    !!hero &&
+    !(hero.type === 'hero'
+      ? heroIsEmpty(hero.settings)
+      : sequenceHeroIsEmpty(hero.settings, ctx))
 
   return (
     <main className={frame.className} style={{ ...(fill ? FILL : {}), ...frame.style }}>

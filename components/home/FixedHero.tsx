@@ -6,8 +6,25 @@ import { ROWS, COLUMNS, drawnAt, type DrawnAt, type Spot, type SpotPair } from '
 import { sizesFor, type Shown } from '@/lib/sections/shown'
 import type { TextVars } from '@/lib/sections/text-style'
 
-export type FixedHeroProps = {
+/**
+ * WHAT IS BEHIND THE WORDS.
+ *
+ * One shape for all three, so the hero draws a backdrop rather than branching
+ * on which kind it got in four different places.
+ */
+export type Backdrop = {
+  kind: 'image' | 'video' | 'color'
   imageUrl: string | null
+  videoUrl: string | null
+  /** Shown while the video loads — and INSTEAD of it, for reduced motion. */
+  posterUrl: string | null
+  color: string
+  /** 0–80. How much darker, so the words stay readable. */
+  dim: number
+}
+
+export type FixedHeroProps = {
+  backdrop: Backdrop
   title: string | null
   subtitle: string | null
   ctaLabel: string | null
@@ -58,7 +75,7 @@ export type FixedHeroProps = {
  * the same answer the refresh brings, not a second guess at it.
  */
 export default function FixedHero({
-  imageUrl,
+  backdrop,
   title,
   subtitle,
   ctaLabel,
@@ -96,6 +113,7 @@ export default function FixedHero({
   }, [])
 
   const point = isMobile ? focalMobile : focal
+  const crop = `${point.x * 100}% ${point.y * 100}%`
 
   const showTitle = Boolean(title) || editable
   const showSubtitle = Boolean(subtitle) || editable
@@ -123,18 +141,69 @@ export default function FixedHero({
   return (
     <section
       className="hero"
-      style={styleVars}
+      data-backdrop={backdrop.kind}
+      style={
+        {
+          ...styleVars,
+          '--hero-bg': backdrop.color,
+          '--hero-dim': `${backdrop.dim}%`,
+        } as React.CSSProperties
+      }
       {...(editable ? { 'data-type-root': '' } : {})}
     >
-      <div className="hero-layer" data-active="true">
-        {imageUrl && (
+      <div className="hero-layer" data-active="true" data-kind={backdrop.kind}>
+        {backdrop.kind === 'image' && backdrop.imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={imageUrl}
+            src={backdrop.imageUrl}
             alt=""
             fetchPriority="high"
             decoding="async"
-            style={{ objectPosition: `${point.x * 100}% ${point.y * 100}%` }}
+            style={{ objectPosition: crop }}
+          />
+        )}
+
+        {backdrop.kind === 'video' && backdrop.videoUrl && (
+          /*
+           * SILENT, LOOPING, AND NOT THE ONLY THING THERE.
+           *
+           * `muted` is not a preference: a video that asks to autoplay with
+           * sound is blocked by every browser, so without it the hero would
+           * simply not play. `playsInline` stops iOS taking it fullscreen the
+           * moment it starts.
+           *
+           * The poster is what a visitor sees while it downloads, and it is
+           * ALSO what they see instead of it when they have asked their
+           * system for less motion — a full-screen moving backdrop is exactly
+           * what that setting is for. That choice is made in CSS
+           * (prefers-reduced-motion in app/hero.css) rather than here,
+           * because it can change without a new page being served.
+           */
+          <video
+            src={backdrop.videoUrl}
+            poster={backdrop.posterUrl ?? undefined}
+            autoPlay
+            muted
+            loop
+            playsInline
+            // Decorative: it carries no information the words do not.
+            aria-hidden="true"
+            tabIndex={-1}
+            style={{ objectPosition: crop }}
+          />
+        )}
+
+        {/* The still, for reduced motion and for the moment before the video
+            has enough of itself to play. CSS decides which of the two shows. */}
+        {backdrop.kind === 'video' && backdrop.posterUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="hero-still"
+            src={backdrop.posterUrl}
+            alt=""
+            fetchPriority="high"
+            decoding="async"
+            style={{ objectPosition: crop }}
           />
         )}
       </div>

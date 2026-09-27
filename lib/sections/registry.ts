@@ -214,154 +214,248 @@ const SIDE = [
   { value: 'right', label: 'Picture on the right' },
 ]
 
+/**
+ * THE WORDS LAID OVER AN OPENING
+ * ══════════════════════════════
+ *
+ * Every hero has these, whatever is behind them. Written once and spread into
+ * each, so a change to how the title works cannot reach one hero and miss
+ * another — which is the failure mode a shared block invites and the reason
+ * this is not copied twice.
+ */
+const HERO_COPY_DEFAULTS: SectionSettings = {
+  /*
+   * This section's own typography (lib/type-styles.ts), as a whole — one
+   * setting for every heading in it at once.
+   *
+   * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27: a
+   * control for "every heading in this section" is the wrong grain when each
+   * heading has its own button under its own box. The key stays and is still
+   * READ — rule 1, and a site that set one would otherwise change appearance
+   * the day the control went away.
+   */
+  type: null,
+  /*
+   * Typography for INDIVIDUAL pieces of text, keyed by the field they belong
+   * to (lib/sections/text-style.ts). No field declares it, on purpose — that
+   * is what carries it across a change of look. See `textStyle` on FieldBase.
+   */
+  text: {},
+  title: null,
+  subtitle: null,
+  cta_label: null,
+  cta_href: null,
+  /*
+   * Where each piece of copy sits, out of fifteen places. All three start
+   * where the old single block sat, so a hero nobody touches looks exactly as
+   * it did. See lib/sections/spots.ts.
+   */
+  title_spot: 'bottom-center',
+  subtitle_spot: 'bottom-center',
+  cta_spot: 'bottom-center',
+  /** Retired. Kept because rows carry it — rule 1. */
+  kicker: null,
+}
+
+const HERO_COPY_FIELDS: Field[] = [
+  { key: 'title', label: 'Title', kind: 'text', content: true, textStyle: true },
+  { key: 'subtitle', label: 'Sub-heading', kind: 'text', content: true, textStyle: true },
+  {
+    key: 'cta_label',
+    label: 'Button',
+    kind: 'text',
+    group: 'Button',
+    content: true,
+    textStyle: true,
+    help: 'Leave empty for no button.',
+  },
+  {
+    key: 'cta_href',
+    label: 'Button link',
+    kind: 'text',
+    group: 'Button',
+    content: true,
+    placeholder: '/trips',
+  },
+]
+
 export const SECTIONS: Record<string, SectionDef> = {
+  /*
+   * ONE OPENING, ONE BLOCK — AND A SECOND BLOCK FOR A SEQUENCE
+   * ══════════════════════════════════════════════════════════
+   *
+   * There used to be a single Hero with a "What the hero shows" switch, and
+   * choosing between a standing photograph and a run of featured stories
+   * changed half the panel underneath it. Two thirds of the settings were
+   * always irrelevant and there was nothing on screen saying which two
+   * thirds, so the panel read as a pile of options rather than as one thing
+   * you were making.
+   *
+   * They are two blocks now. You pick the one you want from the picker, and
+   * everything in its panel applies to it. The cost is that switching from
+   * one to the other means swapping the block — which is why the hero is no
+   * longer `permanent`.
+   *
+   * This is the shape every future block follows: a block is a thing with its
+   * own settings, not a mode of a bigger thing.
+   */
   hero: {
     type: 'hero',
     label: 'Hero',
-    blurb: 'The full-height opening image — one standing photograph, or your featured stories in sequence.',
+    blurb: 'The full-height opening: a photograph, a video or a colour, with your words over it.',
     family: 'Opening',
     version: 1,
     singleton: true,
-    permanent: true,
     styled: 'hero',
-    needs: ['posts'],
     defaults: {
+      ...HERO_COPY_DEFAULTS,
       /*
-       * This section's own typography (lib/type-styles.ts), as a whole — one
-       * setting for every heading in it at once.
-       *
-       * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27:
-       * a control for "every heading in this section" is the wrong grain when
-       * each heading has its own button under its own box, and two controls
-       * over the same numbers with nothing saying which is which is worse
-       * than one.
-       *
-       * The key stays and is still READ — rule 1, and a site that set one
-       * would otherwise change appearance the day the control went away. The
-       * inspector offers to clear it where one exists, and once cleared there
-       * is no way back to it.
+       * What is behind the words. Three sources rather than three section
+       * types, because they are interchangeable: the words, their places and
+       * their typography mean the same thing over all of them, and swapping a
+       * photograph for a colour should not mean rebuilding the hero.
        */
-      type: null,
-      /*
-       * Typography for INDIVIDUAL pieces of text, keyed by the field they
-       * belong to (lib/sections/text-style.ts). `type` above styles the whole
-       * section at once; this is the finer instrument, and it wins where both
-       * are set. Empty means every piece of text follows the section.
-       *
-       * No field declares it, on purpose — that is what carries it across a
-       * change of look. See `textStyle` on FieldBase.
-       */
-      text: {},
-      mode: 'stories',
-      title_position: 'center',
-      story_align: 'left',
-      // Where each piece of copy sits on the photograph, out of nine places.
-      // All three start where the old single block sat, so a hero nobody
-      // touches looks exactly as it did. See lib/sections/spots.ts.
-      title_spot: 'bottom-center',
-      subtitle_spot: 'bottom-center',
-      cta_spot: 'bottom-center',
+      backdrop: 'image',
       image_path: null,
-      title: null,
-      subtitle: null,
-      cta_label: null,
-      cta_href: null,
-      kicker: null,
       focal: {},
-      featured_post_ids: [],
-      titles: {},
-      subtitles: {},
-      story_focal: {},
+      video_path: null,
+      video_poster: null,
+      backdrop_color: '#14100e',
+      /** How much the backdrop is darkened, so words stay readable on it. */
+      dim: 0,
+      /**
+       * Retired: this is the standing hero now, and the sequence is its own
+       * block. Kept because rows carry it, and READ once — lib/sections/load.ts
+       * uses it to send an old stories hero to the new block.
+       */
+      mode: 'fixed',
     },
     fields: [
       {
-        key: 'mode',
-        label: 'What the hero shows',
+        key: 'backdrop',
+        label: 'Behind the words',
         kind: 'select',
         options: [
-          { value: 'stories', label: 'Featured stories, in sequence' },
-          { value: 'fixed', label: 'One standing photograph' },
+          { value: 'image', label: 'A photograph' },
+          { value: 'video', label: 'A video' },
+          { value: 'color', label: 'A colour' },
         ],
-        help: 'Stories fall back to the standing photograph when none are featured.',
       },
       {
         key: 'image_path',
         label: 'Photograph',
         kind: 'image',
         content: true,
-        when: { key: 'mode', equals: 'fixed' },
-      },
-      /*
-       * EACH PLACE SITS UNDER ITS OWN WORDS.
-       *
-       * There used to be one "Title position" select that moved the wordmark
-       * and left the copy welded to the bottom of the picture. These replaced
-       * it, and at first lived together in a Placement group — three grids
-       * with nothing saying which was which, three groups away from the text
-       * they move. Under the box is where a control for that box belongs.
-       *
-       * Design rather than content: a look may place them, and switching look
-       * does not carry a placement across, unlike the words themselves.
-       */
-      { key: 'title', label: 'Title', kind: 'text', content: true, textStyle: true },
-      { key: 'subtitle', label: 'Sub-heading', kind: 'text', content: true, textStyle: true },
-      {
-        key: 'cta_label',
-        label: 'Button',
-        kind: 'text',
-        group: 'Button',
-        content: true,
-        textStyle: true,
-        help: 'Leave empty for no button.',
+        when: { key: 'backdrop', equals: 'image' },
       },
       {
-        key: 'cta_href',
-        label: 'Button link',
-        kind: 'text',
-        group: 'Button',
+        key: 'video_path',
+        label: 'Video',
+        kind: 'image',
         content: true,
-        placeholder: '/trips',
+        when: { key: 'backdrop', equals: 'video' },
+        help: 'It plays silently and loops. Keep it short and small — every visitor downloads it.',
       },
-      /*
-       * Still here, and only for the stories hero: HomeHero lays a featured
-       * story's own title over its picture, and this is where that sits. It
-       * has nothing to do with the standing hero's three places below, which
-       * is part of why one control appearing to serve both was so confusing.
-       */
-      { key: 'title_position', label: 'Story title position', kind: 'select', group: 'Layout',
-        live: { attr: 'data-title-pos' },
-        when: { key: 'mode', equals: 'stories' },
-        options: [
-          { value: 'center', label: 'Centre' },
-          { value: 'bottom', label: 'Bottom' },
-        ] },
-      { key: 'story_align', label: 'Story text', kind: 'select', group: 'Layout', options: ALIGN,
-        live: { attr: 'data-story-align' }, when: { key: 'mode', equals: 'stories' } },
       {
-        key: 'featured_post_ids',
-        label: 'Featured stories',
-        kind: 'custom',
-        editor: 'hero-stories',
+        key: 'video_poster',
+        label: 'Still image',
+        kind: 'image',
         content: true,
-        // Its own group for the same reason the focal picker has one: with
-        // none it fell back to Content, which drew a SECOND heading reading
-        // "Content" below Layout.
-        group: 'Stories',
-        note: 'Choosing stories, their hero titles and where each photograph is cropped.',
-        when: { key: 'mode', equals: 'stories' },
+        when: { key: 'backdrop', equals: 'video' },
+        help: 'Shown while the video loads, and instead of it for anyone who has asked for less motion.',
       },
+      {
+        key: 'backdrop_color',
+        label: 'Colour',
+        kind: 'color',
+        when: { key: 'backdrop', equals: 'color' },
+        live: { var: '--hero-bg' },
+      },
+      {
+        key: 'dim',
+        label: 'Darken it',
+        kind: 'number',
+        slider: true,
+        min: 0,
+        max: 80,
+        step: 5,
+        unit: '%',
+        live: { var: '--hero-dim', unit: '%' },
+        help: 'Words have to be readable on top of it. Most photographs need some.',
+      },
+      ...HERO_COPY_FIELDS,
       {
         key: 'focal',
         label: 'Focal point',
         kind: 'custom',
         editor: 'hero-focal',
         content: true,
-        // Its own group rather than falling back into Content, which put it
-        // in a SECOND group of that name below Button — two headings reading
+        // Its own group rather than falling back into Content, which put it in
+        // a SECOND group of that name below Button — two headings reading
         // "Content" in one panel, which is a mistake however you explain it.
         group: 'Focal point',
         note: 'What stays in frame when the photograph is cropped.',
-        when: { key: 'mode', equals: 'fixed' },
+        when: { key: 'backdrop', equals: 'image' },
+      },
+    ],
+  },
+
+  'hero-sequence': {
+    type: 'hero-sequence',
+    label: 'Hero sequence',
+    blurb: 'Your featured stories as a full-height opening, each with its own photograph.',
+    family: 'Opening',
+    version: 1,
+    singleton: true,
+    styled: 'hero',
+    needs: ['posts'],
+    requires: 'At least one published story with a photograph',
+    defaults: {
+      ...HERO_COPY_DEFAULTS,
+      /**
+       * Where the sequence comes from. One answer today; galleries and a
+       * plain carousel of chosen photographs are the same machinery pointed
+       * somewhere else, which is why this is a setting and not the block's
+       * identity.
+       */
+      source: 'stories',
+      featured_post_ids: [],
+      titles: {},
+      subtitles: {},
+      story_focal: {},
+      title_position: 'center',
+      story_align: 'left',
+    },
+    fields: [
+      {
+        key: 'source',
+        label: 'What it shows',
+        kind: 'select',
+        options: [{ value: 'stories', label: 'Featured stories' }],
+        help: 'Galleries and a carousel of chosen photographs are coming here too.',
+      },
+      ...HERO_COPY_FIELDS,
+      /*
+       * The story's OWN title, laid over its own photograph — not the three
+       * pieces of copy above, which belong to the section and stay put as the
+       * pictures change behind them. One control appearing to serve both is
+       * part of why the old hero was confusing.
+       */
+      { key: 'title_position', label: 'Story title position', kind: 'select', group: 'Layout',
+        live: { attr: 'data-title-pos' },
+        options: [
+          { value: 'center', label: 'Centre' },
+          { value: 'bottom', label: 'Bottom' },
+        ] },
+      { key: 'story_align', label: 'Story text', kind: 'select', group: 'Layout', options: ALIGN },
+      {
+        key: 'featured_post_ids',
+        label: 'Featured stories',
+        kind: 'custom',
+        editor: 'hero-stories',
+        content: true,
+        group: 'Stories',
+        note: 'Choosing stories, their hero titles and where each photograph is cropped.',
       },
     ],
   },

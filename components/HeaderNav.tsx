@@ -61,6 +61,20 @@ export default function HeaderNav({
         className="site-header"
         data-chrome="header"
         data-mode={mode}
+        /*
+         * ── DOES IT FLOAT OVER SOMETHING, OR STAND ON THE PAGE? ─────────────
+         *
+         * `data-mode` cannot answer this: it flips to `solid` as soon as a
+         * hero page is scrolled, and a header that changed between floating
+         * and standing on scroll would shunt the whole page down by its own
+         * height mid-gesture.
+         *
+         * This one comes from the server and never changes. Over a
+         * full-bleed opening the header floats — that is the design. Anywhere
+         * else it takes its place in the flow (app/home.css) so the page
+         * starts BELOW it instead of underneath it.
+         */
+        data-float={overHero || undefined}
         data-align={align}
         style={navStyle}
       >

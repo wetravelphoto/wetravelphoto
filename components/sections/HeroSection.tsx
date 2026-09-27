@@ -5,6 +5,9 @@ import { list, map, str, type SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
 import { spot } from '@/lib/sections/spots'
+import { textStyles, textFonts } from '@/lib/sections/text-style'
+import { sectionFonts } from '@/lib/type-styles'
+import TextFonts from '@/components/sections/TextFonts'
 import FixedHero from '@/components/home/FixedHero'
 
 type Focal = { x?: number; y?: number; mx?: number; my?: number }
@@ -51,8 +54,15 @@ export default function HeroSection({
   // Fall back to the standing image whenever there are no stories to show
   const fixed = settings.mode === 'fixed' || items.length === 0
 
+  // Both the section's own typefaces and any a single piece of text asked
+  // for. Neither was being loaded before.
+  const needed = Array.from(
+    new Set([...sectionFonts('hero', settings, ctx.styles), ...textFonts(settings)])
+  )
+
   return (
     <>
+      <TextFonts names={needed} />
       {fixed ? (
         <FixedHero
           imageUrl={str(settings, 'image_path') ? photoUrl(settings.image_path as string) : null}
@@ -65,6 +75,7 @@ export default function HeroSection({
           titleSpot={spot(settings.title_spot)}
           subtitleSpot={spot(settings.subtitle_spot)}
           ctaSpot={spot(settings.cta_spot)}
+          text={textStyles(settings)}
           styleVars={vars}
           editable={ctx.editable}
         />

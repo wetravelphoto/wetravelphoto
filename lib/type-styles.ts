@@ -226,3 +226,25 @@ export function hasOwnType(
   const own = ownStyle(settings) ?? (group ? styles?.[group] : null)
   return !!own && Object.values(own).some((v) => v !== undefined && v !== null && v !== '')
 }
+
+/**
+ * The typefaces a section has asked for by name — its own heading, body and
+ * over-line choices — so the page can load them.
+ *
+ * They were never loaded. `fontsToLoad()` in lib/styles/tokens.ts returns the
+ * two SITE fonts and nothing else, so a typeface chosen for a section fell
+ * back to whatever the site was using and the control looked broken. The same
+ * class of quiet failure as the Button shape token that reached one rule and
+ * the Letterspacing token that reached almost none: a control that writes a
+ * value nothing consumes.
+ */
+export function sectionFonts(
+  type: string,
+  settings: Record<string, unknown>,
+  styles: TypeStyles | null
+): string[] {
+  const style = sectionStyle(type, settings, styles)
+  return Array.from(
+    new Set([style.font, style.bodyFont, style.eyebrowFont].filter((f): f is string => !!f))
+  )
+}

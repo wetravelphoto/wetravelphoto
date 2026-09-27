@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ROWS, COLUMNS, spot, type Spot } from '@/lib/sections/spots'
+import { textStyleVars, type TextStyles } from '@/lib/sections/text-style'
 
 export type FixedHeroProps = {
   imageUrl: string | null
@@ -16,6 +17,12 @@ export type FixedHeroProps = {
   titleSpot: Spot
   subtitleSpot: Spot
   ctaSpot: Spot
+  /**
+   * Typography chosen for individual pieces of text, keyed by the field name.
+   * Written as custom properties on the element itself; the stylesheet reads
+   * them in front of the section's own, so an unset one falls through.
+   */
+  text?: TextStyles
   styleVars?: React.CSSProperties
   /**
    * True only inside the editor's preview: tags the title, subtitle and button
@@ -54,10 +61,13 @@ export default function FixedHero({
   titleSpot,
   subtitleSpot,
   ctaSpot,
+  text = {},
   styleVars,
   editable = false,
 }: FixedHeroProps) {
   const field = (key: string) => (editable ? { 'data-field': key } : {})
+  /** Its own typography, if it has been given any. */
+  const own = (key: string) => textStyleVars(text[key] ?? null) as React.CSSProperties
   /** Only in the editor: what the drag picks up, and which setting it writes. */
   const grip = (settingKey: string) =>
     editable ? { 'data-spot-drag': settingKey, draggable: false } : {}
@@ -113,12 +123,22 @@ export default function FixedHero({
               return (
                 <div key={here} className="hero-spot" data-spot={here} data-col={column}>
                   {showTitle && at.title === here && (
-                    <h1 className="hero-fixed-title" {...field('title')} {...grip('title_spot')}>
+                    <h1
+                      className="hero-fixed-title"
+                      style={own('title')}
+                      {...field('title')}
+                      {...grip('title_spot')}
+                    >
                       {title}
                     </h1>
                   )}
                   {showSubtitle && at.subtitle === here && (
-                    <p className="hero-fixed-sub" {...field('subtitle')} {...grip('subtitle_spot')}>
+                    <p
+                      className="hero-fixed-sub"
+                      style={own('subtitle')}
+                      {...field('subtitle')}
+                      {...grip('subtitle_spot')}
+                    >
                       {subtitle}
                     </p>
                   )}
@@ -126,6 +146,7 @@ export default function FixedHero({
                     <Link
                       href={ctaHref as string}
                       className="hero-fixed-cta"
+                      style={own('cta_label')}
                       {...field('cta_label')}
                       {...grip('cta_spot')}
                     >

@@ -477,22 +477,47 @@
   .hero-spot[data-col='right'] { grid-column: 1; align-items: center; text-align: center; }
 }
 
+/*
+ * THE CASCADE, WRITTEN OUT
+ *
+ *   --txt-*  one piece of text, chosen next to that text
+ *   --sec-*  the whole section
+ *   literal  the look, and the site behind it
+ *
+ * Each falls through to the next when it is not set, which is the whole
+ * reason nothing here writes a value it was not given. The size MULTIPLIES
+ * rather than replaces, so the clamp keeps working and a title tuned on a
+ * desktop still shrinks on a phone.
+ */
 .hero-fixed-title {
-  font-family: var(--sec-font, var(--font-display));
-  font-weight: var(--sec-weight, 400);
-  text-transform: var(--sec-case, uppercase);
-  letter-spacing: var(--sec-track, 0.02em);
-  color: var(--sec-color, #faf9f6);
-  font-size: calc(clamp(1.4rem, 3vw, 2.2rem) * var(--sec-scale, 1));
-  line-height: 1.1;
+  font-family: var(--txt-font, var(--sec-font, var(--font-display)));
+  font-weight: var(--txt-weight, var(--sec-weight, 400));
+  text-transform: var(--txt-case, var(--sec-case, uppercase));
+  letter-spacing: var(--txt-track, var(--sec-track, 0.02em));
+  color: var(--txt-color, var(--sec-color, #faf9f6));
+  font-size: calc(clamp(1.4rem, 3vw, 2.2rem) * var(--sec-scale, 1) * var(--txt-scale, 1));
+  line-height: var(--txt-leading, 1.1);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  /* `inherit` so the place's own alignment still governs until this is set. */
+  text-align: var(--txt-align, inherit);
   margin: 0;
   text-shadow: 0 2px 24px rgba(0, 0, 0, 0.4);
 }
 
 .hero-fixed-sub {
-  font-family: var(--sec-body-font, var(--font-body));
-  font-size: calc(clamp(0.88rem, 1.4vw, 1.05rem) * var(--sec-body-scale, 1));
-  line-height: 1.7;
+  font-family: var(--txt-font, var(--sec-body-font, var(--font-body)));
+  font-size: calc(clamp(0.88rem, 1.4vw, 1.05rem) * var(--sec-body-scale, 1) * var(--txt-scale, 1));
+  line-height: var(--txt-leading, 1.7);
+  font-weight: var(--txt-weight, inherit);
+  text-transform: var(--txt-case, none);
+  letter-spacing: var(--txt-track, normal);
+  color: var(--txt-color, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  text-align: var(--txt-align, inherit);
   /*
    * `auto` side margins centred this inside its place even when the place was
    * a left-hand one, so a left-aligned subtitle sat indented under its title.
@@ -507,19 +532,24 @@
 .hero-fixed-cta {
   display: inline-block;
   margin-top: 1.5rem;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--txt-font, var(--font-display), sans-serif);
+  font-weight: var(--txt-weight, inherit);
+  font-style: var(--txt-style, normal);
+  text-decoration: var(--txt-decoration, none);
+  word-spacing: var(--txt-word, normal);
+  line-height: var(--txt-leading, normal);
   /* Button shape and case come from Look & style, like .section-cta a in
      home.css. These three buttons were written before those tokens existed
      and quietly ignored them, which is why the Button shape control looked
      like it did nothing. Square is the default, so nothing moves until it is
      changed. */
   border-radius: var(--button-radius, 0px);
-  text-transform: var(--button-case, uppercase);
-  letter-spacing: 0.16em;
-  font-size: 0.74rem;
+  text-transform: var(--txt-case, var(--button-case, uppercase));
+  letter-spacing: var(--txt-track, 0.16em);
+  font-size: calc(0.74rem * var(--txt-scale, 1));
   padding: 0.8em 2em;
   border: 1px solid rgba(250, 249, 246, 0.6);
-  color: #faf9f6;
+  color: var(--txt-color, #faf9f6);
   transition: background 0.25s ease, color 0.25s ease;
 }
 

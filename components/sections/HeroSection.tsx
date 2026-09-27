@@ -5,12 +5,15 @@ import { list, map, str, type SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
 import HomeHero, { type HeroItem } from '@/components/home/HomeHero'
 import { spot } from '@/lib/sections/spots'
-import { textStyles } from '@/lib/sections/text-style'
+import { textVarsByField } from '@/lib/sections/text-style'
 import { allFonts } from '@/lib/type-styles'
 import TextFonts from '@/components/sections/TextFonts'
 import FixedHero from '@/components/home/FixedHero'
 
 type Focal = { x?: number; y?: number; mx?: number; my?: number }
+
+/** The three pieces of copy the hero owns, in both of its modes. */
+const HERO_TEXT = ['title', 'subtitle', 'cta_label'] as const
 
 export default function HeroSection({
   settings,
@@ -73,7 +76,7 @@ export default function HeroSection({
           titleSpot={spot(settings.title_spot)}
           subtitleSpot={spot(settings.subtitle_spot)}
           ctaSpot={spot(settings.cta_spot)}
-          text={textStyles(settings)}
+          text={textVarsByField(settings, HERO_TEXT)}
           styleVars={vars}
           editable={ctx.editable}
         />
@@ -86,7 +89,7 @@ export default function HeroSection({
           overlaySubtitle={str(settings, 'subtitle')}
           ctaLabel={str(settings, 'cta_label')}
           ctaHref={str(settings, 'cta_href')}
-          text={textStyles(settings)}
+          text={textVarsByField(settings, HERO_TEXT)}
           styleVars={vars}
           editable={ctx.editable}
         />

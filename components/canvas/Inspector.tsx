@@ -13,12 +13,20 @@ import TextStylePanel from '@/components/canvas/editors/TextStylePanel'
 import { SEC_VARS, ownStyle, sectionStyle, type TypeStyles } from '@/lib/type-styles'
 import {
   TEXT_VARS,
+  effectiveTextStyle,
+  overrideAgainst,
   textStyleVars,
   textStyles,
   withTextStyle,
   type TextStyle,
   type TextStyles,
 } from '@/lib/sections/text-style'
+import {
+  BASE_DEVICE,
+  DEVICE_LABEL,
+  deviceKey,
+  type Device,
+} from '@/lib/sections/devices'
 import { fontHref } from '@/lib/fonts'
 import type { CanvasSection } from '@/components/canvas/Canvas'
 
@@ -77,7 +85,7 @@ export default function Inspector({
   onMoveSpot,
   onTypeVars,
   onTextVars,
-  onDevice,
+  editing,
   onShowStory,
   onSaved,
   onSettled,
@@ -125,8 +133,14 @@ export default function Inspector({
     vars: Record<string, string | null>,
     fonts: string[]
   ) => void
-  /** Put the preview into the width whose crop is being edited. */
-  onDevice: (device: 'desktop' | 'mobile') => void
+  /**
+   * WHICH SIZE EVERY CONTROL IN HERE IS EDITING.
+   *
+   * Chosen by the one switcher at the top of the editor, which also sets the
+   * preview's width — so what is on screen and what is being changed are the
+   * same thing by construction rather than by remembering.
+   */
+  editing: Device
   /** Bring one of the hero's stories up in the preview. */
   onShowStory: (index: number | null) => void
   onSaved: () => void
@@ -243,19 +257,34 @@ export default function Inspector({
    * the panel is rebuilt, which is what Undo does (Canvas keys this component
    * on `revision`), so it can never outlive the values it describes.
    */
-  const textBag = useRef<{ id: string; bag: TextStyles } | null>(null)
+  const textBag = useRef<{ id: string; device: Device; bag: TextStyles } | null>(null)
+
+  /** The bag this panel last wrote for a section AND a device, or the stored one. */
+  const currentBag = (sectionId: string, device: Device): TextStyles =>
+    textBag.current?.id === sectionId && textBag.current.device === device
+      ? textBag.current.bag
+      : textStyles(section?.settings ?? {}, device)
 
   const saveTextStyle = (sectionId: string, field: string, next: TextStyle | null) => {
-    const bag = withTextStyle(
-      textBag.current?.id === sectionId
-        ? textBag.current.bag
-        : textStyles(section?.settings ?? {}),
-      field,
-      next
-    )
+    /*
+     * ON A NARROWER DEVICE, ONLY THE DIFFERENCE IS STORED.
+     *
+     * The panel shows the EFFECTIVE style — desktop with this device's
+     * overrides on top — so `next` arrives complete, most of it the desktop
+     * values showing through. Storing that whole object would freeze the
+     * inherited half: change the desktop typeface afterwards and the phone
+     * would keep the old one, having copied it the moment anything else was
+     * touched. Storing the difference is what keeps "follows until you change
+     * it" true after the first change.
+     */
+    const stored =
+      editing === BASE_DEVICE
+        ? next
+        : overrideAgainst(textStyles(section?.settings ?? {}, BASE_DEVICE)[field] ?? null, next)
 
-    textBag.current = { id: sectionId, bag }
-    saveValues(sectionId, { text: bag })
+    const bag = withTextStyle(currentBag(sectionId, editing), field, stored)
+    textBag.current = { id: sectionId, device: editing, bag }
+    saveValues(sectionId, { [deviceKey('text', editing)]: bag })
   }
 
   const send = (target: { id: string; data: FormData }) => {
@@ -442,13 +471,25 @@ export default function Inspector({
           publicUrl={publicUrl}
           collapsible
           renderTextStyle={(field: Field) => {
-            // Read from the panel's own copy first, for the same reason
-            // saveTextStyle writes to it: two elements styled in quick
-            // succession must not each start from a stale bag.
-            const bag =
-              textBag.current?.id === section.id
-                ? textBag.current.bag
-                : textStyles(section.settings)
+            /*
+             * What this text looks like ON THE SIZE BEING EDITED: the desktop
+             * values with this device's overrides laid over them. The panel
+             * shows and edits that, so a phone that has changed only its size
+             * still shows the desktop typeface rather than an empty control
+             * that pretends nothing is set.
+             *
+             * Read from the panel's own copy first, for the same reason
+             * saveTextStyle writes to it: two elements styled in quick
+             * succession must not each start from a stale bag.
+             */
+            const live = textBag.current?.id === section.id && textBag.current.device === editing
+              ? textBag.current.bag[field.key] ?? null
+              : null
+            const stored = effectiveTextStyle(section.settings, field.key, editing)
+            const shown =
+              live !== null && editing !== BASE_DEVICE
+                ? { ...(textStyles(section.settings, BASE_DEVICE)[field.key] ?? {}), ...live }
+                : live ?? stored
 
             // What it falls back to, for the "Following (…)" labels. The
             // section's own typography wins over the site's, which is the same
@@ -482,7 +523,14 @@ export default function Inspector({
             return (
               <TextStylePanel
                 label={field.label}
-                value={bag[field.key] ?? null}
+                device={editing}
+                deviceName={DEVICE_LABEL[editing]}
+                inheriting={
+                  editing !== BASE_DEVICE &&
+                  (currentBag(section.id, editing)[field.key] ?? null) === null &&
+                  stored !== null
+                }
+                value={shown}
                 base={base}
                 onChange={(next) => {
                   // Painted on the page first: textStyleVars is what the
@@ -529,7 +577,7 @@ export default function Inspector({
                   value={value}
                   imagePath={(section.settings.image_path as string) ?? null}
                   publicUrl={publicUrl}
-                  onDevice={onDevice}
+                  device={editing}
                   onChange={(next) => saveValues(section.id, { [field.key]: next })}
                 />
               )
@@ -550,7 +598,7 @@ export default function Inspector({
                   }
                   options={stories}
                   publicUrl={publicUrl}
-                  onDevice={onDevice}
+                  device={editing}
                   onShowStory={onShowStory}
                   onChange={(values) => saveValues(section.id, values)}
                 />

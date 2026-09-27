@@ -3101,6 +3101,41 @@
 
 /* Says what the control below IS, now that each text box has two of them. */
 
+/* Which size the whole editor is pointed at. The switcher beside it changes
+   the preview's width AND what every panel edits, so it says which. */
+.cv-device-now {
+  margin-left: 0.5rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--cv-soft);
+  white-space: nowrap;
+}
+
+/* The size a typography panel is editing, beside the field's name. */
+.txt-pop-device {
+  margin-left: 0.4rem;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--cv-accent, #b5602c);
+  color: #fff;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+/* Said plainly: these controls are showing the desktop's values, not this
+   size's. Without it, a panel full of numbers nobody set here is a puzzle. */
+.txt-pop-inherit {
+  margin: 0 0 0.45rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--cv-soft);
+}
+
 /* ---------------- one setting, one line ---------------- */
 
 /*

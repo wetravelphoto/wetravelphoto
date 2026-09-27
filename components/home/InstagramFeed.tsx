@@ -1,5 +1,5 @@
 import type { InstagramPost } from '@/lib/instagram'
-import { textStyleVars, type TextStyle } from '@/lib/sections/text-style'
+
 
 /**
  * Nine recent posts across a 5×3 grid. The first and sixth span 2×2, giving
@@ -10,14 +10,14 @@ export default function InstagramFeed({
   posts,
   heading,
   handle,
-  headingStyle = null,
+  headingStyle,
   editable = false,
 }: {
   posts: InstagramPost[]
   heading: string | null
   handle: string | null
-  /** The heading's own typography, chosen beside its box in the editor. */
-  headingStyle?: TextStyle | null
+  /** The heading's own typography, for every device at once. */
+  headingStyle?: React.CSSProperties
   /** True only in the editor's preview. The handle comes from Settings, so it
    *  is not tagged — only the heading belongs to this section. */
   editable?: boolean
@@ -35,7 +35,7 @@ export default function InstagramFeed({
       <div className="ig-head">
         <h2
           className="ig-heading"
-          style={textStyleVars(headingStyle) as React.CSSProperties}
+          style={headingStyle}
           {...(editable ? { 'data-field': 'heading' } : {})}
         >
           {heading || 'Instagram'}

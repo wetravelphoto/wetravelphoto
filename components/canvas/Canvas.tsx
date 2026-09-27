@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import type { CustomPage, SitePage } from '@/lib/sections/pages'
 import { PLACEABLE, SPOTS } from '@/lib/sections/spots'
+import { DEVICE_LABEL, type Device as EditDevice } from '@/lib/sections/devices'
 import type { MenuItem } from '@/lib/menu'
 import {
   addDraftSection,
@@ -55,6 +56,13 @@ export type CanvasSection = {
   settings: SectionSettings
 }
 
+/**
+ * The widths the preview can be laid out at. NOT the same list as the sizes a
+ * SETTING can differ by (lib/sections/devices.ts): the stylesheets have one
+ * breakpoint, so tablet is a width to LOOK at rather than a width to edit,
+ * and it edits the desktop values. When a real tablet breakpoint exists the
+ * two lists converge and `editedAt` below becomes the identity.
+ */
 type Device = 'desktop' | 'tablet' | 'phone'
 type Mode = 'content' | 'style'
 
@@ -66,6 +74,22 @@ const WIDTHS: Record<Device, number> = { desktop: 1440, tablet: 820, phone: 390 
 
 /** The breathing room above and below a tablet or phone frame. */
 const FRAME_INSET = 44
+
+/**
+ * WHICH SET OF VALUES A PREVIEW WIDTH EDITS.
+ *
+ * One switcher, not two. Before this, the preview width and the size being
+ * edited were separate ideas, and the focal picker carried a switcher of its
+ * own to reconcile them — which made it possible to crop for the phone while
+ * looking at the desktop layout, which is cropping blind.
+ *
+ * Now the width you are looking at IS the thing you are editing, so the two
+ * cannot disagree. Tablet edits desktop because there is nothing else for it
+ * to edit yet, and the switcher says so rather than pretending.
+ */
+function editedAt(device: Device): EditDevice {
+  return device === 'phone' ? 'mobile' : 'desktop'
+}
 
 /**
  * The shell. Holds the selection, owns the iframe, and is the only thing that
@@ -225,6 +249,8 @@ export default function Canvas({
       unit?: string
       attr?: string
       part?: string
+      /** Per-device typography: which size's values these are. */
+      device?: EditDevice
     }) => {
       frame.current?.contentWindow?.postMessage(
         { source: 'wtp-canvas', ...message },
@@ -617,7 +643,12 @@ export default function Canvas({
           ))}
         </div>
 
-        <div className="cv-devices" role="group" aria-label="Preview width">
+        {/*
+          * It changes the preview width AND what the panels edit, so it says
+          * so: a switcher that silently redirected every control below it
+          * would be the most surprising thing in the editor.
+          */}
+        <div className="cv-devices" role="group" aria-label="Size to look at and edit">
           {(['desktop', 'tablet', 'phone'] as Device[]).map((d) => (
             <button
               key={d}
@@ -626,11 +657,19 @@ export default function Canvas({
               data-on={device === d}
               onClick={() => setDevice(d)}
               aria-pressed={device === d}
+              title={
+                d === 'tablet'
+                  ? 'Tablet — shown at tablet width, edited with the desktop values'
+                  : `Edit the ${DEVICE_LABEL[editedAt(d)].toLowerCase()} version`
+              }
             >
               {d === 'desktop' ? '🖥' : d === 'tablet' ? '▭' : '▯'}
               <span className="cv-sr">{d}</span>
             </button>
           ))}
+          <span className="cv-device-now" aria-live="polite">
+            {device === 'tablet' ? 'Editing desktop' : `Editing ${DEVICE_LABEL[editedAt(device)].toLowerCase()}`}
+          </span>
         </div>
 
         <div className="cv-top-right">
@@ -820,13 +859,11 @@ export default function Canvas({
                 bodyFont: tokens.body_font,
                 bodyColor: tokens.ink_soft,
               }}
+              editing={editedAt(device)}
               onTypeVars={(id, vars, fonts) => tell({ type: 'type-vars', id, vars, fonts })}
               onTextVars={(id, field, vars, fonts) =>
-                tell({ type: 'text-vars', id, field, vars, fonts })
+                tell({ type: 'text-vars', id, field, device: editedAt(device), vars, fonts })
               }
-              // Cropping for the phone while looking at the desktop layout is
-              // guessing, so the preview follows the crop being edited.
-              onDevice={(d) => setDevice(d === 'mobile' ? 'phone' : 'desktop')}
               onShowStory={(index) => tell({ type: 'hero-story', index: index ?? undefined })}
               onPatch={(field, value) => {
                 if (selected) tell({ type: 'patch', id: selected, field, value })

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ROWS, COLUMNS, spot, type Spot } from '@/lib/sections/spots'
-import { textStyleVars, type TextStyles } from '@/lib/sections/text-style'
+import type { TextVars } from '@/lib/sections/text-style'
 
 export type FixedHeroProps = {
   imageUrl: string | null
@@ -22,7 +22,7 @@ export type FixedHeroProps = {
    * Written as custom properties on the element itself; the stylesheet reads
    * them in front of the section's own, so an unset one falls through.
    */
-  text?: TextStyles
+  text?: TextVars
   styleVars?: React.CSSProperties
   /**
    * True only inside the editor's preview: tags the title, subtitle and button
@@ -66,8 +66,8 @@ export default function FixedHero({
   editable = false,
 }: FixedHeroProps) {
   const field = (key: string) => (editable ? { 'data-field': key } : {})
-  /** Its own typography, if it has been given any. */
-  const own = (key: string) => textStyleVars(text[key] ?? null) as React.CSSProperties
+  /** This piece of copy's own typography, for every device at once. */
+  const own = (key: string) => text[key]
   /** Only in the editor: what the drag picks up, and which setting it writes. */
   const grip = (settingKey: string) =>
     editable ? { 'data-spot-drag': settingKey, draggable: false } : {}

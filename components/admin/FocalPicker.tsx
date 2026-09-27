@@ -15,6 +15,7 @@ export default function FocalPicker({
   mobile,
   onChange,
   onDevice,
+  device: controlled,
 }: {
   imageUrl: string
   desktop: FocalPoint
@@ -26,8 +27,22 @@ export default function FocalPicker({
    * layout is guessing.
    */
   onDevice?: (device: 'desktop' | 'mobile') => void
+  /**
+   * WHICH CROP TO EDIT, DECIDED FROM OUTSIDE.
+   *
+   * Passed by the canvas, where one switcher at the top governs everything and
+   * this picker's own tabs would be a second switcher that could disagree with
+   * it — which is exactly the mistake the tabs were built to prevent, made
+   * twice. Given this, the tabs are not drawn.
+   *
+   * Left optional because the old admin forms have no switcher of their own
+   * and still need one here.
+   */
+  device?: 'desktop' | 'mobile'
 }) {
-  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const [ownDevice, setOwnDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const device = controlled ?? ownDevice
+  const setDevice = setOwnDevice
   const [dragging, setDragging] = useState(false)
 
   // Mirrored locally so the dot tracks the cursor even if the parent is slow
@@ -76,26 +91,31 @@ export default function FocalPicker({
   return (
     <div className="focal-picker">
       <div className="focal-tabs">
-        <button
-          type="button"
-          onClick={() => {
-            setDevice('desktop')
-            onDevice?.('desktop')
-          }}
-          data-active={device === 'desktop'}
-        >
-          Desktop
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setDevice('mobile')
-            onDevice?.('mobile')
-          }}
-          data-active={device === 'mobile'}
-        >
-          Mobile
-        </button>
+        {/* Only where nothing outside is deciding. See `device`. */}
+        {controlled === undefined && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setDevice('desktop')
+                onDevice?.('desktop')
+              }}
+              data-active={device === 'desktop'}
+            >
+              Desktop
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDevice('mobile')
+                onDevice?.('mobile')
+              }}
+              data-active={device === 'mobile'}
+            >
+              Mobile
+            </button>
+          </>
+        )}
         <button type="button" onClick={reset} className="focal-reset">
           Centre
         </button>

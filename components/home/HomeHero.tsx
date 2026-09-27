@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { textStyleVars, type TextStyles } from '@/lib/sections/text-style'
+import type { TextVars } from '@/lib/sections/text-style'
 
 export type HeroItem = {
   slug: string
@@ -53,11 +53,11 @@ export default function HomeHero({
    * mode, and somebody who styles a title and then switches the hero to
    * stories should find their title still styled.
    */
-  text?: TextStyles
+  text?: TextVars
   styleVars?: React.CSSProperties
 }) {
-  /** This piece of copy's own typography, if it has been given any. */
-  const own = (key: string) => textStyleVars(text[key] ?? null) as React.CSSProperties
+  /** This piece of copy's own typography, for every device at once. */
+  const own = (key: string) => text[key]
 
   const [active, setActive] = useState(0)
   // Held here so the rotation can be paused while a story is being edited.

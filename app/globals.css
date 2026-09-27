@@ -124,3 +124,55 @@ a {
   padding-left: 1.2em;
   margin: 0 0 1.4em;
 }
+
+/* ══ PER-DEVICE TYPOGRAPHY: THE RESOLVER ═════════════════════════════════════
+ *
+ * Every piece of text the editor can style carries BOTH devices' values at
+ * once, inline, under two prefixes — because an inline style attribute cannot
+ * carry a media query, and a `<style>` element per section would be a second
+ * stylesheet to keep in step with the first.
+ *
+ * This is the one rule that picks between them. Each section's own stylesheet
+ * reads `--txt-*` and knows nothing about devices; here `--txt-*` is defined
+ * as the desktop value, and re-defined at the breakpoint as the phone value
+ * falling back to the desktop one.
+ *
+ * WHY AN UNSET VALUE IS SAFE. `var(--txtd-font)` with nothing set makes
+ * `--txt-font` invalid at computed-value time, and a rule reading
+ * `var(--txt-font, <its own value>)` then uses its own value. So text with no
+ * typography of its own is untouched, and a phone that set only its size
+ * keeps the desktop typeface. Both directions are asserted in the test suite,
+ * because the whole feature rests on that behaviour.
+ *
+ * Generated from lib/sections/devices.ts. Add a device there and here.
+ */
+
+[data-txt] {
+  --txt-font: var(--txtd-font);
+  --txt-scale: var(--txtd-scale);
+  --txt-weight: var(--txtd-weight);
+  --txt-case: var(--txtd-case);
+  --txt-style: var(--txtd-style);
+  --txt-decoration: var(--txtd-decoration);
+  --txt-leading: var(--txtd-leading);
+  --txt-track: var(--txtd-track);
+  --txt-word: var(--txtd-word);
+  --txt-color: var(--txtd-color);
+  --txt-align: var(--txtd-align);
+}
+
+@media (max-width: 760px) {
+  [data-txt] {
+    --txt-font: var(--txtm-font, var(--txtd-font));
+    --txt-scale: var(--txtm-scale, var(--txtd-scale));
+    --txt-weight: var(--txtm-weight, var(--txtd-weight));
+    --txt-case: var(--txtm-case, var(--txtd-case));
+    --txt-style: var(--txtm-style, var(--txtd-style));
+    --txt-decoration: var(--txtm-decoration, var(--txtd-decoration));
+    --txt-leading: var(--txtm-leading, var(--txtd-leading));
+    --txt-track: var(--txtm-track, var(--txtd-track));
+    --txt-word: var(--txtm-word, var(--txtd-word));
+    --txt-color: var(--txtm-color, var(--txtd-color));
+    --txt-align: var(--txtm-align, var(--txtd-align));
+  }
+}

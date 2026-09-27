@@ -1,7 +1,7 @@
 import { photoUrl } from '@/lib/images'
 import { allFonts, sectionVars } from '@/lib/type-styles'
 import { str, type SectionSettings } from '@/lib/sections/registry'
-import { textStyles } from '@/lib/sections/text-style'
+import { textVarsByField } from '@/lib/sections/text-style'
 import TextFonts from '@/components/sections/TextFonts'
 import type { SectionContext } from '@/lib/sections/context'
 import ContactSection from '@/components/ContactSection'
@@ -14,13 +14,15 @@ export default function ContactBlock({
   ctx: SectionContext
 }) {
   const image = str(settings, 'image_path')
+  /** The five pieces of writing this section owns. */
+  const text = textVarsByField(settings, ['eyebrow', 'heading', 'intro', 'note', 'tagline'])
 
   return (
     <>
       <TextFonts names={allFonts('contact', settings, ctx.styles)} />
       <ContactSection
         editable={ctx.editable}
-        text={textStyles(settings)}
+        text={text}
         styleVars={sectionVars('contact', settings, ctx.styles)}
         settings={{
           layout: str(settings, 'layout') === 'centered' ? 'centered' : 'split',

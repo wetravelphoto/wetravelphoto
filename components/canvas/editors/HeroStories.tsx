@@ -35,7 +35,7 @@ export default function HeroStories({
   options,
   publicUrl,
   onChange,
-  onDevice,
+  device,
   onShowStory,
 }: {
   ids: string[]
@@ -52,7 +52,8 @@ export default function HeroStories({
     story_focal?: Record<string, Focal>
   }) => void
   /** Puts the preview into the width whose crop is being edited. */
-  onDevice?: (device: 'desktop' | 'mobile') => void
+  /** Which crop to edit — the switcher at the top of the editor decides. */
+  device: 'desktop' | 'mobile'
   /**
    * Which story the preview should be showing. The hero rotates, so editing
    * the second story's crop against the first story's photograph is editing
@@ -234,7 +235,7 @@ export default function HeroStories({
                     <div className="cv-focal">
                       <span className="cv-focal-label">Crop</span>
                       <FocalPicker
-                        onDevice={onDevice}
+                        device={device}
                         imageUrl={imageSrc(publicUrl, story.imagePath)}
                         desktop={{ x: focal.x, y: focal.y }}
                         mobile={{ x: focal.mx, y: focal.my }}

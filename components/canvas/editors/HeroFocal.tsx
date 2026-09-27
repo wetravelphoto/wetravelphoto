@@ -21,14 +21,14 @@ export default function HeroFocal({
   imagePath,
   publicUrl,
   onChange,
-  onDevice,
+  device,
 }: {
   value: unknown
   imagePath: string | null
   publicUrl: string
   onChange: (next: Focal) => void
-  /** Puts the preview into the width whose crop is being edited. */
-  onDevice?: (device: 'desktop' | 'mobile') => void
+  /** Which crop to edit — the switcher at the top of the editor decides. */
+  device: 'desktop' | 'mobile'
 }) {
   const focal = (value ?? {}) as Focal
 
@@ -47,14 +47,16 @@ export default function HeroFocal({
     <div className="cv-focal">
       <span className="cv-focal-label">Crop</span>
       <span className="admin-meta">
-        Drag to set what stays in frame. Phone and desktop crop differently.
+        Drag to set what stays in frame. You are cropping the{' '}
+        {device === 'mobile' ? 'phone' : 'desktop'} version — switch size at the
+        top of the editor to crop the other.
       </span>
 
       <FocalPicker
         imageUrl={imageSrc(publicUrl, imagePath)}
         desktop={{ x: focal.x ?? 0.5, y: focal.y ?? 0.5 }}
         mobile={{ x: focal.mx ?? 0.5, y: focal.my ?? 0.5 }}
-        onDevice={onDevice}
+        device={device}
         onChange={({ desktop, mobile }) =>
           onChange({ x: desktop.x, y: desktop.y, mx: mobile.x, my: mobile.y })
         }

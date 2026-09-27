@@ -1,4 +1,6 @@
+import type React from 'react'
 import { COVER_FONTS } from '@/lib/fonts'
+import { BASE_DEVICE, DEVICES, DEVICE_PREFIX, deviceKey, type Device } from '@/lib/sections/devices'
 
 /**
  * TYPOGRAPHY FOR ONE PIECE OF TEXT
@@ -162,12 +164,46 @@ export function sanitizeTextStyles(input: unknown): TextStyles {
   return out
 }
 
-export function textStyles(settings: Record<string, unknown>): TextStyles {
-  return sanitizeTextStyles(settings.text)
+/** One device's bag. The base device's is plain `text`; see `deviceKey`. */
+export function textStyles(
+  settings: Record<string, unknown>,
+  device: Device = BASE_DEVICE
+): TextStyles {
+  return sanitizeTextStyles(settings[deviceKey('text', device)])
 }
 
-export function textStyleFor(settings: Record<string, unknown>, field: string): TextStyle | null {
-  return textStyles(settings)[field] ?? null
+/**
+ * What a piece of text actually looks like on one device: the base, with that
+ * device's overrides laid over it, property by property.
+ *
+ * Property by property is the point. A phone that set only the size keeps the
+ * desktop typeface, weight and colour — otherwise setting one control would
+ * silently discard the other ten, and nobody would find out until they looked
+ * at the site on a phone.
+ *
+ * This is what the PANEL shows. The page itself never needs it: there the
+ * merge is done by CSS at the breakpoint, which is why a value can be resolved
+ * differently on two screens without re-rendering.
+ */
+export function effectiveTextStyle(
+  settings: Record<string, unknown>,
+  field: string,
+  device: Device
+): TextStyle | null {
+  const base = textStyles(settings, BASE_DEVICE)[field] ?? null
+  if (device === BASE_DEVICE) return base
+  const own = textStyles(settings, device)[field] ?? null
+  if (!base) return own
+  if (!own) return base
+  return { ...base, ...own }
+}
+
+export function textStyleFor(
+  settings: Record<string, unknown>,
+  field: string,
+  device: Device = BASE_DEVICE
+): TextStyle | null {
+  return textStyles(settings, device)[field] ?? null
 }
 
 /**
@@ -187,6 +223,32 @@ export function withTextStyle(
   if (next && Object.keys(next).length > 0) out[field] = next
   else delete out[field]
   return out
+}
+
+/**
+ * What one piece of text's OWN entry should become on a narrower device, given
+ * what the panel is now showing.
+ *
+ * The panel shows the effective style — the base with this device's overrides
+ * on top — so it hands back a complete object, and most of what is in it is
+ * the base showing through. Storing that whole object would silently freeze
+ * the inherited half: change the desktop typeface afterwards and the phone
+ * would keep the old one, having quietly copied it the moment anything else
+ * was touched.
+ *
+ * So the override is the DIFFERENCE. Only a property that actually differs
+ * from the base is kept, and a property set back to the base's value stops
+ * being an override rather than becoming a redundant copy of it.
+ */
+export function overrideAgainst(base: TextStyle | null, next: TextStyle | null): TextStyle | null {
+  if (!next) return null
+  const out: TextStyle = {}
+  for (const [key, value] of Object.entries(next)) {
+    if (value === undefined) continue
+    if (base && base[key as keyof TextStyle] === value) continue
+    Object.assign(out, { [key]: value })
+  }
+  return Object.keys(out).length > 0 ? out : null
 }
 
 /**
@@ -223,6 +285,57 @@ export function textStyleVars(style: TextStyle | null): Record<string, string> {
   return vars
 }
 
+/**
+ * ONE PIECE OF TEXT'S PROPERTIES FOR EVERY DEVICE, AS ONE STYLE ATTRIBUTE.
+ *
+ * An inline style attribute cannot carry a media query, so it carries both
+ * sets at once under different prefixes and one global rule picks between
+ * them at the breakpoint (see app/globals.css, and DEVICE_PREFIX). The
+ * alternative was a `<style>` element per section, which is a second
+ * stylesheet to keep in step with the first.
+ */
+export function deviceTextStyleVars(
+  settings: Record<string, unknown>,
+  field: string
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const device of DEVICES) {
+    const style = textStyles(settings, device)[field]
+    if (!style) continue
+    for (const [name, value] of Object.entries(textStyleVars(style))) {
+      // --txt-scale under the mobile prefix is --txtm-scale.
+      out[DEVICE_PREFIX[device] + name.slice('--txt-'.length)] = value
+    }
+  }
+  return out
+}
+
+/**
+ * Ready-made style objects, keyed by field.
+ *
+ * For the components that take shaped props rather than the settings bag —
+ * the two heroes, the contact block, the Instagram feed. They cannot build
+ * these themselves: it takes every device's bag, and all they are given is
+ * their own words.
+ */
+export type TextVars = Record<string, React.CSSProperties>
+
+export function textVarsByField(
+  settings: Record<string, unknown>,
+  fields: readonly string[]
+): TextVars {
+  const out: TextVars = {}
+  for (const field of fields) {
+    out[field] = deviceTextStyleVars(settings, field) as React.CSSProperties
+  }
+  return out
+}
+
+/** Which fonts a page has to load: every device's, since one page serves all. */
+export function allTextFonts(settings: Record<string, unknown>): string[] {
+  return Array.from(new Set(DEVICES.flatMap((d) => textFonts(settings, d))))
+}
+
 /** Every custom property this can set, for the preview's live patching. */
 export const TEXT_VARS = [
   '--txt-font',
@@ -239,10 +352,13 @@ export const TEXT_VARS = [
 ] as const
 
 /** Which fonts a page has to load because a piece of its text asked for one. */
-export function textFonts(settings: Record<string, unknown>): string[] {
+export function textFonts(
+  settings: Record<string, unknown>,
+  device: Device = BASE_DEVICE
+): string[] {
   return Array.from(
     new Set(
-      Object.values(textStyles(settings))
+      Object.values(textStyles(settings, device))
         .map((s) => s.family)
         .filter((f): f is string => typeof f === 'string')
     )

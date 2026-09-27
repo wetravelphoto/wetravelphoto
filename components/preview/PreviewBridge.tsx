@@ -87,6 +87,8 @@ type Inbound = {
   attr?: string
   /** Header/footer repaint: which of the two. */
   part?: string
+  /** Per-device typography: which size's values these are. */
+  device?: string
 }
 
 /**
@@ -581,6 +583,21 @@ export default function PreviewBridge({ page }: { page: string }) {
       }
 
       if (data.type === 'text-vars' && data.id && data.field && SAFE_WORD.test(data.field)) {
+        /*
+         * WHICH SIZE'S VALUES THESE ARE.
+         *
+         * The element carries both at once under two prefixes and one rule in
+         * globals.css picks between them at the breakpoint, so painting a
+         * change live means writing it under the right prefix and letting the
+         * same rule decide — rather than deciding here, which would be a
+         * second implementation of the breakpoint that could disagree with
+         * the first.
+         *
+         * The preview iframe is laid out at the real device width, so the
+         * media query inside it is already answering for the size being
+         * looked at. Nothing has to be told twice.
+         */
+        const prefix = data.device === 'mobile' ? '--txtm-' : '--txtd-'
         // ONE PIECE OF TEXT's typography, on the element that already carries
         // its field name. The handler above does the same for a whole section;
         // this is the finer one, and it is the identity for the same reason:
@@ -593,7 +610,11 @@ export default function PreviewBridge({ page }: { page: string }) {
         // title sized on a desktop would keep that size on a phone.
         const id = data.id
         const field = data.field
-        const vars = Object.entries(data.vars ?? {}).filter(([name]) => SAFE_VAR.test(name))
+        const vars = Object.entries(data.vars ?? {})
+          .filter(([name]) => SAFE_VAR.test(name))
+          // `--txt-scale` for the phone is `--txtm-scale`; the editor sends the
+          // canonical names and the prefix is applied here, in one place.
+          .map(([name, value]) => [prefix + name.slice('--txt-'.length), value] as const)
 
         const apply = () => {
           document
@@ -604,7 +625,7 @@ export default function PreviewBridge({ page }: { page: string }) {
         }
 
         loadFonts(data.fonts)
-        pending.set(`text:${id}:${field}`, { section: id, apply })
+        pending.set(`text:${id}:${field}:${prefix}`, { section: id, apply })
         apply()
         return
       }

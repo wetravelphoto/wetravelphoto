@@ -1,6 +1,6 @@
 import Icon from '@/components/SocialIcons'
 import ContactForm from '@/components/ContactForm'
-import { textStyleVars, type TextStyles } from '@/lib/sections/text-style'
+import type { TextVars } from '@/lib/sections/text-style'
 
 export type ContactSettings = {
   /** Photograph beside the form, or the form centred on its own. */
@@ -31,7 +31,7 @@ export default function ContactSection({
    * Typography chosen for each piece of this section's writing, keyed by the
    * setting it belongs to. Absent entries follow the section, then the look.
    */
-  text?: TextStyles
+  text?: TextVars
   styleVars?: React.CSSProperties
   /**
    * True only inside the editor's preview: tags the four pieces of writing
@@ -43,8 +43,8 @@ export default function ContactSection({
   editable?: boolean
 }) {
   const field = (key: string) => (editable ? { 'data-field': key } : {})
-  /** This piece of writing's own typography, if it has been given any. */
-  const own = (key: string) => textStyleVars(text[key] ?? null) as React.CSSProperties
+  /** This piece of writing's own typography, for every device at once. */
+  const own = (key: string) => text[key]
 
   // The words, the form and the direct links — the same in both layouts, so
   // they are written once.

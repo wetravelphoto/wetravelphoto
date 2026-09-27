@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { FONT_NAMES } from '@/lib/styles/tokens'
 import SettingRow from '@/components/canvas/editors/SettingRow'
+import { BASE_DEVICE, type Device } from '@/lib/sections/devices'
 import {
   ALIGNS,
   DECORATIONS,
@@ -50,13 +51,26 @@ export default function TextStylePanel({
   value,
   /** What this text looks like when it follows: shown, never stored. */
   base,
+  device,
+  deviceName,
+  inheriting,
   onChange,
 }: {
   /** The field above. Named here for the screen reader and the panel heading. */
   label: string
-  /** Only what has been chosen. Null when this text follows entirely. */
+  /**
+   * The EFFECTIVE style on the size being edited — the desktop values with
+   * this size's overrides laid over them. Not what is stored: on a phone the
+   * caller works out the difference before writing it, so that a value still
+   * following desktop keeps following it. See `overrideAgainst`.
+   */
   value: TextStyle | null
   base: { font: string; color: string }
+  /** Which size these controls are editing. Set by the switcher at the top. */
+  device: Device
+  deviceName: string
+  /** True when this size has no values of its own and is showing desktop's. */
+  inheriting: boolean
   /** The complete new style, or null to follow again. */
   onChange: (next: TextStyle | null) => void
 }) {
@@ -92,9 +106,16 @@ export default function TextStylePanel({
       summary={describe(local, base.font)}
       quiet={set === 0}
     >
-      <div className="txt-pop" role="group" aria-label={`Typography for ${label}`}>
+      <div
+        className="txt-pop"
+        role="group"
+        aria-label={`Typography for ${label} on ${deviceName.toLowerCase()}`}
+      >
         <div className="txt-pop-head">
-          <p className="txt-pop-title">{label}</p>
+          <p className="txt-pop-title">
+            {label}
+            {device !== BASE_DEVICE && <span className="txt-pop-device">{deviceName}</span>}
+          </p>
           {set > 0 && (
             <button
               type="button"
@@ -104,10 +125,23 @@ export default function TextStylePanel({
                 onChange(null)
               }}
             >
-              Back to the look
+              {device === BASE_DEVICE ? 'Back to the look' : 'Back to desktop'}
             </button>
           )}
         </div>
+
+        {/*
+          * Said plainly rather than left to be discovered. Somebody editing
+          * the phone is looking at controls full of numbers they did not set
+          * here, and the difference between "this is the phone's" and "this
+          * is the desktop's, showing through" is the whole model.
+          */}
+        {device !== BASE_DEVICE && inheriting && (
+          <p className="txt-pop-inherit">
+            Following the desktop version. Change anything here and only that
+            one thing stops following.
+          </p>
+        )}
 
         <Block name="Alignment">
           <Segments

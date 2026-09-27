@@ -1,5 +1,5 @@
 import { getFont } from '@/lib/fonts'
-import { textFonts } from '@/lib/sections/text-style'
+import { allTextFonts } from '@/lib/sections/text-style'
 
 /**
  * A section's typography: what it has chosen for its heading, its body text and
@@ -261,11 +261,15 @@ export function sectionFonts(
  * Deduplicated here as well as by React's `precedence` in TextFonts, because a
  * section whose heading and title both use Oswald should produce one link, not
  * two, before the two ever reach the renderer.
+ *
+ * EVERY DEVICE's, not just the one being looked at: one page is served to all
+ * of them and the choice between them is made by a media query in the
+ * browser, long after this has decided what to fetch.
  */
 export function allFonts(
   type: string,
   settings: Record<string, unknown>,
   styles: TypeStyles | null
 ): string[] {
-  return Array.from(new Set([...sectionFonts(type, settings, styles), ...textFonts(settings)]))
+  return Array.from(new Set([...sectionFonts(type, settings, styles), ...allTextFonts(settings)]))
 }

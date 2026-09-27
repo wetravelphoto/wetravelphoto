@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { SectionContext } from '@/lib/sections/context'
-import { textStyleFor, textStyleVars } from '@/lib/sections/text-style'
+import { deviceTextStyleVars } from '@/lib/sections/text-style'
 
 /**
  * MARKS A PIECE OF TEXT AS A SETTING
@@ -86,8 +86,22 @@ export function styledText(
   ctx: SectionContext,
   settings: Record<string, unknown>,
   key: string
-): { 'data-field'?: string; style?: CSSProperties } {
-  const style = textStyleVars(textStyleFor(settings, key)) as CSSProperties
-  const marked = Object.keys(style).length > 0 ? { style } : {}
-  return ctx.editable ? { 'data-field': key, ...marked } : marked
+): { 'data-field'?: string; 'data-txt'?: string; style?: CSSProperties } {
+  const style = deviceTextStyleVars(settings, key) as CSSProperties
+  /*
+   * `data-txt` is ALWAYS here, on the public page as well, and it is not
+   * decoration: it is what the resolver in app/globals.css selects, the rule
+   * that turns this element's --txtd- and --txtm- properties into the --txt- its own
+   * stylesheet reads. Without it the properties sit on the element and
+   * nothing looks at them.
+   *
+   * It is also on an element with no typography at all, deliberately. The
+   * resolver then sets every --txt-* to a var() of something unset, which
+   * computes to invalid and makes each rule fall through to its own value —
+   * so an element with nothing of its own is isolated from an ancestor that
+   * has something, instead of quietly inheriting it.
+   */
+  return ctx.editable
+    ? { 'data-field': key, 'data-txt': '', style }
+    : { 'data-txt': '', style }
 }

@@ -3029,16 +3029,37 @@
 
 .txt-row-name { opacity: 0.7; }
 
+/*
+ * OPAQUE, NOT A TINT — and the options named as well.
+ *
+ * Everything else in this panel is a translucent white over a dark panel,
+ * which is right for a surface that sits on top of something. A `select` is
+ * not only a surface: the browser draws its DROP-DOWN LIST from the control's
+ * own computed background-colour, and a translucent white composites against
+ * the list's own white default rather than against the panel behind it. So the
+ * control looked correct and the list came out white text on white — every
+ * typeface and every weight invisible until it was highlighted.
+ *
+ * Two things fix it and both are needed: an opaque background here, and an
+ * explicit rule on the options, because some platforms take the list's colours
+ * from the option rather than from the select. `.cv-page-select` above already
+ * does the second; this is the same lesson learned twice.
+ */
 .txt-row select {
   width: 100%;
   min-width: 0;
   padding: 0.25rem 0.3rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--cv-line, #2b2f35);
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.05);
-  color: inherit;
+  background: var(--cv-bg, #131416);
+  color: var(--cv-ink, #e8eaed);
   font: inherit;
   font-size: 0.72rem;
+}
+
+.txt-row select option {
+  background: var(--cv-panel, #1a1c1f);
+  color: var(--cv-ink, #e8eaed);
 }
 
 .txt-seg {

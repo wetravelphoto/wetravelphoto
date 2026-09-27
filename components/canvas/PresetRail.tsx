@@ -11,14 +11,14 @@ import {
 /**
  * The left rail in Style mode: whole combinations, chosen on purpose.
  *
- * This is deliberately the FIRST thing offered, with the individual colours and
+ * This is deliberately the FIRST thing offered, with the individual colors and
  * typefaces on the other side of the screen. The premise of the whole builder
  * is "enough freedom to feel unique, enough structure that it is hard to look
- * bad", and an open colour picker on seven slots is how you get maroon body
+ * bad", and an open color picker on seven slots is how you get maroon body
  * text on a teal ground. The easy path is a good one; the precise path is still
  * there.
  *
- * Each swatch is drawn in its own colours, and each pairing is set in its own
+ * Each swatch is drawn in its own colors, and each pairing is set in its own
  * typefaces — because a list of names tells you nothing about what you are
  * choosing.
  */

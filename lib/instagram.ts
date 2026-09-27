@@ -41,7 +41,7 @@ export type InstagramTarget = {
 
 /**
  * The access token lives in site_secrets, not site_settings. site_settings is
- * readable by anyone with the public key — the site needs its colours before
+ * readable by anyone with the public key — the site needs its colors before
  * anybody signs in — and a long-lived Instagram token in that row was readable
  * by anyone who asked PostgREST for it.
  */

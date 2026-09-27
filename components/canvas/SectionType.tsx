@@ -82,24 +82,24 @@ export default function SectionType({
       <Row
         label="Heading"
         font={local.font}
-        colour={local.color}
+        color={local.color}
         scale={local.scale}
         baseFont={base.font}
-        baseColour={base.color}
+        baseColor={base.color}
         onFont={(v) => change({ font: v })}
-        onColour={(v) => change({ color: v })}
+        onColor={(v) => change({ color: v })}
         onScale={(v) => change({ scale: v })}
       />
 
       <Row
         label="Body"
         font={local.bodyFont}
-        colour={local.bodyColor}
+        color={local.bodyColor}
         scale={local.bodyScale}
         baseFont={base.bodyFont}
-        baseColour={base.bodyColor}
+        baseColor={base.bodyColor}
         onFont={(v) => change({ bodyFont: v })}
-        onColour={(v) => change({ bodyColor: v })}
+        onColor={(v) => change({ bodyColor: v })}
         onScale={(v) => change({ bodyScale: v })}
       />
 
@@ -107,12 +107,12 @@ export default function SectionType({
         <Row
           label="Over-line"
           font={local.eyebrowFont}
-          colour={local.eyebrowColor}
+          color={local.eyebrowColor}
           scale={local.eyebrowScale}
           baseFont={base.font}
-          baseColour={base.color}
+          baseColor={base.color}
           onFont={(v) => change({ eyebrowFont: v })}
-          onColour={(v) => change({ eyebrowColor: v })}
+          onColor={(v) => change({ eyebrowColor: v })}
           onScale={(v) => change({ eyebrowScale: v })}
         />
       )}
@@ -123,22 +123,22 @@ export default function SectionType({
 function Row({
   label,
   font,
-  colour,
+  color,
   scale,
   baseFont,
-  baseColour,
+  baseColor,
   onFont,
-  onColour,
+  onColor,
   onScale,
 }: {
   label: string
   font?: string
-  colour?: string
+  color?: string
   scale?: number
   baseFont: string
-  baseColour: string
+  baseColor: string
   onFont: (value: string | null) => void
-  onColour: (value: string | null) => void
+  onColor: (value: string | null) => void
   onScale: (value: number | null) => void
 }) {
   return (
@@ -157,20 +157,20 @@ function Row({
         </select>
       </label>
 
-      <div className="cv-colour-row">
+      <div className="cv-color-row">
         <input
           type="color"
-          value={colour ?? baseColour}
-          onChange={(e) => onColour(e.target.value)}
-          aria-label={`${label} colour`}
+          value={color ?? baseColor}
+          onChange={(e) => onColor(e.target.value)}
+          aria-label={`${label} color`}
         />
-        <span className="cv-colour-name">Colour</span>
-        {colour ? (
-          <button type="button" className="cv-type-clear" onClick={() => onColour(null)}>
+        <span className="cv-color-name">Color</span>
+        {color ? (
+          <button type="button" className="cv-type-clear" onClick={() => onColor(null)}>
             clear
           </button>
         ) : (
-          <span className="cv-colour-hex">following</span>
+          <span className="cv-color-hex">following</span>
         )}
       </div>
 

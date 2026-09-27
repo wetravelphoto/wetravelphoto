@@ -7,7 +7,7 @@
 
    The chrome deliberately does NOT use the site's own tokens. The root layout
    writes those onto <html>, so --ink and --surface are in scope here and would
-   have been convenient; using them would mean the editor changed colour every
+   have been convenient; using them would mean the editor changed color every
    time the photographer changed their palette, and a dark editor would turn
    white the moment someone chose a pale one. Everything below is its own
    closed set of cv- variables.
@@ -1120,7 +1120,7 @@
   color: var(--cv-ink);
 }
 
-/* The footer is dark, so its logo is shown on the footer's own colour. */
+/* The footer is dark, so its logo is shown on the footer's own color. */
 .cv-mark-preview[data-tone='footer'] {
   background: #20252b;
 }
@@ -1953,7 +1953,7 @@
   border-color: rgba(76, 141, 255, 0.4);
 }
 
-/* Each palette drawn in its own colours. A list of names tells you nothing. */
+/* Each palette drawn in its own colors. A list of names tells you nothing. */
 .cv-swatch-chips {
   flex: 0 0 auto;
   display: flex;
@@ -2019,16 +2019,16 @@
   margin-top: auto;
 }
 
-/* ── Colour rows ─────────────────────────────────────────────────────────── */
+/* ── Color rows ─────────────────────────────────────────────────────────── */
 
-.cv-colour-row {
+.cv-color-row {
   display: flex;
   align-items: center;
   gap: 0.55rem;
   cursor: pointer;
 }
 
-.cv-colour-row input[type='color'] {
+.cv-color-row input[type='color'] {
   flex: 0 0 auto;
   width: 30px;
   height: 22px;
@@ -2039,33 +2039,33 @@
   cursor: pointer;
 }
 
-/* Chrome and Safari draw their own inset swatch; strip it so the colour meets
+/* Chrome and Safari draw their own inset swatch; strip it so the color meets
    the border. */
-.cv-colour-row input[type='color']::-webkit-color-swatch-wrapper {
+.cv-color-row input[type='color']::-webkit-color-swatch-wrapper {
   padding: 0;
 }
-.cv-colour-row input[type='color']::-webkit-color-swatch {
+.cv-color-row input[type='color']::-webkit-color-swatch {
   border: 0;
   border-radius: 2px;
 }
-.cv-colour-row input[type='color']::-moz-color-swatch {
+.cv-color-row input[type='color']::-moz-color-swatch {
   border: 0;
   border-radius: 2px;
 }
 
-.cv-colour-name {
+.cv-color-name {
   flex: 1 1 auto;
   font-size: 0.74rem;
   color: var(--cv-soft);
 }
 
-.cv-colour-hex {
+.cv-color-hex {
   font-size: 0.66rem;
   font-variant-numeric: tabular-nums;
   color: var(--cv-mute);
 }
 
-/* The colour field in a section's settings (e.g. a custom background). */
+/* The color field in a section's settings (e.g. a custom background). */
 .sec-color-row {
   display: flex;
   align-items: center;
@@ -2483,12 +2483,21 @@
   gap: 0.4rem;
 }
 
+/*
+ * The name sits next to the arrow, at the LEFT.
+ *
+ * The count had `margin-left: auto`, which pushed itself to the right edge —
+ * correct — but the header read as a name floating in the middle of a wide
+ * empty row because nothing else claimed the space. Now the name takes it, so
+ * the row reads left to right: arrow, name, then the count at the far edge.
+ */
 .cv-fold {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   width: 100%;
   margin: 0;
+  text-align: left;
   /* Tall enough to hit without aiming. */
   min-height: 28px;
   padding: 0.25rem 0;
@@ -2510,10 +2519,15 @@
 
 /* The thing you click to open a group, so it has to be findable. It was a 9px
    glyph at 0.55rem in the muted ink — technically present, practically not. */
+/*
+ * Roughly the height of the word beside it — the mark you aim at to open a
+ * group, and for two rounds it was a speck. It was 9px at 0.55rem in the muted
+ * ink, then 14px, and still smaller than the text it belongs to.
+ */
 .cv-fold-arrow {
   display: inline-block;
-  width: 14px;
-  font-size: 0.95rem;
+  width: 16px;
+  font-size: 1.15rem;
   line-height: 1;
   color: var(--cv-soft);
   transition: transform 0.12s ease;
@@ -2525,13 +2539,15 @@
   transform: rotate(-90deg);
 }
 
+.cv-fold-name { flex: 1; min-width: 0; text-align: left; }
+
 .cv-fold-count {
   margin-left: auto;
   font-size: 0.66rem;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
-  /* Was --cv-line, which is a BORDER colour: nearly invisible on the panel it
+  /* Was --cv-line, which is a BORDER color: nearly invisible on the panel it
      sat on, because that is its job everywhere else. */
   color: var(--cv-mute);
 }
@@ -2902,6 +2918,55 @@
   white-space: nowrap;
 }
 
+/* ---------------- a short list as a row of pictures --------------------- */
+
+.ic-field { display: flex; flex-direction: column; gap: 0.3rem; }
+
+.ic-label { font-size: 0.72rem; }
+
+.ic-row {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ic-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Tall enough for a thumb, and the whole cell is the target. */
+  min-height: 32px;
+  border-radius: 4px;
+  color: var(--cv-mute);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.ic-btn:hover { color: var(--cv-ink); }
+
+.ic-btn[data-on] {
+  background: var(--cv-panel-2, #212429);
+  color: var(--cv-ink);
+}
+
+/* The radio itself is invisible and still the thing being operated: it keeps
+   the keyboard behaviour and the form event a styled button would lose. */
+.ic-btn input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ic-btn:focus-within {
+  outline: 2px solid var(--cv-accent, #b5602c);
+  outline-offset: -2px;
+}
+
 /* ---------------- Customize: three panels behind one button ------------- */
 
 .cz-pop {
@@ -3080,13 +3145,13 @@
  * Everything else in this panel is a translucent white over a dark panel,
  * which is right for a surface that sits on top of something. A `select` is
  * not only a surface: the browser draws its DROP-DOWN LIST from the control's
- * own computed background-colour, and a translucent white composites against
+ * own computed background-color, and a translucent white composites against
  * the list's own white default rather than against the panel behind it. So the
  * control looked correct and the list came out white text on white — every
  * typeface and every weight invisible until it was highlighted.
  *
  * Two things fix it and both are needed: an opaque background here, and an
- * explicit rule on the options, because some platforms take the list's colours
+ * explicit rule on the options, because some platforms take the list's colors
  * from the option rather than from the select. `.cv-page-select` above already
  * does the second; this is the same lesson learned twice.
  */
@@ -3128,6 +3193,18 @@
   line-height: 1;
   cursor: pointer;
 }
+
+/* The lines ARE the icon, so they take the button. A glyph in the middle of a
+   button says "alignment"; lines ragged on one side say WHICH alignment. */
+.txt-align-icon {
+  width: 100%;
+  height: 11px;
+  padding: 0 5px;
+  fill: currentColor;
+  opacity: 0.85;
+}
+
+.txt-seg-btn[data-active] .txt-align-icon { opacity: 1; }
 
 .txt-seg-btn:hover { background: rgba(255, 255, 255, 0.16); }
 
@@ -3189,14 +3266,14 @@
   text-decoration: none;
 }
 
-.txt-colour {
+.txt-color {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   font-size: 0.72rem;
 }
 
-.txt-colour input[type='color'] {
+.txt-color input[type='color'] {
   width: 28px;
   height: 22px;
   padding: 0;
@@ -3206,7 +3283,7 @@
   cursor: pointer;
 }
 
-.txt-colour-name {
+.txt-color-name {
   flex: 1;
   min-width: 0;
   opacity: 0.7;
@@ -3333,7 +3410,19 @@
    reads as a calm list and the one that has been changed stands out. */
 .ed-row-value[data-quiet] { opacity: 0.4; }
 
-.ed-row-caret { flex: 0 0 auto; opacity: 0.4; font-size: 0.9rem; line-height: 1; }
+/* Something has been changed in here. The button says only "Customize", so
+   this is the whole of what it reports from the outside. */
+.ed-row-dot {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cv-accent, #b5602c);
+}
+
+.ed-row-caret { flex: 0 0 auto; margin-left: auto; opacity: 0.4; font-size: 0.9rem; line-height: 1; }
+.ed-row-dot + .ed-row-caret { margin-left: 0.4rem; }
 
 .ed-row-pop {
   position: absolute;
@@ -3382,25 +3471,65 @@
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
-.shown-choice {
-  min-height: 26px;
-  padding: 0 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.04);
+/*
+ * One row per size: its icon, its name, and a switch. The question is per
+ * size — is it on here? — and three named sentences made you translate your
+ * answer into whichever one matched.
+ */
+.shown-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.035);
   color: inherit;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   cursor: pointer;
   text-align: left;
 }
 
-.shown-choice:hover { background: rgba(255, 255, 255, 0.16); }
+.shown-row:hover { background: rgba(255, 255, 255, 0.09); }
 
-.shown-choice[data-active] {
-  background: var(--cv-accent, #b5602c);
-  border-color: var(--cv-accent, #b5602c);
-  color: #fff;
+/* The last size that is still on. It cannot be turned off — text that appears
+   nowhere is text that should be deleted — so it says so rather than moving. */
+.shown-row:disabled { cursor: default; opacity: 0.85; }
+.shown-row:disabled:hover { background: rgba(255, 255, 255, 0.035); }
+
+.shown-row-name { flex: 1; min-width: 0; }
+
+.shown-switch {
+  flex: 0 0 auto;
+  position: relative;
+  width: 30px;
+  height: 17px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.14s ease;
+}
+
+.shown-switch[data-on] { background: var(--cv-accent, #b5602c); }
+
+.shown-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.14s ease;
+}
+
+.shown-switch[data-on] .shown-knob { transform: translateX(13px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .shown-switch,
+  .shown-knob { transition: none; }
 }
 
 .shown-note { margin: 0.35rem 0 0; }

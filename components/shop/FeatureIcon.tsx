@@ -2,7 +2,7 @@
  * The small line drawings beside the reassurance blurbs on a product page.
  *
  * Drawn rather than fetched: they're two dozen bytes of path data each, they
- * take the surrounding text colour, and they stay crisp at any size. Anything
+ * take the surrounding text color, and they stay crisp at any size. Anything
  * unrecognised falls back to the leaf, so a typed-in name never leaves a hole.
  */
 const PATHS: Record<string, string> = {

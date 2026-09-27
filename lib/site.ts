@@ -162,7 +162,7 @@ export type SiteSettings = {
   shop_room: string
 
   /**
-   * Colour, typography and measure for the whole site. Shape and defaults live
+   * Color, typography and measure for the whole site. Shape and defaults live
    * in lib/styles/tokens.ts; this is only where the overrides are kept, so an
    * empty object means "the defaults", not "unstyled".
    */

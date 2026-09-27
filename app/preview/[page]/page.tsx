@@ -60,7 +60,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ page: 
 
   // The root layout has already written the LIVE tokens onto <html>. Custom
   // properties cascade, so re-declaring them on this wrapper is enough to show
-  // the draft's colours and type without the public layout knowing anything
+  // the draft's colors and type without the public layout knowing anything
   // about drafts.
   const tokens = resolveTokens(settings.global_styles, settings.global_styles_version)
   const vars = cssVariables(tokens) as React.CSSProperties

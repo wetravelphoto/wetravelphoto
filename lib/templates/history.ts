@@ -52,7 +52,7 @@ export async function recordHistory(input: {
     template_name: input.templateName,
     version: input.version,
     sections_before: before,
-    // Both halves, so an undo restores the colours as well as the order.
+    // Both halves, so an undo restores the colors as well as the order.
     // A row written before 2026-09-16 holds a bare type_styles map; revertTo
     // handles either shape.
     styles_before: {

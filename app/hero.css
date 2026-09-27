@@ -3,7 +3,7 @@
 /*
  * ── WHAT IS BEHIND THE WORDS ────────────────────────────────────────────────
  *
- * A photograph, a video or a colour. `--hero-bg` is the colour and shows
+ * A photograph, a video or a color. `--hero-bg` is the color and shows
  * through wherever there is no media over it, which also makes it the ground
  * a photograph loads onto rather than a flash of near-black.
  */
@@ -77,7 +77,7 @@
   pointer-events: none;
 }
 
-/* A colour backdrop IS the colour — the gradient over a photograph would only
+/* A color backdrop IS the color — the gradient over a photograph would only
    muddy it, and there is no photograph for it to rescue. */
 .hero[data-backdrop='color'] .hero-scrim { display: none; }
 

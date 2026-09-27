@@ -7,7 +7,7 @@ import { useEffect } from 'react'
  * THE LAST PAGE BEFORE A WHITE SCREEN
  *
  * `global-error` replaces the root layout, so it has to bring its own `<html>`
- * and `<body>` and can take no fonts, colours or settings from the site —
+ * and `<body>` and can take no fonts, colors or settings from the site —
  * whatever failed may be the very thing that would have provided them. Written
  * with inline styles and a system typeface for that reason.
  *

@@ -740,7 +740,7 @@ export default function Canvas({
             onPairing={(id) => run(() => applyDraftPairing(id))}
             onPalette={(id) => run(() => applyDraftPalette(id))}
             onReset={() => {
-              if (confirm('Put the colours and type back to the original?')) {
+              if (confirm('Put the colors and type back to the original?')) {
                 run(() => resetDraftStyles())
               }
             }}
@@ -878,8 +878,22 @@ export default function Canvas({
                 if (selected) tell({ type: 'spot', id: selected, field, value })
               }}
               onSettled={(id) => tell({ type: 'settle', id })}
-              onSaved={() => {
-                tell({ type: 'refresh' })
+              /*
+               * A SAVE DOES NOT ALWAYS MEAN A REDRAW.
+               *
+               * `quiet` says the change went out on a live channel before it
+               * went to the server, so the preview already shows precisely
+               * what was saved. Asking for a re-render then is a round trip
+               * whose only visible effect is the page flashing through its
+               * cached state on the way back — which is why a change of case
+               * appeared, reverted and appeared again, and why a slider
+               * juddered.
+               *
+               * The rail still refreshes: it shows what is in the draft, and
+               * that HAS changed.
+               */
+              onSaved={(quiet) => {
+                if (!quiet) tell({ type: 'refresh' })
                 router.refresh()
               }}
               onClose={() => choose(null)}

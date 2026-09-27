@@ -44,7 +44,7 @@ export const STYLED_SECTIONS = ['hero', 'intro', 'journal', 'contact'] as const
 export type StyledSection = (typeof STYLED_SECTIONS)[number]
 
 /**
- * The hero is the one section whose colour is not a palette decision.
+ * The hero is the one section whose color is not a palette decision.
  *
  * Its words sit on a photograph rather than on the page, so they need to be
  * light whatever the palette is doing — a dark palette would otherwise put dark
@@ -216,7 +216,7 @@ export function styleVars(styles: TypeStyles | null, section: StyledSection): Re
 /**
  * Whether a section's typography is its own rather than the site's — set on
  * the section itself, or inherited from an old shared group override. Style
- * mode lists these, because they win over the typeface and colour set there.
+ * mode lists these, because they win over the typeface and color set there.
  */
 export function hasOwnType(
   type: string,

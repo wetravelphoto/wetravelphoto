@@ -4,7 +4,7 @@ import { COVER_FONTS, getFont } from '@/lib/fonts'
  * GLOBAL STYLES
  * ═════════════
  *
- * Every colour, typeface and measure the site uses, in one place, set once.
+ * Every color, typeface and measure the site uses, in one place, set once.
  *
  * The same contract as lib/sections/registry.ts and for the same reason:
  * defaults are merged under stored values at read time, so a site saved before
@@ -15,7 +15,7 @@ import { COVER_FONTS, getFont } from '@/lib/fonts'
  * ── What this is NOT ────────────────────────────────────────────────────────
  *
  * It is not a CSS editor. The whole premise is "enough freedom to feel unique,
- * enough structure that it is hard to look bad", and an open colour picker on
+ * enough structure that it is hard to look bad", and an open color picker on
  * seven slots is how you get a site with maroon body text on a teal ground.
  *
  * So the first thing the panel offers is a PAIRING and a PALETTE — combinations
@@ -29,7 +29,7 @@ import { COVER_FONTS, getFont } from '@/lib/fonts'
 export const TOKENS_VERSION = 1
 
 export type StyleTokens = {
-  // ── Colour ───────────────────────────────────────────────────────────────
+  // ── Color ───────────────────────────────────────────────────────────────
   /** Page background. */
   surface: string
   /** Bands that need to sit apart from the page — intro, footer. */
@@ -42,7 +42,7 @@ export type StyleTokens = {
   ink_mute: string
   /** Over-lines, links, the one thing on a page allowed to be warm. */
   accent: string
-  /** Hairlines. Stored as an opacity against ink rather than its own colour, so it stays right when ink changes. */
+  /** Hairlines. Stored as an opacity against ink rather than its own color, so it stays right when ink changes. */
   line_opacity: number
 
   // ── Typography ───────────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ export const PALETTES: Palette[] = [
   {
     id: 'bone',
     name: 'Bone',
-    note: 'Cooler and flatter. Lets colour photographs shout.',
+    note: 'Cooler and flatter. Lets color photographs shout.',
     surface: '#F7F7F5',
     surface_alt: '#EDEDEA',
     ink: '#1A1A19',

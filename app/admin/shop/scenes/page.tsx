@@ -100,7 +100,7 @@ export default async function RoomPage() {
               </div>
               <p className="admin-meta" style={{ marginTop: '0.6rem', lineHeight: 1.6 }}>
                 Showing the first print in your catalogue. The frame is exposed down to this
-                room&rsquo;s own light and picks up the wall&rsquo;s colour, which is what stops
+                room&rsquo;s own light and picks up the wall&rsquo;s color, which is what stops
                 it looking pasted on — so a print will read darker here than on the plain wall.
                 That&rsquo;s the room, not the file.
               </p>

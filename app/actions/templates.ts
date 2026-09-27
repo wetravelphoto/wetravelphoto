@@ -21,7 +21,7 @@ const PATHS = ['/admin/design']
 function done() {
   // 'layout' because a look sets the global style tokens, which are emitted in
   // the root layout — revalidating pages alone would leave every one of them
-  // wearing the old colours.
+  // wearing the old colors.
   revalidatePath('/', 'layout')
   PATHS.forEach((p) => revalidatePath(p))
 }

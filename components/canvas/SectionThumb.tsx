@@ -15,7 +15,7 @@
  *    arrangement — a photo on the left, three across, a form on the right —
  *    which is all a 200px card can usefully say;
  *  · nothing to upload, nothing to keep in step, and they inherit the
- *    editor's own colours, so they follow the chrome rather than the site.
+ *    editor's own colors, so they follow the chrome rather than the site.
  *
  * Adding a section type without adding a drawing is fine: it gets the plain
  * one below. The registry stays the only place a type has to be declared.

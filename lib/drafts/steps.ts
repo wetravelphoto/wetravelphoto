@@ -15,7 +15,7 @@ import type { SiteDraft } from '@/lib/drafts/store'
  * the same move in the other direction.
  *
  * Whole snapshots, not inverse operations: nothing here knows what a reorder
- * or a recolour is, so a new kind of edit is undoable the day it is added,
+ * or a recolor is, so a new kind of edit is undoable the day it is added,
  * without anyone remembering to write its opposite.
  *
  * Everything in this file is BEST EFFORT. If the steps table is not there yet,

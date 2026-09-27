@@ -325,6 +325,13 @@ export default function PreviewBridge({ page }: { page: string }) {
      * approximation when something is already stacked there, since the element
      * will settle above or below it.
      */
+    /**
+     * The order pieces of copy stack in when they share a place. Same list the
+     * renderer draws them in, so the park can work out where a dropped element
+     * will actually END UP rather than where the empty cell begins.
+     */
+    const STACK = ['title_spot', 'subtitle_spot', 'cta_spot']
+
     const parkOver = (el: HTMLElement, to: HTMLElement) => {
       // The natural box, with any carried transform taken off first — measuring
       // a transformed element would compound the offset.
@@ -337,6 +344,35 @@ export default function PreviewBridge({ page }: { page: string }) {
       const column = to.getAttribute('data-col')
       const band = to.closest('.hero-row')?.getAttribute('data-row')
 
+      /*
+       * WHAT IS ALREADY IN THE CELL.
+       *
+       * This used to align the dropped element to the cell's own edge, which
+       * is right only when the cell is empty. Drop a second piece of copy into
+       * an occupied place and it parked exactly on top of the first, then
+       * jumped down to its real position when the server's render arrived — a
+       * couple of seconds of showing something that was never going to be
+       * true.
+       *
+       * A place is a column: whatever is in it stacks in the renderer's order,
+       * so the destination is computable. The elements already there, plus
+       * this one, sorted the way they will be drawn.
+       */
+      const mine = el.getAttribute('data-spot-drag') ?? ''
+      const others = Array.from(to.querySelectorAll<HTMLElement>('[data-spot-drag]')).filter(
+        (node) => node !== el && node.offsetParent !== null
+      )
+      const gap = parseFloat(getComputedStyle(to).rowGap) || 0
+
+      const order = (node: HTMLElement) => STACK.indexOf(node.getAttribute('data-spot-drag') ?? '')
+      const before = others.filter((node) => order(node) < STACK.indexOf(mine))
+
+      const heights = [...others, el].map((node) =>
+        node === el ? from.height : node.getBoundingClientRect().height
+      )
+      const stack = heights.reduce((a, b) => a + b, 0) + gap * (heights.length - 1)
+      const above = before.reduce((a, node) => a + node.getBoundingClientRect().height + gap, 0)
+
       const x =
         column === 'left'
           ? cell.left - from.left
@@ -344,12 +380,15 @@ export default function PreviewBridge({ page }: { page: string }) {
             ? cell.right - from.right
             : cell.left + cell.width / 2 - (from.left + from.width / 2)
 
-      const y =
+      // Where the whole stack starts, then this element's place within it.
+      const top =
         band === 'top'
-          ? cell.top - from.top
+          ? cell.top
           : band === 'bottom'
-            ? cell.bottom - from.bottom
-            : cell.top + cell.height / 2 - (from.top + from.height / 2)
+            ? cell.bottom - stack
+            : cell.top + (cell.height - stack) / 2
+
+      const y = top + above - from.top
 
       el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
     }

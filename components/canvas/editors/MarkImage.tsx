@@ -13,7 +13,7 @@ import { isBuiltInMark, markSrc } from '@/lib/sections/mark'
  * key into the section in the draft, the same way every other canvas edit is
  * saved. Nothing reaches the live site until Publish.
  *
- * The preview sits on the page's light surface colour rather than the editor's
+ * The preview sits on the page's light surface color rather than the editor's
  * dark panel, because that is what the mark will be seen against — a dark
  * emblem on a dark panel would look like a broken upload.
  */

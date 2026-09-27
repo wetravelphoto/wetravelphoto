@@ -191,7 +191,15 @@ export default function Inspector({
   onPreviewDevice: (next: PreviewDevice) => void
   /** Bring one of the hero's stories up in the preview. */
   onShowStory: (index: number | null) => void
-  onSaved: () => void
+  /**
+   * A save has landed.
+   *
+   * `quiet` means the preview ALREADY shows this correctly, because the change
+   * went out on a live channel first — so there is nothing for a re-render to
+   * add, and asking for one is a round trip whose only visible effect is a
+   * flicker as the page redraws through its cached state on the way back.
+   */
+  onSaved: (quiet?: boolean) => void
   /**
    * The newest edit to this section has been written — nothing is queued
    * behind it — so values painted on live can be handed back to the server.
@@ -225,7 +233,7 @@ export default function Inspector({
    * onto another. Holding the data instead of the element means the flush
    * below has something real to send no matter what happened to the DOM.
    */
-  const queued = useRef<{ id: string; data: FormData } | null>(null)
+  const queued = useRef<{ id: string; data: FormData; quiet: boolean } | null>(null)
 
   /**
    * Custom editors save through here, coalesced.
@@ -238,7 +246,17 @@ export default function Inspector({
    * is the only one that matters; the rest are the drag.
    */
   const valueTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const valueQueue = useRef<{ id: string; values: Record<string, unknown> } | null>(null)
+  const valueQueue = useRef<{
+    id: string
+    values: Record<string, unknown>
+    /**
+     * Every change in this batch was painted on the page before it was sent,
+     * so the server has nothing to tell the preview that it does not already
+     * show. One change that was not resets it for the whole batch: they are
+     * saved together and a re-render is all-or-nothing.
+     */
+    quiet: boolean
+  } | null>(null)
 
   /**
    * Saves that have been sent and not yet answered. Clicking Undo takes focus
@@ -269,7 +287,7 @@ export default function Inspector({
       try {
         await track(updateDraftSectionValues(page, batch.id, batch.values))
         setSavedAt(Date.now())
-        onSaved()
+        onSaved(batch.quiet)
         if (!valueQueue.current) onSettled(batch.id)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not save that.')
@@ -277,12 +295,25 @@ export default function Inspector({
     })
   }
 
-  const saveValues = (sectionId: string, values: Record<string, unknown>) => {
+  /**
+   * @param painted The preview already shows this — see `quiet` on the queue.
+   *   Left false by default: a control that does NOT paint its own change is
+   *   the common case, and being wrong in that direction costs a re-render
+   *   nobody notices, while being wrong the other way leaves the page showing
+   *   something that is not what was saved.
+   */
+  const saveValues = (
+    sectionId: string,
+    values: Record<string, unknown>,
+    painted = false
+  ) => {
+    const same = valueQueue.current?.id === sectionId
     valueQueue.current = {
       id: sectionId,
       // Merged, so a drag that only moves the crop does not drop a title typed
       // a moment earlier and still waiting in the same batch.
-      values: { ...(valueQueue.current?.id === sectionId ? valueQueue.current.values : {}), ...values },
+      values: { ...(same ? valueQueue.current!.values : {}), ...values },
+      quiet: painted && (!same || valueQueue.current!.quiet),
     }
 
     if (valueTimer.current) clearTimeout(valueTimer.current)
@@ -332,16 +363,16 @@ export default function Inspector({
 
     const bag = withTextStyle(currentBag(sectionId, editing), field, stored)
     textBag.current = { id: sectionId, device: editing, bag }
-    saveValues(sectionId, { [deviceKey('text', editing)]: bag })
+    saveValues(sectionId, { [deviceKey('text', editing)]: bag }, true)
   }
 
-  const send = (target: { id: string; data: FormData }) => {
+  const send = (target: { id: string; data: FormData; quiet: boolean }) => {
     setError(null)
     startTransition(async () => {
       try {
         await track(updateDraftSection(page, target.id, target.data))
         setSavedAt(Date.now())
-        onSaved()
+        onSaved(target.quiet)
         if (!queued.current) onSettled(target.id)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not save that.')
@@ -366,13 +397,11 @@ export default function Inspector({
     // text: the preview decides what it can honestly apply, and everything else
     // arrives with the refresh after the save.
     const target = event.target as HTMLInputElement | HTMLTextAreaElement | null
-    if (
-      target?.name &&
+    const isText =
+      !!target?.name &&
       !target.name.startsWith('__present_') &&
       (target.type === 'text' || target.tagName === 'TEXTAREA')
-    ) {
-      onPatch(target.name, target.value)
-    }
+    if (isText && target) onPatch(target.name, target.value)
 
     // A design value the page can show on the spot: sliders and layout menus
     // whose field declares exactly which property it changes. The save below
@@ -381,7 +410,24 @@ export default function Inspector({
     const spec = target?.name ? def?.fields.find((f) => f.key === target.name)?.live : undefined
     if (spec && target) onLive(target.name, target.value, spec)
 
-    queued.current = { id, data: new FormData(form.current) }
+    /*
+     * Did the page already get this?
+     *
+     * Typing and a `live` field both reach the preview before the network
+     * does, so the save that follows has nothing to add — and the re-render it
+     * used to trigger is what made a slider judder and a change of case flash
+     * back to the old value and forward again on every keystroke's worth of
+     * debounce. Anything else still needs the server to draw it.
+     *
+     * One unpainted change in the batch makes the whole batch loud: they save
+     * together, and a re-render is all or nothing.
+     */
+    const painted = isText || !!spec
+    queued.current = {
+      id,
+      data: new FormData(form.current),
+      quiet: painted && (queued.current?.id !== id || queued.current.quiet),
+    }
 
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(flush, DEBOUNCE_MS)

@@ -219,8 +219,8 @@ export async function composeDraftPage(
 
   // Draft style and search settings sit on top of the live settings object,
   // so a draft that changed only the sections still renders in the site's
-  // real colours — and a page whose sections are untouched still shows the
-  // draft's colours and page settings.
+  // real colors — and a page whose sections are untouched still shows the
+  // draft's colors and page settings.
   const settings: SiteSettings = {
     ...live.settings,
     ...(draft.global_styles !== null ? { global_styles: draft.global_styles } : {}),

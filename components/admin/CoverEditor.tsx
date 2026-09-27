@@ -270,7 +270,7 @@ export default function CoverEditor(props: {
           </label>
 
           <div className="admin-field">
-            Text colour
+            Text color
             <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
               {TITLE_COLORS.map((c) => (
                 <button

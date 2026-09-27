@@ -12,7 +12,7 @@ import {
  * A look — Field Notes, Salt, Atelier — is not a separate codebase or a
  * different set of components. It is this manifest: which sections a page
  * has, in what order, with which DESIGN settings, plus the site-wide type and
- * colour. Nothing in it belongs to the photographer.
+ * color. Nothing in it belongs to the photographer.
  *
  * That is what makes the promise on the picker true: their photographs, words
  * and prices stay exactly where they are, because a manifest has no way to
@@ -46,12 +46,12 @@ export type TemplateStyles = {
   /** Per-section typography, as lib/type-styles.ts reads it. */
   type_styles: Record<string, Record<string, unknown>>
   /**
-   * The site-wide tokens — colour, typeface, measure — as
+   * The site-wide tokens — color, typeface, measure — as
    * lib/styles/tokens.ts stores them.
    *
    * Optional because manifests written before 2026-09-16 have none, and
    * resolveTokens fills the gap. Without this half, switching looks only
-   * reordered sections: Salt and Atelier came out the same colour.
+   * reordered sections: Salt and Atelier came out the same color.
    */
   tokens?: Record<string, unknown>
 }
@@ -202,7 +202,7 @@ export function describeApply(result: ApplyResult): string[] {
 
   if (added.length) lines.push(`Adds ${unique(added).map(label).join(', ')}`)
   if (reordered) lines.push('Changes the order of the page')
-  lines.push('Changes typography, colour, spacing and the look of every section')
+  lines.push('Changes typography, color, spacing and the look of every section')
   if (parked.length) {
     lines.push(
       `Switches off ${unique(parked).map(label).join(', ')} — kept on the page, nothing deleted`

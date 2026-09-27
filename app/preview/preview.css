@@ -9,7 +9,7 @@
 .pv-root {
   position: relative;
 
-  /* Not a site token. The selection chrome must stay legible whatever colours
+  /* Not a site token. The selection chrome must stay legible whatever colors
      the draft is wearing, so it deliberately does not follow the palette. */
   --pv-accent: #4c8dff;
 }

@@ -67,7 +67,7 @@ export default function Logo({
 
   /**
    * Type, not an image. `currentColor` means it inherits whatever the header,
-   * footer or hero has already decided about colour — including the light
+   * footer or hero has already decided about color — including the light
    * treatment over a photograph — so there is nothing here to keep in step
    * with the `tone` of a picture behind it.
    *

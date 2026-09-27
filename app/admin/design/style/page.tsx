@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation'
 /**
  * Style moved into the canvas.
  *
- * This page used to be the only way to change the site's colours and type, and
- * it wrote straight to site_settings — so touching a colour changed the live
+ * This page used to be the only way to change the site's colors and type, and
+ * it wrote straight to site_settings — so touching a color changed the live
  * site immediately, with no draft and no way back. Once the canvas had a draft
  * layer that was no longer a missing feature, it was a trap: every other edit
  * waited for Publish and this one did not.

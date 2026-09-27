@@ -253,9 +253,9 @@ export async function updateDraftSection(page: string, id: string, formData: For
 
 // ── Style ────────────────────────────────────────────────────────────────────
 //
-// Style used to write straight to site_settings, which meant changing a colour
+// Style used to write straight to site_settings, which meant changing a color
 // changed the live site with no draft and no way back. It goes through the
-// draft now like everything else, so colour and type are published with the
+// draft now like everything else, so color and type are published with the
 // content they were chosen for.
 
 /** The draft's tokens if it has any, otherwise the live ones. */
@@ -492,7 +492,7 @@ export async function publish() {
 
   // NOW the live site changes, so now the live paths are revalidated —
   // 'layout' because a published style change is emitted in the root layout
-  // and page-level revalidation would leave every page wearing the old colours.
+  // and page-level revalidation would leave every page wearing the old colors.
   revalidatePath('/', 'layout')
   revalidatePath('/admin/design')
   for (const page of result.pages) done(page)

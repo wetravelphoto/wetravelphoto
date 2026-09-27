@@ -14,7 +14,7 @@ import { imageFor, type PresetRoom } from '@/lib/preset-rooms'
  * perspective transform. Replace the photograph and every mockup updates.
  *
  * What stops it looking like a sticker is the light. The frame is exposed down
- * to the room's own level, washed with the wall's colour, and darkened across
+ * to the room's own level, washed with the wall's color, and darkened across
  * its width the way the window light falls off — all measured off the room
  * photograph itself. See lib/preset-rooms.ts.
  *
@@ -117,7 +117,7 @@ export default function RoomScene({
             fill
           />
 
-          {/* The room's light, over the piece: its colour, and the fall-off
+          {/* The room's light, over the piece: its color, and the fall-off
               away from the window. Multiply, so it only ever darkens. */}
           <span className="scene-light" aria-hidden />
 

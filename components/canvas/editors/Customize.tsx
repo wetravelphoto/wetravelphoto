@@ -81,7 +81,7 @@ export default function Customize({
   label,
   device,
   deviceName,
-  /** What is set, in a few words, for the closed button to show. */
+  /** What is set, in a few words. Announced, not drawn — see the dot. */
   summary,
   /** True when nothing has been changed — the button draws quieter. */
   quiet,
@@ -155,9 +155,11 @@ export default function Customize({
           </svg>
         </span>
         <span className="ed-row-name">Customize</span>
-        <span className="ed-row-value" data-quiet={quiet || undefined}>
-          {summary}
-        </span>
+        {/* A dot rather than a summary. One button standing for three panels
+            could only summarise all three badly, and the tabs each say what
+            they are set to the moment it is opened. Whether ANYTHING has been
+            changed is the one thing worth reporting from out here. */}
+        {!quiet && <span className="ed-row-dot" aria-hidden />}
         <span className="ed-row-caret" aria-hidden>
           ›
         </span>

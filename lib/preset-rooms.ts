@@ -21,7 +21,7 @@ import type { Quad } from '@/lib/perspective'
  *   exposure  how far to bring the frame down toward the room's light. Not all
  *             the way: a print under glass is genuinely brighter than the wall
  *             behind it, and taking it to the wall's own value looks muddy.
- *   wash      the wall's actual colour, laid over the frame so it picks up the
+ *   wash      the wall's actual color, laid over the frame so it picks up the
  *             room's cast — every one of these rooms is warm.
  *   falloff   how much darker the far side of the frame is, from the window
  *             light dropping off across the wall.

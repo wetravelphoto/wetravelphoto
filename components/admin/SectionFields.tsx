@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Toggle from '@/components/admin/Toggle'
+import IconChoice from '@/components/canvas/editors/IconChoice'
 import PageImagePicker from '@/components/admin/PageImagePicker'
 import {
   visibleFields,
@@ -136,7 +137,7 @@ export default function SectionFields({
                 <span className="cv-fold-arrow" aria-hidden="true">
                   ▾
                 </span>
-                {group.name}
+                <span className="cv-fold-name">{group.name}</span>
                 {shut && <span className="cv-fold-count">{group.fields.length}</span>}
               </button>
           ) : (
@@ -208,6 +209,22 @@ function renderField(
       )
 
     case 'select':
+      // A short, pictorial list reads faster as a row of pictures than as a
+      // drop-down that hides every option but one. See `icons` in the
+      // registry — and the hidden input, so the save path is unchanged.
+      if (field.icons) {
+        return (
+          <IconChoice
+            name={field.key}
+            label={field.label}
+            help={field.help}
+            value={(value as string) ?? field.options[0]?.value}
+            options={field.options}
+            onChange={(next) => set(field.key, next)}
+          />
+        )
+      }
+
       return (
         <label className="admin-field">
           {field.label}

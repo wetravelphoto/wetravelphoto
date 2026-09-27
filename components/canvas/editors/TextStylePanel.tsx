@@ -129,7 +129,11 @@ export default function TextStylePanel({
         <Block name="Alignment">
           <Segments
             label="Alignment"
-            options={ALIGNS.map((a) => ({ value: a, label: ALIGN_NAME[a], icon: ALIGN_ICON[a] }))}
+            options={ALIGNS.map((a) => ({
+              value: a,
+              label: ALIGN_NAME[a],
+              draw: <AlignIcon align={a} />,
+            }))}
             value={local.align}
             onChange={(v) => change({ align: v })}
           />
@@ -236,15 +240,15 @@ export default function TextStylePanel({
           />
         </Block>
 
-        <Block name="Colour">
-          <div className="txt-colour">
+        <Block name="Color">
+          <div className="txt-color">
             <input
               type="color"
               value={local.color ?? base.color}
               onChange={(e) => change({ color: e.target.value })}
-              aria-label={`${label} colour`}
+              aria-label={`${label} color`}
             />
-            <span className="txt-colour-name">{local.color ?? 'Following'}</span>
+            <span className="txt-color-name">{local.color ?? 'Following'}</span>
             {local.color && (
               <button type="button" className="txt-clear" onClick={() => change({ color: null })}>
                 clear
@@ -316,7 +320,7 @@ function Segments<T extends string>({
   onChange,
 }: {
   label: string
-  options: { value: T; label: string; icon: string; italic?: boolean }[]
+  options: { value: T; label: string; icon?: string; draw?: React.ReactNode; italic?: boolean }[]
   value: T | undefined
   onChange: (next: T | null) => void
 }) {
@@ -338,7 +342,7 @@ function Segments<T extends string>({
               title={active ? `${option.label} — click to follow again` : option.label}
               onClick={() => onChange(active ? null : option.value)}
             >
-              <span aria-hidden>{option.icon}</span>
+              {option.draw ?? <span aria-hidden>{option.icon}</span>}
               <span className="txt-seg-name">{option.label}</span>
             </button>
           )
@@ -411,11 +415,34 @@ const ALIGN_NAME: Record<(typeof ALIGNS)[number], string> = {
   justify: 'Justified',
 }
 
-const ALIGN_ICON: Record<(typeof ALIGNS)[number], string> = {
-  left: '≡',
-  center: '≡',
-  right: '≡',
-  justify: '≣',
+/**
+ * FOUR LINES THAT ARE ACTUALLY ALIGNED.
+ *
+ * These were the ≡ character in all four buttons — the same glyph whatever the
+ * alignment, so the control said "alignment" without saying which, and at
+ * 0.7rem it was a smudge in the middle of a button.
+ *
+ * Drawn instead, at the width of the button: the lines are ragged on the side
+ * the text is ragged on, which is the whole idea and is not something a
+ * character can express. `preserveAspectRatio="none"` lets them stretch with
+ * the button rather than sitting in a small square inside it.
+ */
+function AlignIcon({ align }: { align: (typeof ALIGNS)[number] }) {
+  const rows = [1, 0.62, 1, 0.62]
+  return (
+    <svg
+      className="txt-align-icon"
+      viewBox="0 0 24 14"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      {rows.map((w, i) => {
+        const width = align === 'justify' ? 24 : w * 24
+        const x = align === 'right' ? 24 - width : align === 'center' ? (24 - width) / 2 : 0
+        return <rect key={i} x={x} y={i * 3.6 + 0.6} width={width} height="1.8" rx="0.9" />
+      })}
+    </svg>
+  )
 }
 
 const TRANSFORM_NAME: Record<(typeof TRANSFORMS)[number], string> = {

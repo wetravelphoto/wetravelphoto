@@ -9,8 +9,8 @@ import { updateDraftStyles } from '@/app/actions/canvas'
  * what they want.
  *
  * Every control reports on every change, and the canvas paints the page
- * immediately — a colour picker that only updates when you let go of the mouse
- * is not a colour picker. The save to the draft is debounced behind that, so
+ * immediately — a color picker that only updates when you let go of the mouse
+ * is not a color picker. The save to the draft is debounced behind that, so
  * dragging a slider across its whole range is one write rather than ninety.
  */
 const DEBOUNCE_MS = 400
@@ -128,7 +128,7 @@ export default function StyleMode({
               ? 'One section on this page has'
               : `${overridden.length} sections on this page have`}{' '}
             typography of their own — {overridden.join(', ')} — which wins over the typeface
-            and colour set here.
+            and color set here.
           </p>
           <button type="button" className="cv-type-clear" onClick={onClearOverrides}>
             Make every section on every page follow the site
@@ -139,7 +139,7 @@ export default function StyleMode({
       <div className="cv-insp-form" onBlur={flush}>
         <div className="sec-fields">
           <div className="sec-group">
-            <p className="sec-group-name">Colour</p>
+            <p className="sec-group-name">Color</p>
             {(
               [
                 ['surface', 'Page'],
@@ -150,15 +150,15 @@ export default function StyleMode({
                 ['accent', 'Accent'],
               ] as const
             ).map(([key, label]) => (
-              <label key={key} className="cv-colour-row">
+              <label key={key} className="cv-color-row">
                 <input
                   type="color"
                   value={values[key]}
                   onChange={(e) => set(key, e.target.value)}
                   aria-label={label}
                 />
-                <span className="cv-colour-name">{label}</span>
-                <span className="cv-colour-hex">{values[key].toUpperCase()}</span>
+                <span className="cv-color-name">{label}</span>
+                <span className="cv-color-hex">{values[key].toUpperCase()}</span>
               </label>
             ))}
 

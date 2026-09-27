@@ -2,7 +2,7 @@
    What every section has: spacing, background, and where it shows.
 
    PageBody wraps each section in an element carrying data-space-top,
-   data-space-bottom, data-bg and data-hide (and --sec-bg-custom for a colour
+   data-space-bottom, data-bg and data-hide (and --sec-bg-custom for a color
    of the photographer's own). On the live site that wrapper is
    `display: contents`, so it adds no box and changes no layout; in the editor
    it is the preview's own selection wrapper.
@@ -39,7 +39,7 @@
 /* ── A photograph behind the section ──────────────────────────────────────── */
 
 [data-bg='image'] {
-  /* The section's own root would otherwise paint its colour straight over the
+  /* The section's own root would otherwise paint its color straight over the
      photograph — every one of them reads --sec-bg, so one line turns them all
      transparent. */
   --sec-bg: transparent;
@@ -59,10 +59,10 @@
 [data-bg-pos='top']    { --sec-bg-anchor: 50% 0%; }
 [data-bg-pos='bottom'] { --sec-bg-anchor: 50% 100%; }
 
-/* A photograph does not change the text colour on its own, and the site's ink
+/* A photograph does not change the text color on its own, and the site's ink
    is nearly always too dark to read on one — so the words switch with it.
    `color` has to be re-stated here rather than left to --ink alone: text
-   inherits a COMPUTED colour from the body, so redefining the token further
+   inherits a COMPUTED color from the body, so redefining the token further
    down the tree would change everything that reads --ink by name and nothing
    that simply inherited. */
 [data-bg='image'][data-ink='light'] {

@@ -98,7 +98,7 @@ type FieldBase = {
    * THIS FIELD'S WORDS CAN CARRY THEIR OWN TYPOGRAPHY.
    *
    * The editor puts a button under the box — alignment, typeface, size,
-   * weight, spacing, colour — and what is chosen is stored in the section's
+   * weight, spacing, color — and what is chosen is stored in the section's
    * `text` bag under this same key, NOT under the key itself. See
    * lib/sections/text-style.ts.
    *
@@ -139,9 +139,21 @@ export type Field = FieldBase &
         /** Shown after the value on a slider, e.g. 'px'. */
         unit?: string
       }
-    | { kind: 'select'; options: { value: string; label: string }[] }
+    /**
+     * A choice from a short list.
+     *
+     * `icons` draws it as a row of buttons instead of a drop-down, naming each
+     * on hover. Worth it where the options are FEW and each has a picture that
+     * says it faster than its name does — a photograph, a video, a color. A
+     * drop-down hides every option but one and costs two clicks to see them; a
+     * row of three says what is available without being opened.
+     *
+     * Not for long lists, and not for options a picture cannot carry. Fifteen
+     * mystery glyphs is worse than a list of words.
+     */
+    | { kind: 'select'; options: { value: string; label: string; icon?: string }[]; icons?: boolean }
     | { kind: 'image' }
-    /** A colour picker. Stored as a #rrggbb hex, validated on save. */
+    /** A color picker. Stored as a #rrggbb hex, validated on save. */
     | { kind: 'color' }
     /**
      * Needs a purpose-built editor (a focal-point picker, a story chooser).
@@ -302,7 +314,7 @@ export const SECTIONS: Record<string, SectionDef> = {
   hero: {
     type: 'hero',
     label: 'Hero',
-    blurb: 'The full-height opening: a photograph, a video or a colour, with your words over it.',
+    blurb: 'The full-height opening: a photograph, a video or a color, with your words over it.',
     family: 'Opening',
     version: 1,
     singleton: true,
@@ -313,7 +325,7 @@ export const SECTIONS: Record<string, SectionDef> = {
        * What is behind the words. Three sources rather than three section
        * types, because they are interchangeable: the words, their places and
        * their typography mean the same thing over all of them, and swapping a
-       * photograph for a colour should not mean rebuilding the hero.
+       * photograph for a color should not mean rebuilding the hero.
        */
       backdrop: 'image',
       image_path: null,
@@ -335,10 +347,11 @@ export const SECTIONS: Record<string, SectionDef> = {
         key: 'backdrop',
         label: 'Behind the words',
         kind: 'select',
+        icons: true,
         options: [
-          { value: 'image', label: 'A photograph' },
-          { value: 'video', label: 'A video' },
-          { value: 'color', label: 'A colour' },
+          { value: 'image', label: 'Photograph', icon: 'image' },
+          { value: 'video', label: 'Video', icon: 'video' },
+          { value: 'color', label: 'Color', icon: 'color' },
         ],
       },
       {
@@ -366,7 +379,7 @@ export const SECTIONS: Record<string, SectionDef> = {
       },
       {
         key: 'backdrop_color',
-        label: 'Colour',
+        label: 'Color',
         kind: 'color',
         when: { key: 'backdrop', equals: 'color' },
         live: { var: '--hero-bg' },
@@ -1118,19 +1131,19 @@ const SPACING_FIELDS: Field[] = [
     kind: 'select',
     options: [
       { value: 'default', label: 'Default' },
-      { value: 'page', label: 'Page colour' },
-      { value: 'alt', label: 'Alternate colour' },
+      { value: 'page', label: 'Page color' },
+      { value: 'alt', label: 'Alternate color' },
       { value: 'tint', label: 'A tint of the accent' },
-      { value: 'custom', label: 'A colour of my own' },
+      { value: 'custom', label: 'A color of my own' },
       { value: 'image', label: 'A photograph' },
     ],
     group: 'Section',
     live: { attr: 'data-bg' },
-    help: 'The page and alternate colours follow your palette in Style mode.',
+    help: 'The page and alternate colors follow your palette in Style mode.',
   },
   {
     key: 'bg_color',
-    label: 'Colour',
+    label: 'Color',
     kind: 'color',
     group: 'Section',
     live: { var: '--sec-bg-custom' },
@@ -1176,7 +1189,7 @@ const SPACING_FIELDS: Field[] = [
     group: 'Section',
     when: { key: 'background', equals: 'image' },
     live: { attr: 'data-ink' },
-    help: 'A photograph does not change the text colour on its own, and the site’s ink is usually too dark to read on one.',
+    help: 'A photograph does not change the text color on its own, and the site’s ink is usually too dark to read on one.',
   },
   {
     key: 'bg_dim',
@@ -1235,7 +1248,7 @@ const VISIBILITY_FIELD: Field = {
 for (const def of Object.values(SECTIONS)) {
   def.defaults = { ...def.defaults, ...COMMON_DEFAULTS, ...derivedDefaults(def) }
   // The hero is full-bleed and draws its own photograph edge to edge: spacing
-  // and a background colour have nothing to act on.
+  // and a background color have nothing to act on.
   def.fields = [...def.fields, ...(def.type === 'hero' ? [] : [...SPACING_FIELDS, VISIBILITY_FIELD])]
 }
 

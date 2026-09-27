@@ -19,7 +19,7 @@ const KINDS = ['image', 'video', 'color'] as const
  * THE STANDING OPENING
  * ════════════════════
  *
- * One backdrop — a photograph, a video or a colour — with the site's words
+ * One backdrop — a photograph, a video or a color — with the site's words
  * over it.
  *
  * ── Why three backdrops and not three blocks ────────────────────────────────
@@ -28,7 +28,7 @@ const KINDS = ['image', 'video', 'color'] as const
  * has stories, they take turns, and two thirds of its settings mean nothing
  * here. These three are the same thing with a different source. The words,
  * their fifteen places, their typography and where they appear all mean
- * exactly what they meant before, so swapping a photograph for a colour is a
+ * exactly what they meant before, so swapping a photograph for a color is a
  * change of backdrop rather than a rebuild.
  *
  * That is the line: a block is a thing you are making, a setting is a choice
@@ -89,7 +89,7 @@ export default function HeroSection({
 /**
  * True when this would render nothing worth putting a transparent header over.
  *
- * A colour counts: it is a deliberate full-height band, and the header should
+ * A color counts: it is a deliberate full-height band, and the header should
  * sit on it the way it sits on a photograph. An empty photograph backdrop does
  * not.
  */

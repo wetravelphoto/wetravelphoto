@@ -10,6 +10,7 @@ import {
   type SectionDef,
   type SectionSettings,
 } from '@/lib/sections/registry'
+import { BASE_DEVICE, type Device } from '@/lib/sections/devices'
 
 /**
  * Draws a section's settings from its field declarations.
@@ -30,11 +31,22 @@ export default function SectionFields({
   renderCustom,
   renderImage,
   renderTextStyle,
+  deviceBadge,
+  device = BASE_DEVICE,
   collapsible = false,
 }: {
   def: SectionDef
   settings: SectionSettings
   publicUrl: string
+  /**
+   * WHICH SIZE THESE VALUES ARE.
+   *
+   * `settings` is expected to be that size's view of them (deviceView in the
+   * registry): per-device fields already resolved to what this size draws,
+   * under their plain keys. This travels with the form so the save action can
+   * put the values back under the right size's keys — see formDevice.
+   */
+  device?: Device
   /**
    * Draws a `custom` field for real, where a caller has an editor for it.
    * The old admin forms pass nothing and keep showing the field's note, which
@@ -63,6 +75,12 @@ export default function SectionFields({
    * pass nothing and show the field exactly as before.
    */
   renderTextStyle?: (field: Field) => React.ReactNode | null
+  /**
+   * A word beside a per-device field saying whether this size has a value of
+   * its own or is still following a wider one. Only the editor knows — this
+   * component is handed one size's view and cannot see the other.
+   */
+  deviceBadge?: (field: Field) => React.ReactNode | null
   /**
    * Groups fold away. The canvas turns this on; the old admin forms are short
    * enough not to need it and keep every group open.
@@ -104,6 +122,9 @@ export default function SectionFields({
 
   return (
     <div className="sec-fields">
+      {/* Travels with every save: which size the panel was pointed at. */}
+      <input type="hidden" name="__device" value={device} />
+
       {collapsible && groups.length > 1 && (
         <button
           type="button"
@@ -134,9 +155,7 @@ export default function SectionFields({
                   })
                 }
               >
-                <span className="cv-fold-arrow" aria-hidden="true">
-                  ▾
-                </span>
+                <Chevron />
                 <span className="cv-fold-name">{group.name}</span>
                 {shut && <span className="cv-fold-count">{group.fields.length}</span>}
               </button>
@@ -148,6 +167,7 @@ export default function SectionFields({
             group.fields.map((field) => (
             <div key={field.key} className="sec-field">
               <input type="hidden" name={`__present_${field.key}`} value="1" />
+              {field.device && deviceBadge?.(field)}
               {(field.kind === 'custom' && renderCustom?.(field, values[field.key])) ||
                 (field.kind === 'image' && renderImage?.(field, values[field.key], set)) ||
                 renderField(field, values, set, publicUrl)}
@@ -158,6 +178,36 @@ export default function SectionFields({
         )
       })}
     </div>
+  )
+}
+
+/**
+ * THE MARK YOU AIM AT TO OPEN A GROUP.
+ *
+ * It was `▾` — U+25BE, whose name is literally BLACK DOWN-POINTING SMALL
+ * TRIANGLE. It is a small triangle inside its own em box, so growing the font
+ * size grows the box and leaves the triangle looking much the same; it was
+ * raised twice and stayed a speck both times. It also renders at a different
+ * size in every font.
+ *
+ * Drawn, so its size is its size.
+ */
+function Chevron() {
+  return (
+    <svg
+      className="cv-fold-arrow"
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 9l7 7 7-7" />
+    </svg>
   )
 }
 

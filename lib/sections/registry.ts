@@ -1,5 +1,8 @@
-import { BASE_DEVICE, DEVICES, deviceKey } from '@/lib/sections/devices'
+import { BASE_DEVICE, DEVICES, deviceKey, type Device } from '@/lib/sections/devices'
 import { PLACEABLE } from '@/lib/sections/spots'
+import { deviceValue } from '@/lib/sections/backdrop'
+
+export { BACKDROP_KEYS } from '@/lib/sections/backdrop'
 
 /**
  * THE SECTION CONTRACT
@@ -95,6 +98,29 @@ type FieldBase = {
   /** Shown on the page instantly while it changes. See LiveSpec. */
   live?: LiveSpec
   /**
+   * THIS SETTING CAN DIFFER BY SCREEN SIZE.
+   *
+   * The editor's size switcher then governs it: the panel shows what the size
+   * being edited resolves to, and what is typed is stored under that size's
+   * own key (`<key>_mobile`, deviceKey) rather than over the desktop's.
+   *
+   * Following is the default and stays the default. A narrower size stores
+   * ONLY the difference — set it back to what the desktop says and the key
+   * goes to null, which is "following" rather than "happens to match". That
+   * is the whole reason this is a flag and not just two fields: two fields
+   * cannot express "follow".
+   *
+   * Setting it is three things at once, and derivedDefaults does the first:
+   *
+   *   · storage for the twin exists, or the save action refuses the write and
+   *     the photographer sees "Minified React error #441";
+   *   · the renderer resolves the setting per size AND, where it costs a
+   *     download, fetches only the one the current width shows;
+   *   · a `live` property, if it declares one, is written under both this
+   *     size's name and the other's — see `liveFor`.
+   */
+  device?: boolean
+  /**
    * THIS FIELD'S WORDS CAN CARRY THEIR OWN TYPOGRAPHY.
    *
    * The editor puts a button under the box — alignment, typeface, size,
@@ -116,6 +142,25 @@ type FieldBase = {
    * ten minutes on a title's letter spacing does not lose it to one click.
    */
   textStyle?: boolean
+  /**
+   * THIS PIECE OF TEXT IS DRAWN AS A BUTTON.
+   *
+   * Adds the box to its typography panel — roundness, the gap round the words,
+   * border thickness and colour, and the two hover colours. Stored in the same
+   * `text` bag as everything else there, so it is per size, silent until
+   * chosen, and survives a change of look on the same terms.
+   *
+   * Declared rather than guessed from the key's name: whether something is
+   * drawn as a button is a fact about the renderer, and a panel that inferred
+   * it from `cta_label` would quietly stop working the day a section called
+   * its button something else.
+   *
+   * The renderer's side of it: the element's stylesheet must read the
+   * `--txt-radius`, `--txt-pad-*`, `--txt-border-*` and `--txt-hover-*`
+   * properties, each in front of whatever it said before, or these are seven
+   * more controls that do nothing.
+   */
+  button?: boolean
 }
 
 type When = { key: string; equals: unknown }
@@ -279,6 +324,7 @@ const HERO_COPY_FIELDS: Field[] = [
     group: 'Button',
     content: true,
     textStyle: true,
+    button: true,
     help: 'Leave empty for no button.',
   },
   {
@@ -326,6 +372,11 @@ export const SECTIONS: Record<string, SectionDef> = {
        * types, because they are interchangeable: the words, their places and
        * their typography mean the same thing over all of them, and swapping a
        * photograph for a color should not mean rebuilding the hero.
+       *
+       * PER SIZE, like everything else here — a film that carries a wide
+       * screen can be the wrong thing entirely on a phone, and it is the one
+       * backdrop that costs a visitor real bandwidth. The phone follows the
+       * desktop until it is given a backdrop of its own; see BACKDROP_KEYS.
        */
       backdrop: 'image',
       image_path: null,
@@ -345,9 +396,21 @@ export const SECTIONS: Record<string, SectionDef> = {
     fields: [
       {
         key: 'backdrop',
-        label: 'Behind the words',
+        label: 'Background Type',
         kind: 'select',
         icons: true,
+        device: true,
+        /*
+         * Painted at once, as far as it honestly can be.
+         *
+         * Choosing `color` needs nothing fetched, so CSS can hide the media
+         * the instant the attribute changes and the answer is complete. Going
+         * the other way — to a photograph or a film — adds an element that is
+         * not in the page yet, which no attribute can express, so that half
+         * waits for the re-render. Half the switches instant and half honest
+         * beats all of them slow.
+         */
+        live: { attr: 'data-backdrop' },
         options: [
           { value: 'image', label: 'Photograph', icon: 'image' },
           { value: 'video', label: 'Video', icon: 'video' },
@@ -359,6 +422,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         label: 'Photograph',
         kind: 'image',
         content: true,
+        device: true,
         when: { key: 'backdrop', equals: 'image' },
       },
       {
@@ -366,6 +430,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         label: 'Video',
         kind: 'image',
         content: true,
+        device: true,
         when: { key: 'backdrop', equals: 'video' },
         help: 'It plays silently and loops. Keep it short and small — every visitor downloads it.',
       },
@@ -374,6 +439,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         label: 'Still image',
         kind: 'image',
         content: true,
+        device: true,
         when: { key: 'backdrop', equals: 'video' },
         help: 'Shown while the video loads, and instead of it for anyone who has asked for less motion.',
       },
@@ -381,6 +447,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         key: 'backdrop_color',
         label: 'Color',
         kind: 'color',
+        device: true,
         when: { key: 'backdrop', equals: 'color' },
         live: { var: '--hero-bg' },
       },
@@ -389,6 +456,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         label: 'Darken it',
         kind: 'number',
         slider: true,
+        device: true,
         min: 0,
         max: 80,
         step: 5,
@@ -1299,7 +1367,70 @@ function derivedDefaults(def: SectionDef): SectionSettings {
     }
   }
 
+  /*
+   * And every field that says it can differ by size, on the same terms. Null
+   * is "following", not "none".
+   *
+   * Read off the `device` flag rather than a list kept beside it: a list is a
+   * second place to remember, and the one thing this whole function exists to
+   * stop is the panel writing a key the save action has never heard of.
+   */
+  for (const field of def.fields) {
+    if (!field.device) continue
+    for (const device of DEVICES) {
+      if (device === BASE_DEVICE) continue
+      out[deviceKey(field.key, device)] = null
+    }
+  }
+
   return out
+}
+
+/**
+ * A SECTION'S SETTINGS AS ONE SIZE SEES THEM.
+ *
+ * Every per-device field replaced by what this size actually resolves to,
+ * under its PLAIN key — so the panel, its `when` conditions and the form read
+ * all go on working in one vocabulary and only two places have to know that a
+ * phone twin exists: this, and where the value is written back.
+ *
+ * On the base device it is the settings themselves.
+ */
+export function deviceView(
+  def: SectionDef,
+  settings: SectionSettings,
+  device: Device
+): SectionSettings {
+  if (device === BASE_DEVICE) return settings
+  const out = { ...settings }
+  for (const field of def.fields) {
+    if (!field.device) continue
+    out[field.key] = deviceValue(settings, field.key, device)
+  }
+  return out
+}
+
+/**
+ * WHICH PROPERTY A LIVE CHANGE WRITES, FOR THE SIZE BEING EDITED.
+ *
+ * An inline style attribute cannot carry a media query, so an element that
+ * can look different on a phone carries BOTH values at once under two names
+ * and one rule in the stylesheet picks between them at the breakpoint. The
+ * same rule the per-element typography uses (`--txtd-` / `--txtm-`), for the
+ * same reason: deciding here which one applies would be a second copy of the
+ * breakpoint, free to disagree with the first.
+ *
+ * `--hero-dim` becomes `--hero-dim-d` and `--hero-dim-m`. An attribute needs
+ * no such trick to be read by a media query, so the desktop keeps the plain
+ * name it already had and only the phone takes a suffix.
+ */
+export function liveFor(field: Field, device: Device): LiveSpec | undefined {
+  if (!field.live) return undefined
+  if (!field.device) return field.live
+  if ('var' in field.live) {
+    return { ...field.live, var: `${field.live.var}-${device === BASE_DEVICE ? 'd' : 'm'}` }
+  }
+  return device === BASE_DEVICE ? field.live : { attr: `${field.live.attr}-m` }
 }
 
 export const SECTION_TYPES = Object.keys(SECTIONS)

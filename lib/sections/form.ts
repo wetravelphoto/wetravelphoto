@@ -1,4 +1,6 @@
-import type { Field, SectionDef, SectionSettings } from '@/lib/sections/registry'
+import { deviceView, type Field, type SectionDef, type SectionSettings } from '@/lib/sections/registry'
+import { BASE_DEVICE, DEVICES, deviceKey, type Device } from '@/lib/sections/devices'
+import { overrideValue } from '@/lib/sections/backdrop'
 
 /**
  * FORM → SETTINGS
@@ -62,6 +64,22 @@ export function readField(field: Field, formData: FormData, current: SectionSett
   }
 }
 
+/**
+ * WHICH SIZE THIS PANEL WAS EDITING.
+ *
+ * The editor puts it in the form (`__device`) because the same panel edits
+ * every size, one at a time, and a value typed while the phone was selected
+ * must not land on the desktop's key. Anything unrecognised — an old client,
+ * a crafted request — reads as the base device, which is the safe direction:
+ * it writes where it always did.
+ */
+export function formDevice(formData: FormData): Device {
+  const raw = formData.get('__device')
+  return typeof raw === 'string' && (DEVICES as readonly string[]).includes(raw)
+    ? (raw as Device)
+    : BASE_DEVICE
+}
+
 /** Every field of a section, read back out of its submitted panel. */
 export function readSettingsFromForm(
   def: SectionDef,
@@ -69,12 +87,39 @@ export function readSettingsFromForm(
   current: SectionSettings
 ): SectionSettings {
   const next: SectionSettings = { ...current }
+  const device = formDevice(formData)
+  /*
+   * The panel drew what this SIZE resolves to — the desktop's value showing
+   * through wherever the phone has none of its own — so that is what a field
+   * left untouched has to read back as. Handing it the raw settings would
+   * make every unedited phone field look like a change from the desktop
+   * value to nothing.
+   */
+  const seen = deviceView(def, current, device)
 
   for (const field of def.fields) {
     // A custom field is edited elsewhere; the generic panel never draws it and
     // this must not blank it.
     if (field.kind === 'custom') continue
-    next[field.key] = readField(field, formData, current)
+    const value = readField(field, formData, seen)
+
+    if (!field.device || device === BASE_DEVICE) {
+      next[field.key] = value
+      continue
+    }
+
+    /*
+     * ONLY THE DIFFERENCE IS STORED.
+     *
+     * The panel shows the effective value, so most of what comes back on a
+     * phone is the desktop's own value showing through. Writing that down
+     * would freeze it: change the desktop photograph afterwards and the phone
+     * would keep the old one, having copied it the moment anything else in
+     * the panel was touched. Equal to the desktop means FOLLOWING, which is
+     * also what makes "set it back and it follows again" true with no extra
+     * control to find.
+     */
+    next[deviceKey(field.key, device)] = overrideValue(current[field.key], value)
   }
 
   return next

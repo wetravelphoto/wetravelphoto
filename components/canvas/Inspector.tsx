@@ -3,7 +3,15 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import SectionFields from '@/components/admin/SectionFields'
 import { updateDraftSection, updateDraftSectionValues } from '@/app/actions/canvas'
-import { contentKeys, type Field, type LiveSpec, type SectionDef } from '@/lib/sections/registry'
+import {
+  contentKeys,
+  deviceView,
+  liveFor,
+  type Field,
+  type LiveSpec,
+  type SectionDef,
+} from '@/lib/sections/registry'
+import { overrideValue } from '@/lib/sections/backdrop'
 import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
 import SpotPicker from '@/components/canvas/editors/SpotPicker'
@@ -128,6 +136,7 @@ export default function Inspector({
   onMoveSpot,
   onTypeVars,
   onTextVars,
+  onShown,
   editing,
   previewDevice,
   onPreviewDevice,
@@ -178,6 +187,11 @@ export default function Inspector({
     vars: Record<string, string | null>,
     fonts: string[]
   ) => void
+  /**
+   * A piece of text's visibility, for the page to show at once. `data-at` is
+   * the whole of what it changes — see the handler in PreviewBridge.
+   */
+  onShown: (sectionId: string, field: string, at: string) => void
   /**
    * WHICH SIZE EVERY CONTROL IN HERE IS EDITING.
    *
@@ -407,7 +421,13 @@ export default function Inspector({
     // whose field declares exactly which property it changes. The save below
     // still happens on its usual debounce; this only stops the page waiting
     // for it.
-    const spec = target?.name ? def?.fields.find((f) => f.key === target.name)?.live : undefined
+    /*
+     * Which property this paints depends on the SIZE being edited: an element
+     * that can differ by size carries both values at once under two names and
+     * the stylesheet picks between them at the breakpoint. See `liveFor`.
+     */
+    const changed = target?.name ? def?.fields.find((f) => f.key === target.name) : undefined
+    const spec = changed ? liveFor(changed, editing) : undefined
     if (spec && target) onLive(target.name, target.value, spec)
 
     /*
@@ -528,6 +548,72 @@ export default function Inspector({
     )
   }
 
+  /**
+   * THE SETTINGS AS THE SIZE BEING EDITED SEES THEM.
+   *
+   * Per-device fields resolved: the phone's own value where it has one, the
+   * desktop's showing through where it does not. Everything below reads this
+   * rather than `section.settings`, so a control cannot show one size's value
+   * while writing another's.
+   */
+  const view = deviceView(def, section.settings, editing)
+
+  /**
+   * A value from a custom editor — an image picker, a focal point — saved
+   * under the right size's key.
+   *
+   * The form path does this in lib/sections/form.ts; these save outside the
+   * form, so they need the same rule: on a narrower size, store only what
+   * DIFFERS from the desktop, and null when it matches, because null is
+   * "following" and a copy is a freeze.
+   */
+  const saveField = (field: Field, value: unknown) => {
+    if (!field.device || editing === BASE_DEVICE) {
+      saveValues(section.id, { [field.key]: value })
+      return
+    }
+    saveValues(section.id, {
+      [deviceKey(field.key, editing)]: overrideValue(section.settings[field.key], value),
+    })
+  }
+
+  /**
+   * WHETHER THIS SIZE HAS AN ANSWER OF ITS OWN.
+   *
+   * Drawn only on a narrower size, and only for settings that can differ —
+   * on the desktop every control is its own and a badge saying so on all six
+   * would be noise. Which leaves the one question worth answering: am I
+   * looking at the phone's photograph or the desktop's?
+   */
+  const deviceBadge = (field: Field) => {
+    if (editing === BASE_DEVICE) return null
+    const own = section.settings[deviceKey(field.key, editing)]
+    const following = own === null || own === undefined
+
+    return (
+      <p className="cv-follow" data-own={!following || undefined}>
+        <span>
+          {following
+            ? `Following ${DEVICE_LABEL[BASE_DEVICE].toLowerCase()}`
+            : `${DEVICE_LABEL[editing]} only`}
+        </span>
+        {!following && (
+          <button
+            type="button"
+            onClick={() => {
+              // Null, not the desktop's value: following has to stay absent to
+              // stay following.
+              saveValues(section.id, { [deviceKey(field.key, editing)]: null })
+              sendValues()
+            }}
+          >
+            Follow {DEVICE_LABEL[BASE_DEVICE].toLowerCase()}
+          </button>
+        )}
+      </p>
+    )
+  }
+
   const preserved = contentKeys(def)
   /** A section-wide typography override from before per-element replaced it. */
   const legacyType = ownStyle(section.settings) !== null
@@ -581,7 +667,15 @@ export default function Inspector({
       {error && <p className="cv-insp-error">{error}</p>}
 
       <form
-        key={section.id}
+        /*
+         * Keyed by the SIZE as well as the section.
+         *
+         * The panel is handed one size's view of the settings and most of its
+         * inputs are uncontrolled, so switching from desktop to phone has to
+         * rebuild the form or every box would keep showing the desktop's
+         * values while writing the phone's.
+         */
+        key={`${section.id}:${editing}`}
         ref={form}
         className="cv-insp-form"
         autoComplete="off"
@@ -594,7 +688,19 @@ export default function Inspector({
       >
         <SectionFields
           def={def}
-          settings={section.settings}
+          /*
+           * THIS SIZE'S VIEW, not the raw settings.
+           *
+           * Per-device fields resolved to what the phone actually draws — the
+           * desktop's value showing through wherever the phone has none of
+           * its own — under their plain keys, so the panel, its `when`
+           * conditions and the form read all stay in one vocabulary. Only
+           * `formDevice` in lib/sections/form.ts and `saveField` below know
+           * that a phone twin exists.
+           */
+          settings={view}
+          device={editing}
+          deviceBadge={deviceBadge}
           publicUrl={publicUrl}
           collapsible
           renderTextStyle={(field: Field) => {
@@ -669,6 +775,7 @@ export default function Inspector({
                 type={
                   <TextStylePanel
                     label={field.label}
+                    button={field.button}
                     device={editing}
                     inheriting={
                       editing !== BASE_DEVICE &&
@@ -741,9 +848,24 @@ export default function Inspector({
                     label={field.label}
                     value={seen}
                     onChange={(next: Shown) => {
-                      saveValues(section.id, {
-                        shown: withShown(shownBag(section.settings), field.key, next),
-                      })
+                      /*
+                       * Painted first, where it can be.
+                       *
+                       * `data-at` is the whole of what this changes on an
+                       * element that is drawn ONCE — which is every piece of
+                       * text whose two places agree, and all of them until
+                       * somebody moves one on the phone. Where the places
+                       * differ the element exists twice, and which copy
+                       * survives is a question about both at once; that case
+                       * waits for the server rather than being guessed at.
+                       */
+                      const single = pair === null || !pair.differs
+                      if (single) onShown(section.id, field.key, next === 'all' ? '' : next)
+                      saveValues(
+                        section.id,
+                        { shown: withShown(shownBag(section.settings), field.key, next) },
+                        single
+                      )
                       sendValues()
                     }}
                   />
@@ -763,7 +885,7 @@ export default function Inspector({
                 // re-evaluates now, and saved straight away rather than waiting
                 // for a keystroke somewhere else in the form.
                 set(field.key, path ?? '')
-                saveValues(section.id, { [field.key]: path })
+                saveField(field, path)
               }}
             />
           )}
@@ -777,7 +899,10 @@ export default function Inspector({
               return (
                 <HeroFocal
                   value={value}
-                  imagePath={(section.settings.image_path as string) ?? null}
+                  // The photograph THIS SIZE shows — cropping the desktop's
+                  // picture while looking at a different one on the phone is
+                  // the kind of thing nobody notices until it ships.
+                  imagePath={(view.image_path as string) ?? null}
                   publicUrl={publicUrl}
                   device={editing}
                   onChange={(next) => saveValues(section.id, { [field.key]: next })}

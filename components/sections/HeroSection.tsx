@@ -1,8 +1,10 @@
 import { photoUrl } from '@/lib/images'
 import { allFonts, sectionVars } from '@/lib/type-styles'
-import { num, str, type SectionSettings } from '@/lib/sections/registry'
+import { str, type SectionSettings } from '@/lib/sections/registry'
 import type { SectionContext } from '@/lib/sections/context'
 import { spotPair } from '@/lib/sections/spots'
+import { backdropFor, hasOwnBackdrop, type BackdropValues } from '@/lib/sections/backdrop'
+import { BASE_DEVICE } from '@/lib/sections/devices'
 import { textVarsByField } from '@/lib/sections/text-style'
 import { shownBag } from '@/lib/sections/shown'
 import TextFonts from '@/components/sections/TextFonts'
@@ -12,8 +14,6 @@ type Focal = { x?: number; y?: number; mx?: number; my?: number }
 
 /** The three pieces of copy this block owns. */
 const HERO_TEXT = ['title', 'subtitle', 'cta_label'] as const
-
-const KINDS = ['image', 'video', 'color'] as const
 
 /**
  * THE STANDING OPENING
@@ -43,31 +43,40 @@ export default function HeroSection({
   ctx: SectionContext
 }) {
   const focal = (settings.focal ?? {}) as Focal
-  const kind = (KINDS as readonly string[]).includes(str(settings, 'backdrop') ?? '')
-    ? (str(settings, 'backdrop') as Backdrop['kind'])
-    : 'image'
 
-  const path = (key: string) => {
-    const value = str(settings, key)
-    return value ? photoUrl(value) : null
-  }
+  const url = (path: string | null) => (path ? photoUrl(path) : null)
+  /*
+   * Everything about the backdrop is resolved and sanitised in one place
+   * (lib/sections/backdrop.ts) and turned into URLs here. Which size sees
+   * which is the module's question, not this component's.
+   */
+  const drawn = (b: BackdropValues): Backdrop => ({
+    kind: b.kind,
+    imageUrl: url(b.imagePath),
+    videoUrl: url(b.videoPath),
+    posterUrl: url(b.posterPath),
+    color: b.color,
+    dim: b.dim,
+  })
+
+  /*
+   * NULL UNLESS THE PHONE HAS BEEN GIVEN A BACKDROP OF ITS OWN.
+   *
+   * Not "unless the two happen to differ": a phone that has been set to the
+   * same photograph deliberately still gets its own resolved values, because
+   * `dim` and the color can differ without any of the media doing so. Null is
+   * the common case and the one that draws exactly what it always drew.
+   */
+  const mobile = hasOwnBackdrop(settings, 'mobile')
+    ? drawn(backdropFor(settings, 'mobile'))
+    : null
 
   return (
     <>
       <TextFonts names={allFonts('hero', settings, ctx.styles)} />
       <FixedHero
-        backdrop={{
-          kind,
-          imageUrl: path('image_path'),
-          videoUrl: path('video_path'),
-          posterUrl: path('video_poster'),
-          // Sanitised where it is stored, and again on the way out: this ends
-          // up in an inline custom property.
-          color: /^#[0-9a-f]{3,8}$/i.test(str(settings, 'backdrop_color') ?? '')
-            ? (str(settings, 'backdrop_color') as string)
-            : '#14100e',
-          dim: Math.min(80, Math.max(0, num(settings, 'dim', 0))),
-        }}
+        backdrop={drawn(backdropFor(settings, BASE_DEVICE))}
+        backdropMobile={mobile}
         title={str(settings, 'title')}
         subtitle={str(settings, 'subtitle')}
         ctaLabel={str(settings, 'cta_label')}
@@ -94,8 +103,14 @@ export default function HeroSection({
  * not.
  */
 export function heroIsEmpty(settings: SectionSettings): boolean {
-  const kind = str(settings, 'backdrop') ?? 'image'
-  if (kind === 'color') return false
-  if (kind === 'video') return !str(settings, 'video_path') && !str(settings, 'video_poster')
-  return !str(settings, 'image_path')
+  // Per size, and empty only if BOTH are: a hero with a photograph on a wide
+  // screen and nothing set for the phone is not an empty hero, and a header
+  // that decided otherwise would go opaque on one width and transparent on
+  // the other.
+  const bare = (b: BackdropValues) => {
+    if (b.kind === 'color') return false
+    if (b.kind === 'video') return !b.videoPath && !b.posterPath
+    return !b.imagePath
+  }
+  return bare(backdropFor(settings, 'desktop')) && bare(backdropFor(settings, 'mobile'))
 }

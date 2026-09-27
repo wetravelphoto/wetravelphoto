@@ -8,11 +8,74 @@
  * a photograph loads onto rather than a flash of near-black.
  */
 .hero {
+  /*
+   * ── TWO SIZES, ONE INLINE STYLE ───────────────────────────────────────────
+   *
+   * A style attribute cannot carry a media query, so the renderer writes both
+   * sizes' values at once as `-d` and `-m` and this resolves them into the
+   * names the rest of the stylesheet reads. An unset custom property makes
+   * its consumer's own fallback apply, so a phone that has been given nothing
+   * needs no value to say so — which is what keeps "the phone follows the
+   * desktop" true without anything being copied.
+   *
+   * The plain `--hero-bg` cannot be redefined in terms of itself (a cycle
+   * makes the whole declaration invalid), which is why both sizes take a
+   * suffix rather than only the phone.
+   */
+  --hero-bg: var(--hero-bg-d, #0f0d0c);
+  --hero-dim: var(--hero-dim-d, 0%);
+
   position: relative;
   height: 100svh;
   min-height: 560px;
   overflow: hidden;
   background: var(--hero-bg, #0f0d0c);
+}
+
+@media (max-width: 760px) {
+  .hero {
+    --hero-bg: var(--hero-bg-m, var(--hero-bg-d, #0f0d0c));
+    --hero-dim: var(--hero-dim-m, var(--hero-dim-d, 0%));
+  }
+}
+
+/*
+ * ── A BACKDROP ONLY ONE WIDTH SHOWS ────────────────────────────────────────
+ *
+ * A photograph is chosen by `<source media>` before it is fetched, so the two
+ * are one element and this never applies to it. What is left is the element
+ * that has a source for only one width — and a film, which is mounted by the
+ * width that plays it rather than hidden here. Removing them rather than
+ * making them invisible keeps them out of the layout and out of the
+ * accessibility tree; that they have also not been downloaded is the point of
+ * the mechanisms above, not of this rule.
+ */
+.hero-layer [data-at='mobile'] { display: none; }
+
+@media (max-width: 760px) {
+  .hero-layer [data-at='desktop'] { display: none; }
+  .hero-layer [data-at='mobile'] { display: block; }
+}
+
+/* A <picture> is a wrapper and nothing else: the image inside it has to be
+   laid out by the rules below as though it were a direct child. */
+.hero-layer picture { display: contents; }
+
+/*
+ * A COLOR HAS NOTHING TO FETCH, SO IT CAN BE INSTANT.
+ *
+ * `backdrop` declares this attribute as its `live` property, which means the
+ * editor sets it the moment the choice is made. Going TO a color is then
+ * complete straight away — there is no media to draw. Going the other way
+ * adds an element that is not in the page yet and waits for the re-render,
+ * which is slower and honest; half instant beats all slow.
+ */
+.hero[data-backdrop='color'] .hero-layer { display: none; }
+
+@media (max-width: 760px) {
+  /* The phone's own kind, present only where it differs from the desktop's. */
+  .hero[data-backdrop-m] .hero-layer { display: block; }
+  .hero[data-backdrop-m='color'] .hero-layer { display: none; }
 }
 
 .hero-layer {
@@ -78,8 +141,14 @@
 }
 
 /* A color backdrop IS the color — the gradient over a photograph would only
-   muddy it, and there is no photograph for it to rescue. */
+   muddy it, and there is no photograph for it to rescue. Per size, because a
+   phone showing a photograph under a desktop's flat color still needs it. */
 .hero[data-backdrop='color'] .hero-scrim { display: none; }
+
+@media (max-width: 760px) {
+  .hero[data-backdrop-m] .hero-scrim { display: block; }
+  .hero[data-backdrop-m='color'] .hero-scrim { display: none; }
+}
 
 .hero-scrim {
   position: absolute;
@@ -600,18 +669,39 @@
      and quietly ignored them, which is why the Button shape control looked
      like it did nothing. Square is the default, so nothing moves until it is
      changed. */
-  border-radius: var(--button-radius, 0px);
+  /*
+   * ── THE BOX, WHICH THIS BUTTON CAN NOW SET FOR ITSELF ─────────────────────
+   *
+   * Three fallbacks deep, and the order is the point: this button's own
+   * choice, then the look's token, then what the stylesheet has always said.
+   * A button nobody has touched draws exactly as it did; one given a radius
+   * of its own stops following the look for that one property and nothing
+   * else.
+   *
+   * The padding is in `em` so the gap round the words grows with the words.
+   * Set in pixels it would look right at one size and wrong at every other,
+   * which is the same reason the size control is a multiplier.
+   */
+  border-radius: var(--txt-radius, var(--button-radius, 0px));
   text-transform: var(--txt-case, var(--button-case, uppercase));
   letter-spacing: var(--txt-track, 0.16em);
   text-align: var(--txt-align, inherit);
   font-size: calc(0.74rem * var(--txt-scale, 1));
-  padding: 0.8em 2em;
-  border: 1px solid rgba(250, 249, 246, 0.6);
+  padding: var(--txt-pad-y, 0.8em) var(--txt-pad-x, 2em);
+  border: var(--txt-border-w, 1px) solid var(--txt-border-c, rgba(250, 249, 246, 0.6));
   color: var(--txt-color, #faf9f6);
-  transition: background 0.25s ease, color 0.25s ease;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
 }
 
-.hero-fixed-cta:hover { background: var(--txt-color, #faf9f6); color: #14100e; }
+/*
+ * Under the pointer. The old behaviour — fill with the text colour, write in
+ * near-black — stays the fallback, so a button that has not been given hover
+ * colours behaves exactly as it always did.
+ */
+.hero-fixed-cta:hover {
+  background: var(--txt-hover-bg, var(--txt-color, #faf9f6));
+  color: var(--txt-hover-ink, #14100e);
+}
 
 /* ── WHICH WIDTHS A PIECE OF COPY IS FOR ─────────────────────────────────────
  *

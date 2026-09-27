@@ -26,6 +26,9 @@ export default async function SiteFooter({ settings: given }: { settings?: SiteS
 
   const footerFont = settings.footer_font || 'Karla'
 
+  /** Its own mark if it has one, otherwise the header's. See the note below. */
+  const footerLogo = settings.logo_footer_path || settings.logo_header_path || null
+
   const chrome: React.CSSProperties = {
     // The same function the editor repaints with (lib/chrome.ts).
     ...(footerFontVars(footerFont) as React.CSSProperties),
@@ -46,7 +49,19 @@ export default async function SiteFooter({ settings: given }: { settings?: SiteS
       <div className="footer-grid">
         <div className="footer-brand-col">
           <Logo
-            src={settings.logo_footer_path ? photoUrl(settings.logo_footer_path) : null}
+            /*
+             * THE FOOTER FOLLOWS THE HEADER UNLESS IT HAS BEEN GIVEN ITS OWN.
+             *
+             * A site has one mark. Asking for it twice meant every new site
+             * arrived with a logo at the top and its name typed out at the
+             * bottom, with nothing saying the two were meant to match — and
+             * anyone who did upload it twice then had to remember both the
+             * day they changed it.
+             *
+             * Following rather than copying: replace the header's and the
+             * footer's changes with it.
+             */
+            src={footerLogo ? photoUrl(footerLogo) : null}
             text={settings.site_title}
             alt={settings.site_title}
             tone="light"

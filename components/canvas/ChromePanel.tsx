@@ -253,6 +253,8 @@ export default function ChromePanel({
         <ChromeLogo
           slot={part}
           path={header ? (values.logo_header_path as string | null) : (values.logo_footer_path as string | null)}
+          // The footer follows the header until it is given a mark of its own.
+          follows={header ? null : (values.logo_header_path as string | null)}
           publicUrl={publicUrl}
           onChange={(path) => set(header ? 'logo_header_path' : 'logo_footer_path', path, 0)}
         />
@@ -392,11 +394,25 @@ export default function ChromePanel({
 function ChromeLogo({
   slot,
   path,
+  follows,
   publicUrl,
   onChange,
 }: {
   slot: Part
   path: string | null
+  /**
+   * WHAT THIS SLOT SHOWS WHEN IT HAS NOTHING OF ITS OWN.
+   *
+   * Only the footer has one, and it is the header's logo. A site has ONE mark;
+   * making the footer ask for it separately meant every new site had a header
+   * with a logo and a footer with its name typed out, and no indication that
+   * the two were meant to match.
+   *
+   * Following rather than copying, for the reason following always beats
+   * copying: replace the header logo and the footer follows, instead of
+   * keeping whichever file happened to be uploaded first.
+   */
+  follows?: string | null
   publicUrl: string
   onChange: (path: string | null) => void
 }) {
@@ -426,20 +442,24 @@ function ChromeLogo({
   return (
     <div className="admin-field">
       Logo
-      <div className="cv-mark-preview" data-tone={slot} data-empty={!path}>
-        {path ? (
-          <img src={imageSrc(publicUrl, path)} alt="" />
+      <div className="cv-mark-preview" data-tone={slot} data-empty={!path && !follows}>
+        {path || follows ? (
+          <img src={imageSrc(publicUrl, (path ?? follows) as string)} alt="" />
         ) : (
           <span className="cv-mark-none">The logo that came with your site</span>
         )}
       </div>
+      {/* Said plainly: the picture above is the header's, not this slot's. */}
+      {!path && follows && (
+        <span className="admin-meta">Using your header logo. Upload one here to use a different mark.</span>
+      )}
       <div className="cv-mark-actions">
         <button type="button" className="cv-btn cv-btn-ghost" disabled={busy} onClick={() => file.current?.click()}>
-          {busy ? 'Uploading…' : path ? 'Replace…' : 'Upload your own…'}
+          {busy ? 'Uploading…' : path ? 'Replace…' : follows ? 'Use a different one…' : 'Upload your own…'}
         </button>
         {path && (
           <button type="button" className="cv-btn cv-btn-ghost" disabled={busy} onClick={() => onChange(null)}>
-            Use the built-in logo
+            {follows ? 'Use the header logo' : 'Use the built-in logo'}
           </button>
         )}
         <input

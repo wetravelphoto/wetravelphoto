@@ -693,6 +693,28 @@ export default function Canvas({
           <a href={`/preview/${page}`} target="_blank" rel="noreferrer" className="cv-btn cv-btn-ghost">
             Open preview ↗
           </a>
+          {/*
+            * THE LIVE PAGE, AS A VISITOR HAS IT.
+            *
+            * Not the same thing as the preview beside it, and the difference
+            * is the point: the preview is the draft, this is what is actually
+            * published. Getting to it meant typing the address, which is a
+            * silly thing to make somebody do from inside their own editor —
+            * and the moment after Publish is exactly when they want to look.
+            */}
+          <a
+            href={pagePath}
+            target="_blank"
+            rel="noreferrer"
+            className="cv-btn cv-btn-ghost"
+            title={
+              hasDraft
+                ? 'The published page — your unpublished changes are not on it yet'
+                : 'The published page'
+            }
+          >
+            View site ↗
+          </a>
           <button
             type="button"
             className="cv-btn cv-btn-ghost"
@@ -867,6 +889,7 @@ export default function Canvas({
               onTextVars={(id, field, vars, fonts) =>
                 tell({ type: 'text-vars', id, field, device: editedAt(device), vars, fonts })
               }
+              onShown={(id, field, at) => tell({ type: 'shown', id, field, value: at })}
               onShowStory={(index) => tell({ type: 'hero-story', index: index ?? undefined })}
               onPatch={(field, value) => {
                 if (selected) tell({ type: 'patch', id: selected, field, value })

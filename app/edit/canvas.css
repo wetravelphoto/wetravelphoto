@@ -2517,18 +2517,14 @@
   color: var(--cv-soft);
 }
 
-/* The thing you click to open a group, so it has to be findable. It was a 9px
-   glyph at 0.55rem in the muted ink — technically present, practically not. */
 /*
- * Roughly the height of the word beside it — the mark you aim at to open a
- * group, and for two rounds it was a speck. It was 9px at 0.55rem in the muted
- * ink, then 14px, and still smaller than the text it belongs to.
+ * Drawn rather than typed. It was the character `▾` for three rounds, raised
+ * from 0.55rem to 1.15rem and still a speck — because U+25BE is a SMALL
+ * triangle inside its em box, so a bigger font size buys a bigger box and
+ * almost no more triangle. An SVG's size is its size.
  */
 .cv-fold-arrow {
-  display: inline-block;
-  width: 16px;
-  font-size: 1.15rem;
-  line-height: 1;
+  flex: 0 0 auto;
   color: var(--cv-soft);
   transition: transform 0.12s ease;
 }
@@ -3290,6 +3286,20 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * A colour with a name in front of it. The one under Color needs none — the
+ * group heading says it — but a button has four, and four unlabelled swatches
+ * in a column is a guessing game.
+ */
+.txt-color-row {
+  align-items: center;
+}
+
+.txt-color-row .txt-color {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Says what the control below IS, now that each text box has two of them. */
 
 /* Which size the whole editor is pointed at. The switcher beside it changes
@@ -3321,6 +3331,50 @@
   letter-spacing: 0.04em;
   color: var(--cv-soft);
   white-space: nowrap;
+}
+
+/*
+ * ── IS THIS THE PHONE'S ANSWER OR THE DESKTOP'S? ────────────────────────────
+ *
+ * Drawn above a setting that can differ by size, and only while a narrower
+ * size is being edited. On the desktop every control is its own and six
+ * badges saying so would be noise; on the phone it is the one question the
+ * panel cannot otherwise answer — a photograph in the box looks identical
+ * whether it is this size's or the one it is inheriting.
+ */
+.cv-follow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.3rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cv-soft);
+}
+
+/* Set here, rather than inherited: worth noticing, so it is not grey. */
+.cv-follow[data-own] {
+  color: var(--cv-accent, #b5602c);
+}
+
+.cv-follow button {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 0.5px solid var(--cv-line);
+  border-radius: 9px;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--cv-soft);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.cv-follow button:hover {
+  color: var(--cv-ink);
+  border-color: var(--cv-ink);
 }
 
 /* The size a typography panel is editing, beside the field's name. */

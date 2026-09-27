@@ -48,6 +48,7 @@ import {
 export default function TextStylePanel({
   label,
   value,
+  button = false,
   /** What this text looks like when it follows: shown, never stored. */
   base,
   device,
@@ -68,6 +69,18 @@ export default function TextStylePanel({
   device: Device
   /** True when this size has no values of its own and is showing desktop's. */
   inheriting: boolean
+  /**
+   * THIS PIECE OF TEXT HAS A BOX ROUND IT.
+   *
+   * Adds the group below — roundness, the gap round the words, the border and
+   * the hover colours. Declared on the field in the registry rather than
+   * guessed from its name, because "is this a button" is a fact about how the
+   * renderer draws it and the registry is where those facts live.
+   *
+   * The settings ride in the same bag as the typography, which is what gives
+   * them per-size, only-what-was-chosen and survives-a-look-change for free.
+   */
+  button?: boolean
   /** The complete new style, or null to follow again. */
   onChange: (next: TextStyle | null) => void
 }) {
@@ -241,21 +254,83 @@ export default function TextStylePanel({
         </Block>
 
         <Block name="Color">
-          <div className="txt-color">
-            <input
-              type="color"
-              value={local.color ?? base.color}
-              onChange={(e) => change({ color: e.target.value })}
-              aria-label={`${label} color`}
-            />
-            <span className="txt-color-name">{local.color ?? 'Following'}</span>
-            {local.color && (
-              <button type="button" className="txt-clear" onClick={() => change({ color: null })}>
-                clear
-              </button>
-            )}
-          </div>
+          <Colour
+            label={`${label} color`}
+            value={local.color}
+            fallback={base.color}
+            onChange={(v) => change({ color: v })}
+          />
         </Block>
+
+        {button && (
+          /*
+           * ── THE BOX, NOT THE WORDS ────────────────────────────────────────
+           *
+           * Only for a field the registry marks as a button. Everything here
+           * is absent until it is touched, like everything above it, so a
+           * button that has never been opened keeps drawing the way the look
+           * says — and one that has been given a radius stops following for
+           * that one property and nothing else.
+           */
+          <Block name="Button">
+            <Slider
+              name="Roundness"
+              value={local.radius}
+              limits={LIMITS.radius}
+              neutral={undefined}
+              format={(v) => (v === 0 ? 'Square' : `${v}px`)}
+              onChange={(v) => change({ radius: v })}
+            />
+
+            <Slider
+              name="Space, sides"
+              value={local.padX}
+              limits={LIMITS.padX}
+              format={(v) => `${v.toFixed(1)}em`}
+              onChange={(v) => change({ padX: v })}
+            />
+
+            <Slider
+              name="Space, top and bottom"
+              value={local.padY}
+              limits={LIMITS.padY}
+              format={(v) => `${v.toFixed(2)}em`}
+              onChange={(v) => change({ padY: v })}
+            />
+
+            <Slider
+              name="Border"
+              value={local.borderWidth}
+              limits={LIMITS.borderWidth}
+              format={(v) => (v === 0 ? 'None' : `${v}px`)}
+              onChange={(v) => change({ borderWidth: v })}
+            />
+
+            <Colour
+              label={`${label} border color`}
+              name="Border color"
+              value={local.borderColor}
+              fallback={local.color ?? base.color}
+              onChange={(v) => change({ borderColor: v })}
+            />
+
+            <Colour
+              label={`${label} hover fill`}
+              name="Hover fill"
+              value={local.hoverBg}
+              fallback={local.color ?? base.color}
+              onChange={(v) => change({ hoverBg: v })}
+            />
+
+            <Colour
+              label={`${label} hover text`}
+              name="Hover text"
+              value={local.hoverColor}
+              fallback="#14100e"
+              onChange={(v) => change({ hoverColor: v })}
+            />
+          </Block>
+        )}
       </div>
   )
 }
@@ -358,6 +433,51 @@ function Segments<T extends string>({
  * readout says "following" rather than a number, and the readout is the button
  * that gives the value back.
  */
+/**
+ * A COLOUR THAT CAN BE UNSET.
+ *
+ * `<input type="color">` has no empty state — it always shows something — so
+ * the swatch shows what the text is FOLLOWING and the word beside it says
+ * whether that is a choice or an inheritance. Without the word, every colour
+ * control in the panel would look set from the moment it was drawn, which is
+ * the one thing this whole panel is built not to do.
+ */
+function Colour({
+  label,
+  name,
+  value,
+  fallback,
+  onChange,
+}: {
+  /** For the screen reader. The visible name, if any, is `name`. */
+  label: string
+  name?: string
+  value: string | undefined
+  /** Shown in the swatch while nothing is chosen — what it would look like. */
+  fallback: string
+  onChange: (next: string | null) => void
+}) {
+  return (
+    <div className="txt-row txt-color-row">
+      {name && <span className="txt-row-name">{name}</span>}
+      <div className="txt-color">
+        <input
+          type="color"
+          value={value ?? fallback}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={label}
+        />
+        <span className="txt-color-name">{value ?? 'Following'}</span>
+        {value && (
+          <button type="button" className="txt-clear" onClick={() => onChange(null)}>
+            clear
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Slider({
   name,
   value,

@@ -159,6 +159,15 @@ a {
   --txt-word: var(--txtd-word);
   --txt-color: var(--txtd-color);
   --txt-align: var(--txtd-align);
+
+  /* A button's box, on exactly the same terms as its words. */
+  --txt-radius: var(--txtd-radius);
+  --txt-pad-x: var(--txtd-pad-x);
+  --txt-pad-y: var(--txtd-pad-y);
+  --txt-border-w: var(--txtd-border-w);
+  --txt-border-c: var(--txtd-border-c);
+  --txt-hover-bg: var(--txtd-hover-bg);
+  --txt-hover-ink: var(--txtd-hover-ink);
 }
 
 @media (max-width: 760px) {
@@ -174,5 +183,13 @@ a {
     --txt-word: var(--txtm-word, var(--txtd-word));
     --txt-color: var(--txtm-color, var(--txtd-color));
     --txt-align: var(--txtm-align, var(--txtd-align));
+
+    --txt-radius: var(--txtm-radius, var(--txtd-radius));
+    --txt-pad-x: var(--txtm-pad-x, var(--txtd-pad-x));
+    --txt-pad-y: var(--txtm-pad-y, var(--txtd-pad-y));
+    --txt-border-w: var(--txtm-border-w, var(--txtd-border-w));
+    --txt-border-c: var(--txtm-border-c, var(--txtd-border-c));
+    --txt-hover-bg: var(--txtm-hover-bg, var(--txtd-hover-bg));
+    --txt-hover-ink: var(--txtm-hover-ink, var(--txtd-hover-ink));
   }
 }

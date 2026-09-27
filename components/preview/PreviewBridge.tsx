@@ -637,6 +637,40 @@ export default function PreviewBridge({ page }: { page: string }) {
         return
       }
 
+      if (data.type === 'shown' && data.id && data.field && SAFE_WORD.test(data.field)) {
+        /*
+         * WHICH SIZES A PIECE OF TEXT APPEARS ON.
+         *
+         * `data-at` is the whole of it — app/hero.css removes an element at
+         * the width its attribute names — so setting the attribute is exactly
+         * what the server is about to render, and the editor can stop waiting
+         * for it.
+         *
+         * Only where the element is drawn ONCE. A piece of copy that sits in a
+         * different place on the phone is drawn in two containers, and which
+         * of the two survives is a question about both places at once; the
+         * editor does not send this then, and the re-render answers it.
+         */
+        const id = data.id
+        const field = data.field
+        const at = data.value ?? ''
+
+        const apply = () => {
+          document
+            .querySelectorAll<HTMLElement>(
+              `.pv-section[data-section-id="${CSS.escape(id)}"] [data-field="${CSS.escape(field)}"]`
+            )
+            .forEach((el) => {
+              if (at) el.setAttribute('data-at', at)
+              else el.removeAttribute('data-at')
+            })
+        }
+
+        pending.set(`shown:${id}:${field}`, { section: id, apply })
+        apply()
+        return
+      }
+
       if (data.type === 'text-vars' && data.id && data.field && SAFE_WORD.test(data.field)) {
         /*
          * WHICH SIZE'S VALUES THESE ARE.

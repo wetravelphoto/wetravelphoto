@@ -62,6 +62,32 @@ export type TextStyle = {
   wordSpacing?: number
   color?: string
   align?: 'left' | 'center' | 'right' | 'justify'
+
+  /*
+   * ── A BUTTON IS TEXT WITH A BOX ROUND IT ──────────────────────────────────
+   *
+   * These ride in the same bag as the rest and are shown only for a field the
+   * registry marks `button`. That is a deliberate choice over a bag of their
+   * own: a button's box has to follow the same rules its words already do —
+   * per element, per size, only-what-was-chosen-is-stored, and surviving a
+   * change of look — and every one of those is already built here. A second
+   * bag would be a second copy of all of it, free to drift.
+   *
+   * The cost is that a heading could technically carry a corner radius. It
+   * would do nothing, because no heading's stylesheet reads it.
+   */
+
+  /** px. Corner roundness. */
+  radius?: number
+  /** em, so the gap round the words scales with them rather than with nothing. */
+  padX?: number
+  padY?: number
+  /** px. A border thinner than a pixel is a border nobody asked for. */
+  borderWidth?: number
+  borderColor?: string
+  /** Under the pointer: the fill behind the words, and the words. */
+  hoverBg?: string
+  hoverColor?: string
 }
 
 export const TRANSFORMS = ['none', 'uppercase', 'lowercase', 'capitalize'] as const
@@ -76,7 +102,24 @@ export const LIMITS = {
   lineHeight: { min: 0.8, max: 2.4, step: 0.05 },
   letterSpacing: { min: -0.1, max: 0.5, step: 0.005 },
   wordSpacing: { min: -0.2, max: 1, step: 0.01 },
+  // 0 is a square corner and a real answer; the top is a pill on any button
+  // this site draws.
+  radius: { min: 0, max: 40, step: 1 },
+  padX: { min: 0, max: 6, step: 0.1 },
+  padY: { min: 0, max: 3, step: 0.05 },
+  borderWidth: { min: 0, max: 6, step: 0.5 },
 } as const
+
+/** The half of a TextStyle that only means anything on a button. */
+export const BUTTON_KEYS = [
+  'radius',
+  'padX',
+  'padY',
+  'borderWidth',
+  'borderColor',
+  'hoverBg',
+  'hoverColor',
+] as const satisfies readonly (keyof TextStyle)[]
 
 /** `#abc`, `#aabbcc`, `#aabbccdd`. Anything else is not a color as far as this is concerned. */
 const COLOUR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i
@@ -136,6 +179,28 @@ export function sanitizeTextStyle(input: unknown): TextStyle | null {
 
   const align = oneOf(raw.align, ALIGNS)
   if (align) out.align = align
+
+  // The button's box. Same treatment as everything above: clamped, checked,
+  // and absent unless it was actually chosen.
+  const radius = num(raw.radius, LIMITS.radius)
+  if (radius !== undefined) out.radius = radius
+
+  const padX = num(raw.padX, LIMITS.padX)
+  if (padX !== undefined) out.padX = padX
+
+  const padY = num(raw.padY, LIMITS.padY)
+  if (padY !== undefined) out.padY = padY
+
+  const borderWidth = num(raw.borderWidth, LIMITS.borderWidth)
+  if (borderWidth !== undefined) out.borderWidth = borderWidth
+
+  if (typeof raw.borderColor === 'string' && COLOUR.test(raw.borderColor)) {
+    out.borderColor = raw.borderColor
+  }
+  if (typeof raw.hoverBg === 'string' && COLOUR.test(raw.hoverBg)) out.hoverBg = raw.hoverBg
+  if (typeof raw.hoverColor === 'string' && COLOUR.test(raw.hoverColor)) {
+    out.hoverColor = raw.hoverColor
+  }
 
   return Object.keys(out).length > 0 ? out : null
 }
@@ -282,6 +347,14 @@ export function textStyleVars(style: TextStyle | null): Record<string, string> {
   if (style.color) vars['--txt-color'] = style.color
   if (style.align) vars['--txt-align'] = style.align
 
+  if (style.radius !== undefined) vars['--txt-radius'] = `${style.radius}px`
+  if (style.padX !== undefined) vars['--txt-pad-x'] = `${style.padX}em`
+  if (style.padY !== undefined) vars['--txt-pad-y'] = `${style.padY}em`
+  if (style.borderWidth !== undefined) vars['--txt-border-w'] = `${style.borderWidth}px`
+  if (style.borderColor) vars['--txt-border-c'] = style.borderColor
+  if (style.hoverBg) vars['--txt-hover-bg'] = style.hoverBg
+  if (style.hoverColor) vars['--txt-hover-ink'] = style.hoverColor
+
   return vars
 }
 
@@ -366,6 +439,13 @@ export const TEXT_VARS = [
   '--txt-word',
   '--txt-color',
   '--txt-align',
+  '--txt-radius',
+  '--txt-pad-x',
+  '--txt-pad-y',
+  '--txt-border-w',
+  '--txt-border-c',
+  '--txt-hover-bg',
+  '--txt-hover-ink',
 ] as const
 
 /** Which fonts a page has to load because a piece of its text asked for one. */

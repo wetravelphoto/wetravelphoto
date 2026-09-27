@@ -172,16 +172,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 24px;
+  gap: 0.4rem;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 0.5rem;
   border: 0;
   border-radius: 3px;
   background: transparent;
   color: var(--cv-mute);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
+
+/* Icons only, inside a section's panel: by then it is a reminder rather than
+   an introduction, and three words would crowd out the settings. */
+.cv-devices[data-size='compact'] .cv-device { width: 30px; padding: 0; }
+
+.cv-device-name { white-space: nowrap; }
 
 .cv-device:hover {
   color: var(--cv-ink);
@@ -3103,9 +3111,30 @@
 
 /* Which size the whole editor is pointed at. The switcher beside it changes
    the preview's width AND what every panel edits, so it says which. */
+.cv-device-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .cv-device-now {
-  margin-left: 0.5rem;
   font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--cv-soft);
+  white-space: nowrap;
+}
+
+.cv-insp-device {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem 0.5rem;
+  border-bottom: 1px solid var(--cv-line);
+}
+
+.cv-insp-device-now {
+  font-size: 0.66rem;
   letter-spacing: 0.04em;
   color: var(--cv-soft);
   white-space: nowrap;

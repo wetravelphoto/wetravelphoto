@@ -45,7 +45,8 @@ export default function HeroFocal({
 
   return (
     <div className="cv-focal">
-      <span className="cv-focal-label">Crop</span>
+      {/* No label of its own: the group above is called Focal point, and a
+          heading immediately under an identical heading is noise. */}
       <span className="admin-meta">
         Drag to set what stays in frame. You are cropping the{' '}
         {device === 'mobile' ? 'phone' : 'desktop'} version — switch size at the

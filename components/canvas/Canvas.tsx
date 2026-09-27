@@ -30,6 +30,7 @@ import { readShortcut, shortcutHint, type Shortcut } from '@/lib/canvas-keys'
 import { cssVariables, fontsToLoad, type StyleTokens } from '@/lib/styles/tokens'
 import { hasOwnType, type TypeStyles } from '@/lib/type-styles'
 import { fontHref } from '@/lib/fonts'
+import DeviceSwitcher from '@/components/canvas/DeviceSwitcher'
 import SectionRail from '@/components/canvas/SectionRail'
 import Inspector from '@/components/canvas/Inspector'
 import AddSectionModal from '@/components/canvas/AddSectionModal'
@@ -665,32 +666,10 @@ export default function Canvas({
           ))}
         </div>
 
-        {/*
-          * It changes the preview width AND what the panels edit, so it says
-          * so: a switcher that silently redirected every control below it
-          * would be the most surprising thing in the editor.
-          */}
-        <div className="cv-devices" role="group" aria-label="Size to look at and edit">
-          {(['desktop', 'tablet', 'phone'] as Device[]).map((d) => (
-            <button
-              key={d}
-              type="button"
-              className="cv-device"
-              data-on={device === d}
-              onClick={() => setDevice(d)}
-              aria-pressed={device === d}
-              title={
-                d === 'tablet'
-                  ? 'Tablet — shown at tablet width, edited with the desktop values'
-                  : `Edit the ${DEVICE_LABEL[editedAt(d)].toLowerCase()} version`
-              }
-            >
-              {d === 'desktop' ? '🖥' : d === 'tablet' ? '▭' : '▯'}
-              <span className="cv-sr">{d}</span>
-            </button>
-          ))}
+        <div className="cv-device-bar">
+          <DeviceSwitcher value={device} onChange={setDevice} />
           <span className="cv-device-now" aria-live="polite">
-            {device === 'tablet' ? 'Editing desktop' : `Editing ${DEVICE_LABEL[editedAt(device)].toLowerCase()}`}
+            Editing {device === 'tablet' ? 'desktop' : DEVICE_LABEL[editedAt(device)].toLowerCase()}
           </span>
         </div>
 
@@ -882,6 +861,8 @@ export default function Canvas({
                 bodyColor: tokens.ink_soft,
               }}
               editing={editedAt(device)}
+              previewDevice={device}
+              onPreviewDevice={setDevice}
               onTypeVars={(id, vars, fonts) => tell({ type: 'type-vars', id, vars, fonts })}
               onTextVars={(id, field, vars, fonts) =>
                 tell({ type: 'text-vars', id, field, device: editedAt(device), vars, fonts })

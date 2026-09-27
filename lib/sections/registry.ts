@@ -1,3 +1,5 @@
+import { BASE_DEVICE, DEVICES, deviceKey } from '@/lib/sections/devices'
+
 /**
  * THE SECTION CONTRACT
  * ════════════════════
@@ -258,29 +260,6 @@ export const SECTIONS: Record<string, SectionDef> = {
       title_spot: 'bottom-center',
       subtitle_spot: 'bottom-center',
       cta_spot: 'bottom-center',
-      /*
-       * The same three places on a phone, where a wide landscape has become a
-       * tall crop and copy that sat in the lower left of one can be over
-       * somebody's face in the other.
-       *
-       * NULL, not a place: null means "still following the desktop", and a
-       * value means "deliberately somewhere else". Defaulting these to
-       * 'bottom-center' would make the two indistinguishable, and moving the
-       * desktop title would then leave the phone one behind.
-       */
-      title_spot_mobile: null,
-      subtitle_spot_mobile: null,
-      cta_spot_mobile: null,
-      /*
-       * Which sizes each piece of copy appears on at all
-       * (lib/sections/shown.ts), keyed by the field it belongs to. Empty means
-       * every piece appears everywhere, which is what a hero nobody has
-       * touched does.
-       *
-       * No field declares it, like `text` — that is what carries it across a
-       * change of look.
-       */
-      shown: {},
       image_path: null,
       title: null,
       subtitle: null,
@@ -347,6 +326,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         placeholder: '/trips',
       },
       { key: 'cta_spot', label: 'Button position', kind: 'custom', editor: 'spot',
+        group: 'Button',
         note: 'Where the button sits, on the size you are editing.' },
       /*
        * Still here, and only for the stories hero: HomeHero lays a featured
@@ -369,16 +349,24 @@ export const SECTIONS: Record<string, SectionDef> = {
         kind: 'custom',
         editor: 'hero-stories',
         content: true,
+        // Its own group for the same reason the focal picker has one: with
+        // none it fell back to Content, which drew a SECOND heading reading
+        // "Content" below Layout.
+        group: 'Stories',
         note: 'Choosing stories, their hero titles and where each photograph is cropped.',
         when: { key: 'mode', equals: 'stories' },
       },
       {
         key: 'focal',
-        label: 'Crop',
+        label: 'Focal point',
         kind: 'custom',
         editor: 'hero-focal',
         content: true,
-        note: 'Dragging the focal point for desktop and phone.',
+        // Its own group rather than falling back into Content, which put it
+        // in a SECOND group of that name below Button — two headings reading
+        // "Content" in one panel, which is a mistake however you explain it.
+        group: 'Focal point',
+        note: 'What stays in frame when the photograph is cropped.',
         when: { key: 'mode', equals: 'fixed' },
       },
     ],
@@ -1157,10 +1145,55 @@ const VISIBILITY_FIELD: Field = {
 }
 
 for (const def of Object.values(SECTIONS)) {
-  def.defaults = { ...def.defaults, ...COMMON_DEFAULTS }
+  def.defaults = { ...def.defaults, ...COMMON_DEFAULTS, ...derivedDefaults(def) }
   // The hero is full-bleed and draws its own photograph edge to edge: spacing
-  // and a background colour have nothing to act on. Where it shows still does.
-  def.fields = [...def.fields, ...(def.type === 'hero' ? [VISIBILITY_FIELD] : [...SPACING_FIELDS, VISIBILITY_FIELD])]
+  // and a background colour have nothing to act on.
+  def.fields = [...def.fields, ...(def.type === 'hero' ? [] : [...SPACING_FIELDS, VISIBILITY_FIELD])]
+}
+
+/**
+ * THE KEYS A PANEL WRITES THAT NO FIELD DECLARES.
+ *
+ * `updateDraftSectionValues` refuses any key that is not in the section's
+ * defaults, which is rule 4 doing its job — a renderer may only read keys that
+ * exist, and the same discipline keeps a typo out of the database. But three
+ * things the editor writes have no field behind them, on purpose, because that
+ * is what carries them across a change of look: the per-element typography
+ * bags, the per-element visibility bag, and each placement's phone value.
+ *
+ * Hand-writing them in every section is how they went missing. The first
+ * release of per-device typography declared `text` and forgot `text_mobile`,
+ * so styling anything on a phone threw inside the server action — and Next
+ * redacts a server action's message in production, so what a photographer saw
+ * was "Minified React error #441" and nothing else.
+ *
+ * Deriving them from the same declarations the panel reads means the two
+ * cannot disagree. Add a device to lib/sections/devices.ts, or `textStyle` to
+ * a field, and the storage for it exists.
+ */
+function derivedDefaults(def: SectionDef): SectionSettings {
+  const out: SectionSettings = {}
+
+  if (def.fields.some((f) => f.textStyle)) {
+    // Typography per piece of text, per size. The base device keeps the plain
+    // key so every row already in the database is a desktop row.
+    for (const device of DEVICES) out[deviceKey('text', device)] = {}
+    // Which sizes each piece appears on.
+    out.shown = {}
+  }
+
+  for (const field of def.fields) {
+    if (field.kind !== 'custom' || field.editor !== 'spot') continue
+    for (const device of DEVICES) {
+      if (device === BASE_DEVICE) continue
+      // NULL, not a place: null means "still following the desktop", and a
+      // place means "deliberately somewhere else". A default of
+      // 'bottom-center' would make the two indistinguishable.
+      out[deviceKey(field.key, device)] = null
+    }
+  }
+
+  return out
 }
 
 export const SECTION_TYPES = Object.keys(SECTIONS)

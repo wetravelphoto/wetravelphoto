@@ -11,6 +11,7 @@ import ShownPicker from '@/components/canvas/editors/ShownPicker'
 import MarkImage from '@/components/canvas/editors/MarkImage'
 import ImageField from '@/components/canvas/ImageField'
 import TextStylePanel from '@/components/canvas/editors/TextStylePanel'
+import DeviceSwitcher, { type PreviewDevice } from '@/components/canvas/DeviceSwitcher'
 import { spotPair } from '@/lib/sections/spots'
 import { shownBag, withShown, type Shown } from '@/lib/sections/shown'
 import { SEC_VARS, ownStyle, sectionStyle, type TypeStyles } from '@/lib/type-styles'
@@ -89,6 +90,8 @@ export default function Inspector({
   onTypeVars,
   onTextVars,
   editing,
+  previewDevice,
+  onPreviewDevice,
   onShowStory,
   onSaved,
   onSettled,
@@ -144,6 +147,9 @@ export default function Inspector({
    * same thing by construction rather than by remembering.
    */
   editing: Device
+  /** The preview's own width, so the panel's switcher shows the same answer. */
+  previewDevice: PreviewDevice
+  onPreviewDevice: (next: PreviewDevice) => void
   /** Bring one of the hero's stories up in the preview. */
   onShowStory: (index: number | null) => void
   onSaved: () => void
@@ -441,6 +447,24 @@ export default function Inspector({
   /** A section-wide typography override from before per-element replaced it. */
   const legacyType = ownStyle(section.settings) !== null
 
+  /**
+   * A HERO HIDDEN ON ONE SIZE, FROM BEFORE ITS COPY COULD BE HIDDEN PIECE BY
+   * PIECE.
+   *
+   * The hero's "Show on" went away because each piece of text now says where
+   * it belongs, and what was left underneath was a photograph — which you
+   * hide by removing the hero, not by hiding it. But a site that had already
+   * used it is still wearing the result, with nothing on screen to explain
+   * why the hero vanishes on a phone.
+   *
+   * Shown only where one is set, and once cleared it never comes back.
+   */
+  const heroHidden =
+    def.type === 'hero' &&
+    !def.fields.some((f) => f.key === 'hide_on') &&
+    typeof section.settings.hide_on === 'string' &&
+    section.settings.hide_on !== 'none'
+
   return (
     <aside className="cv-inspector" aria-label={`${def.label} settings`}>
       {resizer}
@@ -452,6 +476,21 @@ export default function Inspector({
         <button type="button" className="cv-ico" onClick={onClose} aria-label="Close settings">
           ×
         </button>
+      </div>
+
+      {/*
+        * The same switcher as the top of the editor, icons only.
+        *
+        * Not a second control — it writes the same state — but a second place
+        * to see it. The one at the top is easy to miss while you are looking
+        * down at a slider, and finding out afterwards that you styled the
+        * wrong size costs ten minutes and some trust.
+        */}
+      <div className="cv-insp-device">
+        <DeviceSwitcher value={previewDevice} onChange={onPreviewDevice} size="compact" />
+        <span className="cv-insp-device-now">
+          Editing {previewDevice === 'tablet' ? 'desktop' : DEVICE_LABEL[editing].toLowerCase()}
+        </span>
       </div>
 
       {error && <p className="cv-insp-error">{error}</p>}
@@ -681,6 +720,25 @@ export default function Inspector({
           }}
         />
       </form>
+
+      {heroHidden && (
+        <div className="cv-insp-legacy">
+          <p>
+            This hero is hidden on some screens, set before each piece of text
+            could say where it belongs.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              onLive('hide_on', 'none', { attr: 'data-hide' })
+              saveValues(section.id, { hide_on: 'none' })
+              sendValues()
+            }}
+          >
+            Show it everywhere
+          </button>
+        </div>
+      )}
 
       {legacyType && (
         /*

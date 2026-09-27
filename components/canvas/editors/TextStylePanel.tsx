@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { FONT_NAMES } from '@/lib/styles/tokens'
+import SettingRow from '@/components/canvas/editors/SettingRow'
 import {
   ALIGNS,
   DECORATIONS,
@@ -67,28 +68,6 @@ export default function TextStylePanel({
     setLocal(value ?? {})
   }
 
-  const [open, setOpen] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey, true)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey, true)
-    }
-  }, [open])
-
   /**
    * One or more keys at once. `null` REMOVES a key rather than storing a null,
    * which is the whole "silence" property: a key that is absent follows, a key
@@ -107,178 +86,195 @@ export default function TextStylePanel({
   const set = Object.keys(local).length
 
   return (
-    // Kept off the settings form's own change handler: without this, dragging
-    // a slider here would queue a save of every other field in the panel on
-    // every frame of the drag.
-    <div className="txt-field" ref={box} onChange={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        className="txt-open"
-        aria-expanded={open}
-        aria-label={`Typography for ${label}${set ? `: ${set} change${set === 1 ? '' : 's'}` : ', following the look'}`}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="txt-open-icon" aria-hidden>
-          Aa
-        </span>
-        <span className="txt-open-text">Typography</span>
-        {set > 0 ? (
-          <span className="txt-open-count">{set}</span>
-        ) : (
-          <span className="txt-open-hint" aria-hidden>
-            following
-          </span>
-        )}
-      </button>
+    <SettingRow
+      icon="Aa"
+      name="Typography"
+      summary={describe(local, base.font)}
+      quiet={set === 0}
+    >
+      <div className="txt-pop" role="group" aria-label={`Typography for ${label}`}>
+        <div className="txt-pop-head">
+          <p className="txt-pop-title">{label}</p>
+          {set > 0 && (
+            <button
+              type="button"
+              className="txt-clear"
+              onClick={() => {
+                setLocal({})
+                onChange(null)
+              }}
+            >
+              Back to the look
+            </button>
+          )}
+        </div>
 
-      {open && (
-        <div className="txt-pop" role="group" aria-label={`Typography for ${label}`}>
-          <div className="txt-pop-head">
-            <p className="txt-pop-title">{label}</p>
-            {set > 0 && (
-              <button
-                type="button"
-                className="txt-clear"
-                onClick={() => {
-                  setLocal({})
-                  onChange(null)
-                }}
-              >
-                Back to the look
+        <Block name="Alignment">
+          <Segments
+            label="Alignment"
+            options={ALIGNS.map((a) => ({ value: a, label: ALIGN_NAME[a], icon: ALIGN_ICON[a] }))}
+            value={local.align}
+            onChange={(v) => change({ align: v })}
+          />
+        </Block>
+
+        <Block name="Typography">
+          <label className="txt-row">
+            <span className="txt-row-name">Typeface</span>
+            <select
+              value={local.family ?? ''}
+              onChange={(e) => change({ family: e.target.value || null })}
+            >
+              <option value="">Following ({base.font})</option>
+              {FONT_NAMES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <Slider
+            name="Size"
+            value={local.size}
+            limits={LIMITS.size}
+            /* 1 is the same as not overriding, so it clears rather than
+               storing a number whose only effect is to stop inheritance. */
+            neutral={1}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onChange={(v) => change({ size: v })}
+          />
+
+          <label className="txt-row">
+            <span className="txt-row-name">Weight</span>
+            <select
+              value={local.weight ?? ''}
+              onChange={(e) => change({ weight: e.target.value ? Number(e.target.value) : null })}
+            >
+              <option value="">Following</option>
+              {WEIGHTS.map((w) => (
+                <option key={w} value={w}>
+                  {w} — {WEIGHT_NAME[w]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <Segments
+            label="Capitals"
+            options={TRANSFORMS.map((t) => ({
+              value: t,
+              label: TRANSFORM_NAME[t],
+              icon: TRANSFORM_ICON[t],
+            }))}
+            value={local.transform}
+            onChange={(v) => change({ transform: v })}
+          />
+
+          <Segments
+            label="Style"
+            options={[
+              { value: 'normal', label: 'Upright', icon: 'A' },
+              { value: 'italic', label: 'Italic', icon: 'A', italic: true },
+            ]}
+            value={local.style}
+            onChange={(v) => change({ style: v })}
+          />
+
+          <Segments
+            label="Decoration"
+            options={DECORATIONS.map((d) => ({
+              value: d,
+              label: DECORATION_NAME[d],
+              icon: DECORATION_ICON[d],
+            }))}
+            value={local.decoration}
+            onChange={(v) => change({ decoration: v })}
+          />
+
+          <Slider
+            name="Line height"
+            value={local.lineHeight}
+            limits={LIMITS.lineHeight}
+            format={(v) => v.toFixed(2)}
+            onChange={(v) => change({ lineHeight: v })}
+          />
+
+          <Slider
+            name="Letter spacing"
+            value={local.letterSpacing}
+            limits={LIMITS.letterSpacing}
+            neutral={0}
+            format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(3)}em`}
+            onChange={(v) => change({ letterSpacing: v })}
+          />
+
+          <Slider
+            name="Word spacing"
+            value={local.wordSpacing}
+            limits={LIMITS.wordSpacing}
+            neutral={0}
+            format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}em`}
+            onChange={(v) => change({ wordSpacing: v })}
+          />
+        </Block>
+
+        <Block name="Colour">
+          <div className="txt-colour">
+            <input
+              type="color"
+              value={local.color ?? base.color}
+              onChange={(e) => change({ color: e.target.value })}
+              aria-label={`${label} colour`}
+            />
+            <span className="txt-colour-name">{local.color ?? 'Following'}</span>
+            {local.color && (
+              <button type="button" className="txt-clear" onClick={() => change({ color: null })}>
+                clear
               </button>
             )}
           </div>
-
-          <Block name="Alignment">
-            <Segments
-              label="Alignment"
-              options={ALIGNS.map((a) => ({ value: a, label: ALIGN_NAME[a], icon: ALIGN_ICON[a] }))}
-              value={local.align}
-              onChange={(v) => change({ align: v })}
-            />
-          </Block>
-
-          <Block name="Typography">
-            <label className="txt-row">
-              <span className="txt-row-name">Typeface</span>
-              <select
-                value={local.family ?? ''}
-                onChange={(e) => change({ family: e.target.value || null })}
-              >
-                <option value="">Following ({base.font})</option>
-                {FONT_NAMES.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <Slider
-              name="Size"
-              value={local.size}
-              limits={LIMITS.size}
-              /* 1 is the same as not overriding, so it clears rather than
-                 storing a number whose only effect is to stop inheritance. */
-              neutral={1}
-              format={(v) => `${Math.round(v * 100)}%`}
-              onChange={(v) => change({ size: v })}
-            />
-
-            <label className="txt-row">
-              <span className="txt-row-name">Weight</span>
-              <select
-                value={local.weight ?? ''}
-                onChange={(e) => change({ weight: e.target.value ? Number(e.target.value) : null })}
-              >
-                <option value="">Following</option>
-                {WEIGHTS.map((w) => (
-                  <option key={w} value={w}>
-                    {w} — {WEIGHT_NAME[w]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <Segments
-              label="Capitals"
-              options={TRANSFORMS.map((t) => ({
-                value: t,
-                label: TRANSFORM_NAME[t],
-                icon: TRANSFORM_ICON[t],
-              }))}
-              value={local.transform}
-              onChange={(v) => change({ transform: v })}
-            />
-
-            <Segments
-              label="Style"
-              options={[
-                { value: 'normal', label: 'Upright', icon: 'A' },
-                { value: 'italic', label: 'Italic', icon: 'A', italic: true },
-              ]}
-              value={local.style}
-              onChange={(v) => change({ style: v })}
-            />
-
-            <Segments
-              label="Decoration"
-              options={DECORATIONS.map((d) => ({
-                value: d,
-                label: DECORATION_NAME[d],
-                icon: DECORATION_ICON[d],
-              }))}
-              value={local.decoration}
-              onChange={(v) => change({ decoration: v })}
-            />
-
-            <Slider
-              name="Line height"
-              value={local.lineHeight}
-              limits={LIMITS.lineHeight}
-              format={(v) => v.toFixed(2)}
-              onChange={(v) => change({ lineHeight: v })}
-            />
-
-            <Slider
-              name="Letter spacing"
-              value={local.letterSpacing}
-              limits={LIMITS.letterSpacing}
-              neutral={0}
-              format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(3)}em`}
-              onChange={(v) => change({ letterSpacing: v })}
-            />
-
-            <Slider
-              name="Word spacing"
-              value={local.wordSpacing}
-              limits={LIMITS.wordSpacing}
-              neutral={0}
-              format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}em`}
-              onChange={(v) => change({ wordSpacing: v })}
-            />
-          </Block>
-
-          <Block name="Colour">
-            <div className="txt-colour">
-              <input
-                type="color"
-                value={local.color ?? base.color}
-                onChange={(e) => change({ color: e.target.value })}
-                aria-label={`${label} colour`}
-              />
-              <span className="txt-colour-name">{local.color ?? 'Following'}</span>
-              {local.color && (
-                <button type="button" className="txt-clear" onClick={() => change({ color: null })}>
-                  clear
-                </button>
-              )}
-            </div>
-          </Block>
-        </div>
-      )}
-    </div>
+        </Block>
+      </div>
+    </SettingRow>
   )
+}
+
+/**
+ * The row's right-hand side: what this text is actually set to.
+ *
+ * Size, weight and typeface first, because that is the order somebody reads a
+ * type spec in and they are what people change. At most THREE parts, because
+ * a row that wraps has stopped being a row — the rest is one click away, and
+ * the row's job is to answer "has anything been done to this" without being
+ * opened, not to be a complete account.
+ *
+ * Anything set that is not one of the three still gets named rather than
+ * hidden, so a title whose only change is its alignment reads "Right" and not
+ * the useless "Adjusted".
+ */
+function describe(style: TextStyle, followingFont: string): string {
+  if (Object.keys(style).length === 0) {
+    // Naming what it follows is more use than "Default": it answers "what
+    // typeface is this?" without opening anything.
+    return `Following ${followingFont}`
+  }
+
+  const parts = [
+    style.size !== undefined ? `${Math.round(style.size * 100)}%` : null,
+    style.weight !== undefined ? WEIGHT_NAME[style.weight as (typeof WEIGHTS)[number]] : null,
+    style.family ?? null,
+    style.transform ? TRANSFORM_NAME[style.transform] : null,
+    style.style === 'italic' ? 'Italic' : null,
+    style.decoration && style.decoration !== 'none' ? DECORATION_NAME[style.decoration] : null,
+    style.align ? ALIGN_NAME[style.align] : null,
+    style.color ?? null,
+    style.letterSpacing !== undefined ? 'Tracking' : null,
+    style.lineHeight !== undefined ? 'Line height' : null,
+    style.wordSpacing !== undefined ? 'Word spacing' : null,
+  ].filter((p): p is string => p !== null)
+
+  return parts.slice(0, 3).join(' · ')
 }
 
 function Block({ name, children }: { name: string; children: React.ReactNode }) {

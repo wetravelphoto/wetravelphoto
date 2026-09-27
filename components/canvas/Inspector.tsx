@@ -9,9 +9,8 @@ import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroS
 import SpotPicker from '@/components/canvas/editors/SpotPicker'
 import MarkImage from '@/components/canvas/editors/MarkImage'
 import ImageField from '@/components/canvas/ImageField'
-import SectionType from '@/components/canvas/SectionType'
 import TextStylePanel from '@/components/canvas/editors/TextStylePanel'
-import { SEC_VARS, sectionStyle, varsFor, type SectionStyle, type TypeStyles } from '@/lib/type-styles'
+import { SEC_VARS, ownStyle, sectionStyle, type TypeStyles } from '@/lib/type-styles'
 import {
   TEXT_VARS,
   textStyleVars,
@@ -407,6 +406,8 @@ export default function Inspector({
   }
 
   const preserved = contentKeys(def)
+  /** A section-wide typography override from before per-element replaced it. */
+  const legacyType = ownStyle(section.settings) !== null
 
   return (
     <aside className="cv-inspector" aria-label={`${def.label} settings`}>
@@ -556,31 +557,6 @@ export default function Inspector({
               )
             }
 
-            if (field.editor === 'typography') {
-              const current = sectionStyle(section.type, section.settings, typeStyles)
-              return (
-                <SectionType
-                  style={current}
-                  base={styleBase}
-                  hasEyebrow={def.fields.some((f) => f.key === 'eyebrow' || f.key === 'kicker')}
-                  onChange={(next: SectionStyle | null) => {
-                    // Painted on the page at once — varsFor is what the renderer
-                    // uses, so this is the identity — then saved, coalesced.
-                    const vars = varsFor(next ?? {})
-                    const all: Record<string, string | null> = {}
-                    for (const name of SEC_VARS) all[name] = vars[name] ?? null
-                    const fonts = [next?.font, next?.bodyFont, next?.eyebrowFont]
-                      .filter((f): f is string => !!f)
-                      .map(fontHref)
-                    onTypeVars(section.id, all, fonts)
-                    // {} rather than null: "follow the site" must not fall back to
-                    // an old shared group override.
-                    saveValues(section.id, { [field.key]: next ?? {} })
-                  }}
-                />
-              )
-            }
-
             if (field.editor === 'spot') {
               return (
                 <SpotPicker
@@ -618,6 +594,41 @@ export default function Inspector({
           }}
         />
       </form>
+
+      {legacyType && (
+        /*
+         * THIS SECTION SET ITS OWN TYPOGRAPHY BEFORE THE CONTROL WENT AWAY.
+         *
+         * Per-element typography replaced the section-wide kind, and the
+         * panel for it is gone — but a site that had already used it is still
+         * wearing the result, with nothing on screen to say why its headings
+         * ignore the look. Removing a control without leaving a way to undo
+         * what it did is how a setting becomes permanent by accident.
+         *
+         * Shown only where one exists, and once cleared it never comes back.
+         */
+        <div className="cv-insp-legacy">
+          <p>
+            This section still carries typography of its own, set before each
+            piece of text had its own. It overrides the look for every heading
+            in here.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              const all: Record<string, string | null> = {}
+              for (const name of SEC_VARS) all[name] = null
+              onTypeVars(section.id, all, [])
+              // {} rather than null: "follow the site" must not fall back to
+              // an old shared group override.
+              saveValues(section.id, { type: {} })
+              sendValues()
+            }}
+          >
+            Follow the look again
+          </button>
+        </div>
+      )}
 
       <div className="cv-insp-foot">
         <span className="cv-insp-state" aria-live="polite">

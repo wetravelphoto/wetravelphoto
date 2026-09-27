@@ -223,7 +223,21 @@ export const SECTIONS: Record<string, SectionDef> = {
     styled: 'hero',
     needs: ['posts'],
     defaults: {
-      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      /*
+       * This section's own typography (lib/type-styles.ts), as a whole — one
+       * setting for every heading in it at once.
+       *
+       * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27:
+       * a control for "every heading in this section" is the wrong grain when
+       * each heading has its own button under its own box, and two controls
+       * over the same numbers with nothing saying which is which is worse
+       * than one.
+       *
+       * The key stays and is still READ — rule 1, and a site that set one
+       * would otherwise change appearance the day the control went away. The
+       * inspector offers to clear it where one exists, and once cleared there
+       * is no way back to it.
+       */
       type: null,
       /*
        * Typography for INDIVIDUAL pieces of text, keyed by the field they
@@ -344,15 +358,6 @@ export const SECTIONS: Record<string, SectionDef> = {
         note: 'Dragging the focal point for desktop and phone.',
         when: { key: 'mode', equals: 'fixed' },
       },
-      {
-        key: 'type',
-        label: 'Typography',
-        kind: 'custom',
-        editor: 'typography',
-        group: 'Typography',
-        folded: true,
-        note: 'The typefaces, colours and sizes of this section only.',
-      },
     ],
   },
 
@@ -403,7 +408,21 @@ export const SECTIONS: Record<string, SectionDef> = {
     version: 1,
     styled: 'intro',
     defaults: {
-      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      /*
+       * This section's own typography (lib/type-styles.ts), as a whole — one
+       * setting for every heading in it at once.
+       *
+       * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27:
+       * a control for "every heading in this section" is the wrong grain when
+       * each heading has its own button under its own box, and two controls
+       * over the same numbers with nothing saying which is which is worse
+       * than one.
+       *
+       * The key stays and is still READ — rule 1, and a site that set one
+       * would otherwise change appearance the day the control went away. The
+       * inspector offers to clear it where one exists, and once cleared there
+       * is no way back to it.
+       */
       type: null,
       /* Typography for individual pieces of text, keyed by the field they
          belong to. No field declares it, which is what carries it across a
@@ -429,15 +448,6 @@ export const SECTIONS: Record<string, SectionDef> = {
       },
       { key: 'image_path', label: 'Photograph', kind: 'image', content: true },
       { key: 'image_side', label: 'Layout', kind: 'select', options: SIDE, live: { attr: 'data-side' } },
-      {
-        key: 'type',
-        label: 'Typography',
-        kind: 'custom',
-        editor: 'typography',
-        group: 'Typography',
-        folded: true,
-        note: 'The typefaces, colours and sizes of this section only.',
-      },
     ],
   },
 
@@ -450,7 +460,21 @@ export const SECTIONS: Record<string, SectionDef> = {
     styled: 'intro',
     grows: true,
     defaults: {
-      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      /*
+       * This section's own typography (lib/type-styles.ts), as a whole — one
+       * setting for every heading in it at once.
+       *
+       * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27:
+       * a control for "every heading in this section" is the wrong grain when
+       * each heading has its own button under its own box, and two controls
+       * over the same numbers with nothing saying which is which is worse
+       * than one.
+       *
+       * The key stays and is still READ — rule 1, and a site that set one
+       * would otherwise change appearance the day the control went away. The
+       * inspector offers to clear it where one exists, and once cleared there
+       * is no way back to it.
+       */
       type: null,
       /* Typography for individual pieces of text, keyed by the field they
          belong to. No field declares it, which is what carries it across a
@@ -495,15 +519,6 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         placeholder: '/trips',
       },
-      {
-        key: 'type',
-        label: 'Typography',
-        kind: 'custom',
-        editor: 'typography',
-        group: 'Typography',
-        folded: true,
-        note: 'The typefaces, colours and sizes of this section only.',
-      },
     ],
   },
 
@@ -519,7 +534,21 @@ export const SECTIONS: Record<string, SectionDef> = {
     // Only the grid's root has flex: 1 (it is the Galleries page's layout).
     grows: true,
     defaults: {
-      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      /*
+       * This section's own typography (lib/type-styles.ts), as a whole — one
+       * setting for every heading in it at once.
+       *
+       * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27:
+       * a control for "every heading in this section" is the wrong grain when
+       * each heading has its own button under its own box, and two controls
+       * over the same numbers with nothing saying which is which is worse
+       * than one.
+       *
+       * The key stays and is still READ — rule 1, and a site that set one
+       * would otherwise change appearance the day the control went away. The
+       * inspector offers to clear it where one exists, and once cleared there
+       * is no way back to it.
+       */
       type: null,
       // 'carousel': the homepage's draggable row.
       // 'grid': every gallery as a tile, under a page heading (the Galleries
@@ -575,15 +604,6 @@ export const SECTIONS: Record<string, SectionDef> = {
         live: { attr: 'data-cols' },
         when: { key: 'layout', equals: 'grid' },
       },
-      {
-        key: 'type',
-        label: 'Typography',
-        kind: 'custom',
-        editor: 'typography',
-        group: 'Typography',
-        folded: true,
-        note: 'The typefaces, colours and sizes of this section only.',
-      },
     ],
   },
 
@@ -599,7 +619,21 @@ export const SECTIONS: Record<string, SectionDef> = {
     // Only the grid's root has flex: 1 (it is the Journal page's layout).
     grows: true,
     defaults: {
-      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      /*
+       * This section's own typography (lib/type-styles.ts), as a whole — one
+       * setting for every heading in it at once.
+       *
+       * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27:
+       * a control for "every heading in this section" is the wrong grain when
+       * each heading has its own button under its own box, and two controls
+       * over the same numbers with nothing saying which is which is worse
+       * than one.
+       *
+       * The key stays and is still READ — rule 1, and a site that set one
+       * would otherwise change appearance the day the control went away. The
+       * inspector offers to clear it where one exists, and once cleared there
+       * is no way back to it.
+       */
       type: null,
       // 'row': the latest few, with a link to the rest (the homepage's).
       // 'grid': every story, the newest drawn large (the Journal page's).
@@ -717,15 +751,6 @@ export const SECTIONS: Record<string, SectionDef> = {
         live: { var: '--journal-title-scale' },
         when: { key: 'layout', equals: 'grid' },
       },
-      {
-        key: 'type',
-        label: 'Typography',
-        kind: 'custom',
-        editor: 'typography',
-        group: 'Typography',
-        folded: true,
-        note: 'The typefaces, colours and sizes of this section only.',
-      },
     ],
   },
 
@@ -740,7 +765,21 @@ export const SECTIONS: Record<string, SectionDef> = {
     needs: ['catalog'],
     requires: 'The shop switched on, with prints published in the catalogue',
     defaults: {
-      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      /*
+       * This section's own typography (lib/type-styles.ts), as a whole — one
+       * setting for every heading in it at once.
+       *
+       * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27:
+       * a control for "every heading in this section" is the wrong grain when
+       * each heading has its own button under its own box, and two controls
+       * over the same numbers with nothing saying which is which is worse
+       * than one.
+       *
+       * The key stays and is still READ — rule 1, and a site that set one
+       * would otherwise change appearance the day the control went away. The
+       * inspector offers to clear it where one exists, and once cleared there
+       * is no way back to it.
+       */
       type: null,
       /* Typography for individual pieces of text, keyed by the field they
          belong to. No field declares it, which is what carries it across a
@@ -776,7 +815,10 @@ export const SECTIONS: Record<string, SectionDef> = {
         max: 5,
         step: 1,
         slider: true,
-        group: 'The wall',
+        // No group of its own: "The wall" held this one field, so it drew a
+        // heading, a fold arrow and a count of 1 over a single slider — the
+        // same thing that made "Section" read as empty on the hero. A group
+        // earns its heading by having something to group.
         help: 'On a wide screen. Narrower screens step down on their own.',
         live: { attr: 'data-cols' },
       },
@@ -798,15 +840,6 @@ export const SECTIONS: Record<string, SectionDef> = {
         kind: 'toggle',
         group: 'Captions',
         help: 'The cheapest size. Off makes the shop read as a gallery.',
-      },
-      {
-        key: 'type',
-        label: 'Typography',
-        kind: 'custom',
-        editor: 'typography',
-        group: 'Typography',
-        folded: true,
-        note: 'The typefaces, colours and sizes of this section only.',
       },
     ],
   },
@@ -846,7 +879,21 @@ export const SECTIONS: Record<string, SectionDef> = {
     // natural height either way, so declaring this changes nothing for it.
     grows: true,
     defaults: {
-      // This section's own typography (lib/type-styles.ts). Null follows the site.
+      /*
+       * This section's own typography (lib/type-styles.ts), as a whole — one
+       * setting for every heading in it at once.
+       *
+       * NO LONGER EDITABLE. Per-element typography replaced it on 2026-09-27:
+       * a control for "every heading in this section" is the wrong grain when
+       * each heading has its own button under its own box, and two controls
+       * over the same numbers with nothing saying which is which is worse
+       * than one.
+       *
+       * The key stays and is still READ — rule 1, and a site that set one
+       * would otherwise change appearance the day the control went away. The
+       * inspector offers to clear it where one exists, and once cleared there
+       * is no way back to it.
+       */
       type: null,
       // 'split': photograph beside the form (the homepage's).
       // 'centered': the form and its words in the middle, no photograph (the
@@ -908,15 +955,6 @@ export const SECTIONS: Record<string, SectionDef> = {
         options: SIDE,
         live: { attr: 'data-side' },
         when: { key: 'layout', equals: 'split' },
-      },
-      {
-        key: 'type',
-        label: 'Typography',
-        kind: 'custom',
-        editor: 'typography',
-        group: 'Typography',
-        folded: true,
-        note: 'The typefaces, colours and sizes of this section only.',
       },
     ],
   },
@@ -1080,7 +1118,17 @@ const VISIBILITY_FIELD: Field = {
     { value: 'mobile', label: 'Desktop and tablet only' },
     { value: 'desktop', label: 'Phones only' },
   ],
-  group: 'Section',
+  /*
+   * ITS OWN GROUP, not "Section".
+   *
+   * On the hero this was the only common field — spacing and a background
+   * have nothing to act on behind a full-bleed photograph — so "Section" drew
+   * a heading, a fold arrow and a count of 1 over a single select, and read
+   * as a group with nothing in it. Renaming the whole group to Visibility
+   * would have been wrong everywhere else, where it also holds spacing,
+   * background and width. Splitting is what both of them wanted.
+   */
+  group: 'Visibility',
   folded: true,
   live: { attr: 'data-hide' },
 }

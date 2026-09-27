@@ -670,6 +670,37 @@
   color: var(--cv-mute);
 }
 
+/*
+ * A section still wearing typography set before the control for it went away.
+ * Sits above the footer, quiet but not hidden: it is an explanation, not a
+ * warning, and it disappears the moment it is acted on.
+ */
+.cv-insp-legacy {
+  flex: 0 0 auto;
+  padding: 0.6rem 0.85rem;
+  border-top: 1px solid var(--cv-line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.cv-insp-legacy p {
+  margin: 0 0 0.4rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--cv-mute);
+}
+
+.cv-insp-legacy button {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cv-accent, #b5602c);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 /* ── Page settings: search and sharing ───────────────────────────────────── */
 
 .cv-seo {
@@ -2403,7 +2434,6 @@
   background: var(--cv-panel-2);
 }
 
-
 /* ── Making the panel bigger ─────────────────────────────────────────────────
    Lightroom's panels are a fixed column you can widen, with sections you can
    fold away. Both, because they solve different halves of the same complaint:
@@ -2778,32 +2808,8 @@
 
 /* ---------------- where a piece of hero copy sits ---------------- */
 
-.spot-field { position: relative; margin-top: 0.35rem; }
-
-/*
- * Reads the place in words. This is looked at far more often than it is
- * changed, and a dot in a grid is quick to set and useless to read.
- */
-.spot-open {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  color: inherit;
-  font: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
-  text-align: left;
-}
-
-.spot-open:hover { background: rgba(255, 255, 255, 0.1); }
-.spot-open[aria-expanded='true'] { border-color: var(--cv-accent, #b5602c); }
-
-/* A miniature of the hero with one dot in it: the place, at a glance. */
+/* A miniature of the picture with one dot in it — the place, at a glance —
+   drawn as the Position row's icon. */
 .spot-open-icon {
   position: relative;
   flex: 0 0 auto;
@@ -2831,23 +2837,12 @@
 .spot-open-dot[data-col='center'] { left: 50%; }
 .spot-open-dot[data-col='right'] { left: 78%; }
 
-.spot-open-text { flex: 1; min-width: 0; }
-
-.spot-open-hint {
-  font-size: 0.68rem;
-  opacity: 0.45;
-  white-space: nowrap;
-}
-
 /* Fifteen places: five bands down, three across, same shape as the picture. */
 .spot-pop {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 4px);
-  left: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 3px;
+  margin-left: auto;
   width: 150px;
   padding: 5px;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -2892,75 +2887,11 @@
 /* ---------------- one piece of text's own typography ---------------- */
 
 /*
- * Sits under the box it governs, beside the placement picker, and looks like
- * it: two controls for the same words, the same shape, one saying where and
- * one saying what it looks like.
- */
-.txt-field { position: relative; margin-top: 0.35rem; }
-
-.txt-open {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  color: inherit;
-  font: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
-  text-align: left;
-}
-
-.txt-open:hover { background: rgba(255, 255, 255, 0.1); }
-.txt-open[aria-expanded='true'] { border-color: var(--cv-accent, #b5602c); }
-
-.txt-open-icon {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 15px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 2px;
-  font-size: 0.6rem;
-  line-height: 1;
-}
-
-.txt-open-text { flex: 1; min-width: 0; }
-
-.txt-open-hint {
-  font-size: 0.68rem;
-  opacity: 0.45;
-  white-space: nowrap;
-}
-
-/* How many things this text no longer takes from the look. */
-.txt-open-count {
-  flex: 0 0 auto;
-  min-width: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--cv-accent, #b5602c);
-  color: #fff;
-  font-size: 0.62rem;
-  line-height: 16px;
-  text-align: center;
-}
-
-/*
- * Wider than the placement grid and scrollable, because this is a long panel
- * in a narrow column. Anchored to the RIGHT edge so it cannot run off the side
- * of the inspector on a small screen.
+ * The panel behind the Typography row. Wider than the placement grid and
+ * scrollable, because it is a long panel in a narrow column; its wrapper
+ * anchors it to both edges so it cannot run off the side of the inspector.
  */
 .txt-pop {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 4px);
-  right: 0;
-  left: 0;
   max-height: min(60vh, 460px);
   overflow-y: auto;
   padding: 0.55rem;
@@ -3169,10 +3100,83 @@
 }
 
 /* Says what the control below IS, now that each text box has two of them. */
-.spot-label {
-  margin: 0 0 0.2rem;
+
+/* ---------------- one setting, one line ---------------- */
+
+/*
+ * Typography and Position both used to explain themselves differently and
+ * between them took more height than the writing they governed. Both are this
+ * now: name on the left, CURRENT VALUE on the right, detail behind a click.
+ * The value on the right is the point — a row that says "140% . Bold . Oswald"
+ * has already answered the question that opening it would have answered.
+ */
+.ed-row-wrap { position: relative; margin-top: 0.3rem; }
+
+.ed-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  /* Tall enough for a thumb; the two rows under a text box are the controls
+     most likely to be used on a tablet. */
+  min-height: 34px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ed-row:hover { background: rgba(255, 255, 255, 0.09); }
+.ed-row[aria-expanded='true'] { border-color: var(--cv-accent, #b5602c); }
+
+.ed-row-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 18px;
+  font-size: 0.64rem;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.ed-row-name { flex: 0 0 auto; }
+
+/* Ellipsised rather than wrapped: a row that wraps has stopped being a row. */
+.ed-row-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+/* Following the look rather than set. Quieter, so a panel of untouched rows
+   reads as a calm list and the one that has been changed stands out. */
+.ed-row-value[data-quiet] { opacity: 0.4; }
+
+.ed-row-caret { flex: 0 0 auto; opacity: 0.4; font-size: 0.9rem; line-height: 1; }
+
+.ed-row-pop {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+}
+
+.spot-hint {
+  grid-column: 1 / -1;
+  margin: 0.35rem 0 0;
   font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   opacity: 0.45;
+  text-align: center;
 }

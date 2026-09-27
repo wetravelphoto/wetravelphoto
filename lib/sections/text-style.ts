@@ -311,14 +311,28 @@ export function deviceTextStyleVars(
 }
 
 /**
- * Ready-made style objects, keyed by field.
+ * READY-MADE PROPS, KEYED BY FIELD — NOT STYLES.
  *
- * For the components that take shaped props rather than the settings bag —
- * the two heroes, the contact block, the Instagram feed. They cannot build
- * these themselves: it takes every device's bag, and all they are given is
+ * For the components that take shaped props rather than the settings bag: the
+ * two heroes, the contact block, the Instagram feed. They cannot build these
+ * themselves, because it takes every device's bag and all they are given is
  * their own words.
+ *
+ * ── Why props and not a style object ────────────────────────────────────────
+ *
+ * This returned `CSSProperties` at first, and every one of those four
+ * components did `style={own('title')}` — which is not enough, and failed
+ * silently. The custom properties only become the `--txt-*` a stylesheet reads
+ * because of a rule keyed on `[data-txt]` (app/globals.css); without the
+ * attribute the properties sit on the element and nothing looks at them. The
+ * hero's title, subtitle and button carried their typography for a week and
+ * ignored all of it.
+ *
+ * Returning the attribute WITH the style makes the mistake unavailable: the
+ * only way to use this is to spread it, and spreading it brings both.
  */
-export type TextVars = Record<string, React.CSSProperties>
+export type TextProps = { 'data-txt': string; style: React.CSSProperties }
+export type TextVars = Record<string, TextProps>
 
 export function textVarsByField(
   settings: Record<string, unknown>,
@@ -326,7 +340,10 @@ export function textVarsByField(
 ): TextVars {
   const out: TextVars = {}
   for (const field of fields) {
-    out[field] = deviceTextStyleVars(settings, field) as React.CSSProperties
+    out[field] = {
+      'data-txt': '',
+      style: deviceTextStyleVars(settings, field) as React.CSSProperties,
+    }
   }
   return out
 }

@@ -10,14 +10,18 @@ export default function InstagramFeed({
   posts,
   heading,
   handle,
-  headingStyle,
+  headingProps,
   editable = false,
 }: {
   posts: InstagramPost[]
   heading: string | null
   handle: string | null
-  /** The heading's own typography, for every device at once. */
-  headingStyle?: React.CSSProperties
+  /**
+   * The heading's own typography, for every device at once. Props rather than
+   * a style object: the custom properties only become the `--txt-*` the
+   * stylesheet reads because of a rule keyed on `data-txt`.
+   */
+  headingProps?: { 'data-txt': string; style: React.CSSProperties }
   /** True only in the editor's preview. The handle comes from Settings, so it
    *  is not tagged — only the heading belongs to this section. */
   editable?: boolean
@@ -35,7 +39,7 @@ export default function InstagramFeed({
       <div className="ig-head">
         <h2
           className="ig-heading"
-          style={headingStyle}
+          {...headingProps}
           {...(editable ? { 'data-field': 'heading' } : {})}
         >
           {heading || 'Instagram'}

@@ -1,7 +1,6 @@
 'use client'
 
 import { ROWS, COLUMNS, describeSpot, type Spot, type SpotPair } from '@/lib/sections/spots'
-import SettingRow from '@/components/canvas/editors/SettingRow'
 import { BASE_DEVICE, type Device } from '@/lib/sections/devices'
 
 /**
@@ -62,20 +61,6 @@ export default function SpotPicker({
   const following = device !== BASE_DEVICE && pair.mobile === null
 
   return (
-    <SettingRow
-      icon={
-        <span className="spot-open-icon" aria-hidden>
-          <span
-            className="spot-open-dot"
-            data-row={current.split('-')[0]}
-            data-col={current.split('-')[1]}
-          />
-        </span>
-      }
-      name="Position"
-      summary={describeSpot(current)}
-      quiet={following}
-    >
       <div
         className="spot-pop"
         role="group"
@@ -113,6 +98,5 @@ export default function SpotPicker({
         )}
         <p className="spot-hint">Or drag it on the photograph.</p>
       </div>
-    </SettingRow>
   )
 }

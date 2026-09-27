@@ -1,4 +1,5 @@
 import { BASE_DEVICE, DEVICES, deviceKey } from '@/lib/sections/devices'
+import { PLACEABLE } from '@/lib/sections/spots'
 
 /**
  * THE SECTION CONTRACT
@@ -303,11 +304,7 @@ export const SECTIONS: Record<string, SectionDef> = {
        * does not carry a placement across, unlike the words themselves.
        */
       { key: 'title', label: 'Title', kind: 'text', content: true, textStyle: true },
-      { key: 'title_spot', label: 'Title position', kind: 'custom', editor: 'spot',
-        note: 'Where the title sits on the photograph, on the size you are editing.' },
       { key: 'subtitle', label: 'Sub-heading', kind: 'text', content: true, textStyle: true },
-      { key: 'subtitle_spot', label: 'Sub-heading position', kind: 'custom', editor: 'spot',
-        note: 'Where the line under the title sits, on the size you are editing.' },
       {
         key: 'cta_label',
         label: 'Button',
@@ -325,9 +322,6 @@ export const SECTIONS: Record<string, SectionDef> = {
         content: true,
         placeholder: '/trips',
       },
-      { key: 'cta_spot', label: 'Button position', kind: 'custom', editor: 'spot',
-        group: 'Button',
-        note: 'Where the button sits, on the size you are editing.' },
       /*
        * Still here, and only for the stories hero: HomeHero lays a featured
        * story's own title over its picture, and this is where that sits. It
@@ -1182,14 +1176,19 @@ function derivedDefaults(def: SectionDef): SectionSettings {
     out.shown = {}
   }
 
-  for (const field of def.fields) {
-    if (field.kind !== 'custom' || field.editor !== 'spot') continue
+  /*
+   * Placements. PLACEABLE is the list — a placement stopped being a field of
+   * its own when it became one of the three things the Customize panel does
+   * to a piece of text, and the drag has always read it from there.
+   */
+  for (const { key } of PLACEABLE) {
+    if (!(key in def.defaults)) continue
     for (const device of DEVICES) {
       if (device === BASE_DEVICE) continue
       // NULL, not a place: null means "still following the desktop", and a
       // place means "deliberately somewhere else". A default of
       // 'bottom-center' would make the two indistinguishable.
-      out[deviceKey(field.key, device)] = null
+      out[deviceKey(key, device)] = null
     }
   }
 

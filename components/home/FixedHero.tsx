@@ -74,8 +74,13 @@ export default function FixedHero({
   editable = false,
 }: FixedHeroProps) {
   const field = (key: string) => (editable ? { 'data-field': key } : {})
-  /** This piece of copy's own typography, for every device at once. */
-  const own = (key: string) => text[key]
+  /**
+   * This piece of copy's own typography, for every device at once — as PROPS,
+   * not a style object. The custom properties only become the `--txt-*` the
+   * stylesheet reads because of a rule keyed on `data-txt`, so the attribute
+   * travels with them and cannot be left off.
+   */
+  const own = (key: string) => text[key] ?? {}
   /** Only in the editor: what the drag picks up, and which setting it writes. */
   const grip = (settingKey: string) =>
     editable ? { 'data-spot-drag': settingKey, draggable: false } : {}
@@ -150,7 +155,7 @@ export default function FixedHero({
                         at && (
                           <h1
                             className="hero-fixed-title"
-                            style={own('title')}
+                            {...own('title')}
                             {...only(at)}
                             {...field('title')}
                             {...grip('title_spot')}
@@ -167,7 +172,7 @@ export default function FixedHero({
                         at && (
                           <p
                             className="hero-fixed-sub"
-                            style={own('subtitle')}
+                            {...own('subtitle')}
                             {...only(at)}
                             {...field('subtitle')}
                             {...grip('subtitle_spot')}
@@ -185,7 +190,7 @@ export default function FixedHero({
                           <Link
                             href={ctaHref as string}
                             className="hero-fixed-cta"
-                            style={own('cta_label')}
+                            {...own('cta_label')}
                             {...only(at)}
                             {...field('cta_label')}
                             {...grip('cta_spot')}

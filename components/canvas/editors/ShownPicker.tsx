@@ -1,6 +1,5 @@
 'use client'
 
-import SettingRow from '@/components/canvas/editors/SettingRow'
 import { SHOWN, SHOWN_LABEL, type Shown } from '@/lib/sections/shown'
 
 /**
@@ -22,8 +21,9 @@ import { SHOWN, SHOWN_LABEL, type Shown } from '@/lib/sections/shown'
  *
  * Every other control in the panel edits the size the editor is pointed at.
  * This one is ABOUT the sizes, so it has to show all of them at once — a
- * control that only offered "hide this here" would take three visits to say
- * something you can say in one word.
+ * control that only offered "hide this here" would take two visits to say
+ * something you can say in one word. It is the one tab of Customize that does
+ * not carry the size badge, for that reason.
  */
 export default function ShownPicker({
   value,
@@ -36,12 +36,6 @@ export default function ShownPicker({
   onChange: (next: Shown) => void
 }) {
   return (
-    <SettingRow
-      icon="◐"
-      name="Shown"
-      summary={SHOWN_LABEL[value]}
-      quiet={value === 'all'}
-    >
       <div className="shown-pop" role="group" aria-label={`Where ${label} appears`}>
         {SHOWN.map((option) => (
           <button
@@ -60,6 +54,5 @@ export default function ShownPicker({
           nothing reads it out or finds it in a search.
         </p>
       </div>
-    </SettingRow>
   )
 }

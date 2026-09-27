@@ -10,10 +10,11 @@ import SpotPicker from '@/components/canvas/editors/SpotPicker'
 import ShownPicker from '@/components/canvas/editors/ShownPicker'
 import MarkImage from '@/components/canvas/editors/MarkImage'
 import ImageField from '@/components/canvas/ImageField'
-import TextStylePanel from '@/components/canvas/editors/TextStylePanel'
+import TextStylePanel, { describeTextStyle } from '@/components/canvas/editors/TextStylePanel'
+import Customize from '@/components/canvas/editors/Customize'
 import DeviceSwitcher, { type PreviewDevice } from '@/components/canvas/DeviceSwitcher'
-import { spotPair } from '@/lib/sections/spots'
-import { shownBag, withShown, type Shown } from '@/lib/sections/shown'
+import { DEFAULT_SPOT, PLACEABLE, describeSpot, spotPair, type SpotPair } from '@/lib/sections/spots'
+import { SHOWN_LABEL, shownBag, withShown, type Shown } from '@/lib/sections/shown'
 import { SEC_VARS, ownStyle, sectionStyle, type TypeStyles } from '@/lib/type-styles'
 import {
   TEXT_VARS,
@@ -62,6 +63,44 @@ import type { CanvasSection } from '@/components/canvas/Canvas'
  * for the "Following (…)" labels in its panel, and nothing else. Anything not
  * listed reads as body text, which is the common case.
  */
+/**
+ * Has this piece of copy been PUT somewhere, as opposed to left where it
+ * started? On a phone, "put somewhere" means given a place of its own rather
+ * than following the desktop.
+ */
+function changedPlace(pair: SpotPair, device: Device): boolean {
+  return device === BASE_DEVICE ? pair.desktop !== DEFAULT_SPOT : pair.mobile !== null
+}
+
+/**
+ * The closed button's right-hand side: what has been done to this text, in a
+ * few words.
+ *
+ * One button now stands for three panels, so the summary has to cover all
+ * three without becoming a sentence. Typography first because it is what
+ * changes most, then the place, then where it appears — and capped at three
+ * parts, because a row that wraps has stopped being a row.
+ */
+function describeAll(
+  style: TextStyle | null,
+  followingFont: string,
+  pair: SpotPair | null,
+  seen: Shown,
+  device: Device
+): string {
+  const parts: string[] = []
+  if (style && Object.keys(style).length > 0) {
+    parts.push(...describeTextStyle(style, followingFont).split(' · '))
+  }
+  if (pair && changedPlace(pair, device)) {
+    parts.push(describeSpot(device === BASE_DEVICE ? pair.desktop : pair.effectiveMobile))
+  }
+  if (seen !== 'all') parts.push(SHOWN_LABEL[seen])
+
+  if (parts.length === 0) return 'Default'
+  return parts.slice(0, 3).join(' · ')
+}
+
 const HEADINGS = new Set(['title', 'heading'])
 const OVERLINES = new Set(['eyebrow', 'kicker', 'subheading'])
 
@@ -562,57 +601,108 @@ export default function Inspector({
                       color: own.bodyColor ?? styleBase.bodyColor,
                     }
 
+            /*
+             * THE PLACEMENT THAT BELONGS TO THIS TEXT, IF ANY.
+             *
+             * PLACEABLE maps each spot setting to the piece of copy it moves,
+             * and those settings are no longer fields of their own — a
+             * placement is one of three things you do to a piece of text, not
+             * a row sitting below it pretending to be unrelated.
+             */
+            const placeable = PLACEABLE.find((p) => p.field === field.key)
+            const pair = placeable ? spotPair(section.settings, placeable.key) : null
+            const seen = shownBag(section.settings)[field.key] ?? 'all'
+
             return (
-              <>
-              <TextStylePanel
+              <Customize
                 label={field.label}
                 device={editing}
                 deviceName={DEVICE_LABEL[editing]}
-                inheriting={
-                  editing !== BASE_DEVICE &&
-                  (currentBag(section.id, editing)[field.key] ?? null) === null &&
-                  stored !== null
+                summary={describeAll(shown, base.font, pair, seen, editing)}
+                quiet={shown === null && seen === 'all' && (pair === null || !changedPlace(pair, editing))}
+                type={
+                  <TextStylePanel
+                    label={field.label}
+                    device={editing}
+                    inheriting={
+                      editing !== BASE_DEVICE &&
+                      (currentBag(section.id, editing)[field.key] ?? null) === null &&
+                      stored !== null
+                    }
+                    value={shown}
+                    base={base}
+                    onChange={(next) => {
+                      // Painted on the page first: textStyleVars is what the
+                      // renderer writes, so setting the same properties to the
+                      // same values is the identity rather than a second
+                      // renderer. Every property this can set is sent on every
+                      // change, the unset ones as null, or clearing one would
+                      // leave the last value stranded until the re-render.
+                      const vars = textStyleVars(next)
+                      const all: Record<string, string | null> = {}
+                      for (const name of TEXT_VARS) all[name] = vars[name] ?? null
+                      onTextVars(
+                        section.id,
+                        field.key,
+                        all,
+                        next?.family ? [fontHref(next.family)] : []
+                      )
+                      saveTextStyle(section.id, field.key, next)
+                    }}
+                  />
                 }
-                value={shown}
-                base={base}
-                onChange={(next) => {
-                  // Painted on the page first: textStyleVars is what the
-                  // renderer writes, so setting the same properties to the
-                  // same values is the identity rather than a second renderer.
-                  // Every property this can set is sent on every change, the
-                  // unset ones as null, or clearing one would leave the last
-                  // value stranded on the element until the re-render.
-                  const vars = textStyleVars(next)
-                  const all: Record<string, string | null> = {}
-                  for (const name of TEXT_VARS) all[name] = vars[name] ?? null
-                  onTextVars(section.id, field.key, all, next?.family ? [fontHref(next.family)] : [])
-
-                  saveTextStyle(section.id, field.key, next)
-                }}
+                place={
+                  placeable && pair ? (
+                    <SpotPicker
+                      pair={pair}
+                      device={editing}
+                      deviceName={DEVICE_LABEL[editing]}
+                      label={field.label}
+                      onFollow={() => {
+                        // Null, not a place: following has to stay absent to
+                        // stay following. See `spotPair`.
+                        saveValues(section.id, { [deviceKey(placeable.key, editing)]: null })
+                        sendValues()
+                      }}
+                      onChange={(next) => {
+                        /*
+                         * Sent at once rather than on the usual debounce. The
+                         * element is moved by the server's render — the
+                         * preview cannot move it itself without re-parenting a
+                         * node React owns, which crashes the page — so the
+                         * round trip IS the feedback, and half a second of
+                         * debounce on top of it is what made this feel broken.
+                         */
+                        onMoveSpot(placeable.key, next)
+                        saveValues(section.id, { [deviceKey(placeable.key, editing)]: next })
+                        sendValues()
+                      }}
+                    />
+                  ) : undefined
+                }
+                shown={
+                  /*
+                   * Not governed by the switcher at the top, unlike the other
+                   * two: it is ABOUT the sizes, so it names all of them at
+                   * once rather than taking two visits to say one thing.
+                   *
+                   * Waits for the re-render rather than being painted live —
+                   * the element is being added to or removed from the page,
+                   * which is more than one property and so not something a
+                   * patch may express. See LiveSpec in the registry.
+                   */
+                  <ShownPicker
+                    label={field.label}
+                    value={seen}
+                    onChange={(next: Shown) => {
+                      saveValues(section.id, {
+                        shown: withShown(shownBag(section.settings), field.key, next),
+                      })
+                      sendValues()
+                    }}
+                  />
+                }
               />
-
-              {/*
-                * Which sizes this piece of text appears on. Not governed by
-                * the switcher at the top, unlike everything else here: it is
-                * ABOUT the sizes, so it names all of them at once rather than
-                * taking three visits to say one thing.
-                *
-                * Waits for the re-render rather than being painted live — the
-                * element is being added to or removed from the page, which is
-                * more than one property and so not something a patch may
-                * express. See LiveSpec in the registry.
-                */}
-              <ShownPicker
-                label={field.label}
-                value={shownBag(section.settings)[field.key] ?? 'all'}
-                onChange={(next: Shown) => {
-                  saveValues(section.id, {
-                    shown: withShown(shownBag(section.settings), field.key, next),
-                  })
-                  sendValues()
-                }}
-              />
-              </>
             )
           }}
           renderImage={(field: Field, value: unknown, set) => (

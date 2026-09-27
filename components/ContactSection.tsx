@@ -43,28 +43,32 @@ export default function ContactSection({
   editable?: boolean
 }) {
   const field = (key: string) => (editable ? { 'data-field': key } : {})
-  /** This piece of writing's own typography, for every device at once. */
-  const own = (key: string) => text[key]
+  /**
+   * This piece of writing's own typography, for every device at once — as
+   * PROPS, not a style object: the custom properties only become the
+   * `--txt-*` the stylesheet reads because of a rule keyed on `data-txt`.
+   */
+  const own = (key: string) => text[key] ?? {}
 
   // The words, the form and the direct links — the same in both layouts, so
   // they are written once.
   const words = (
     <>
       {(settings.eyebrow || editable) && (
-        <p className="contact-eyebrow" style={own('eyebrow')} {...field('eyebrow')}>
+        <p className="contact-eyebrow" {...own('eyebrow')} {...field('eyebrow')}>
           {settings.eyebrow}
         </p>
       )}
-      <h2 className="contact-heading" style={own('heading')} {...field('heading')}>
+      <h2 className="contact-heading" {...own('heading')} {...field('heading')}>
         {settings.heading || 'Let’s connect'}
       </h2>
       {(settings.intro || editable) && (
-        <p className="contact-copy" style={own('intro')} {...field('intro')}>
+        <p className="contact-copy" {...own('intro')} {...field('intro')}>
           {settings.intro}
         </p>
       )}
 
-      <ContactForm note={settings.note} noteStyle={own('note')} editable={editable} />
+      <ContactForm note={settings.note} noteProps={own('note')} editable={editable} />
 
       <div className="contact-direct">
         {settings.instagramUrl && (
@@ -140,7 +144,7 @@ export default function ContactSection({
           {settings.tagline && (
             <div className="contact-media-caption">
               <span className="contact-media-rule" />
-              <p style={own('tagline')} {...field('tagline')}>
+              <p {...own('tagline')} {...field('tagline')}>
                 {settings.tagline}
               </p>
             </div>

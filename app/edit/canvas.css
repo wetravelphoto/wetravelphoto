@@ -2489,12 +2489,14 @@
   gap: 0.4rem;
   width: 100%;
   margin: 0;
-  padding: 0.2rem 0;
+  /* Tall enough to hit without aiming. */
+  min-height: 28px;
+  padding: 0.25rem 0;
   border: 0;
   background: transparent;
   color: var(--cv-mute);
   font: inherit;
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2506,12 +2508,18 @@
   color: var(--cv-soft);
 }
 
+/* The thing you click to open a group, so it has to be findable. It was a 9px
+   glyph at 0.55rem in the muted ink — technically present, practically not. */
 .cv-fold-arrow {
   display: inline-block;
-  width: 9px;
-  font-size: 0.55rem;
+  width: 14px;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--cv-soft);
   transition: transform 0.12s ease;
 }
+
+.cv-fold:hover .cv-fold-arrow { color: var(--cv-ink); }
 
 .cv-fold[aria-expanded='false'] .cv-fold-arrow {
   transform: rotate(-90deg);
@@ -2519,11 +2527,13 @@
 
 .cv-fold-count {
   margin-left: auto;
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--cv-line);
+  /* Was --cv-line, which is a BORDER colour: nearly invisible on the panel it
+     sat on, because that is its job everywhere else. */
+  color: var(--cv-mute);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2891,6 +2901,102 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* ---------------- Customize: three panels behind one button ------------- */
+
+.cz-pop {
+  max-height: min(64vh, 480px);
+  overflow-y: auto;
+  padding: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: #1c1d21;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.cz-head { margin-bottom: 0.45rem; }
+
+.cz-title {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+/* Which size these controls are editing. Visibility is the exception and says
+   so itself — it is about the sizes rather than set per size. */
+.cz-device {
+  margin-left: 0.4rem;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--cv-accent, #b5602c);
+  color: #fff;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  vertical-align: 1px;
+}
+
+/* Always all three, so the panel says what it contains before it is explored
+   and says where you are once you are in it. */
+.cz-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 0.5rem;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cz-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cv-mute);
+  font: inherit;
+  font-size: 0.66rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cz-tab:hover { color: var(--cv-ink); }
+
+.cz-tab[data-on='true'] {
+  background: var(--cv-panel-2, #212429);
+  color: var(--cv-ink);
+}
+
+.cz-tab svg { flex: 0 0 auto; }
+
+/* The panels inside no longer float — their wrapper does — so they fill it. */
+.cz-body > .txt-pop,
+.cz-body > .spot-pop,
+.cz-body > .shown-pop {
+  max-height: none;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.cz-body > .spot-pop {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+
+.cz-body > .shown-pop { display: grid; gap: 3px; }
 
 /* ---------------- one piece of text's own typography ---------------- */
 

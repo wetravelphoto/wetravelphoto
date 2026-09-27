@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { FONT_NAMES } from '@/lib/styles/tokens'
-import SettingRow from '@/components/canvas/editors/SettingRow'
 import { BASE_DEVICE, type Device } from '@/lib/sections/devices'
 import {
   ALIGNS,
@@ -52,7 +51,6 @@ export default function TextStylePanel({
   /** What this text looks like when it follows: shown, never stored. */
   base,
   device,
-  deviceName,
   inheriting,
   onChange,
 }: {
@@ -68,7 +66,6 @@ export default function TextStylePanel({
   base: { font: string; color: string }
   /** Which size these controls are editing. Set by the switcher at the top. */
   device: Device
-  deviceName: string
   /** True when this size has no values of its own and is showing desktop's. */
   inheriting: boolean
   /** The complete new style, or null to follow again. */
@@ -100,23 +97,9 @@ export default function TextStylePanel({
   const set = Object.keys(local).length
 
   return (
-    <SettingRow
-      icon="Aa"
-      name="Typography"
-      summary={describe(local, base.font)}
-      quiet={set === 0}
-    >
-      <div
-        className="txt-pop"
-        role="group"
-        aria-label={`Typography for ${label} on ${deviceName.toLowerCase()}`}
-      >
-        <div className="txt-pop-head">
-          <p className="txt-pop-title">
-            {label}
-            {device !== BASE_DEVICE && <span className="txt-pop-device">{deviceName}</span>}
-          </p>
-          {set > 0 && (
+      <div className="txt-pop" role="group" aria-label={`Typography for ${label}`}>
+        {set > 0 && (
+          <div className="txt-pop-head">
             <button
               type="button"
               className="txt-clear"
@@ -127,8 +110,8 @@ export default function TextStylePanel({
             >
               {device === BASE_DEVICE ? 'Back to the look' : 'Back to desktop'}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/*
           * Said plainly rather than left to be discovered. Somebody editing
@@ -270,7 +253,6 @@ export default function TextStylePanel({
           </div>
         </Block>
       </div>
-    </SettingRow>
   )
 }
 
@@ -287,7 +269,7 @@ export default function TextStylePanel({
  * hidden, so a title whose only change is its alignment reads "Right" and not
  * the useless "Adjusted".
  */
-function describe(style: TextStyle, followingFont: string): string {
+export function describeTextStyle(style: TextStyle, followingFont: string): string {
   if (Object.keys(style).length === 0) {
     // Naming what it follows is more use than "Default": it answers "what
     // typeface is this?" without opening anything.

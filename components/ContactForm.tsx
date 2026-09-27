@@ -6,12 +6,17 @@ import Turnstile from '@/components/Turnstile'
 
 export default function ContactForm({
   note,
-  noteStyle,
+  noteProps,
   editable = false,
 }: {
   note?: string | null
-  /** The note's own typography, chosen beside its box in the editor. */
-  noteStyle?: React.CSSProperties
+  /**
+   * The note's own typography, for every device at once. Props rather than a
+   * style object: the custom properties only become the `--txt-*` the
+   * stylesheet reads because of a rule keyed on `data-txt`, so the two
+   * travel together.
+   */
+  noteProps?: { 'data-txt': string; style: React.CSSProperties }
   /** True only in the editor's preview, so the note can be selected on its own. */
   editable?: boolean
 }) {
@@ -81,7 +86,7 @@ export default function ContactForm({
         {note && (
           <span
             className="contact-note"
-            style={noteStyle}
+            {...noteProps}
             {...(editable ? { 'data-field': 'note' } : {})}
           >
             {note}

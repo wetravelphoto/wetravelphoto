@@ -64,8 +64,13 @@ export default function HomeHero({
   shownOn?: Record<string, Shown>
   styleVars?: React.CSSProperties
 }) {
-  /** This piece of copy's own typography, for every device at once. */
-  const own = (key: string) => text[key]
+  /**
+   * This piece of copy's own typography, for every device at once — as PROPS,
+   * not a style object. The custom properties only become the `--txt-*` the
+   * stylesheet reads because of a rule keyed on `data-txt`, so the attribute
+   * travels with them and cannot be left off.
+   */
+  const own = (key: string) => text[key] ?? {}
   /** Absent unless this piece is for one size only. See app/hero.css. */
   const only = (field: string) => {
     const sizes = sizesFor(shownOn[field] ?? 'all')
@@ -167,7 +172,7 @@ export default function HomeHero({
           {(overlayTitle || editable) && (
             <p
               className="hero-fixed-title"
-              style={own('title')}
+              {...own('title')}
               {...only('title')}
               {...(editable ? { 'data-field': 'title' } : {})}
             >
@@ -177,7 +182,7 @@ export default function HomeHero({
           {(overlaySubtitle || editable) && (
             <p
               className="hero-fixed-sub"
-              style={own('subtitle')}
+              {...own('subtitle')}
               {...only('subtitle')}
               {...(editable ? { 'data-field': 'subtitle' } : {})}
             >
@@ -188,7 +193,7 @@ export default function HomeHero({
             <Link
               href={ctaHref}
               className="hero-fixed-cta"
-              style={own('cta_label')}
+              {...own('cta_label')}
               {...only('cta_label')}
               {...(editable ? { 'data-field': 'cta_label' } : {})}
             >

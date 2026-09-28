@@ -31,6 +31,7 @@ import './scenes.css'
 // to revert. See the note at the top of it.
 import './workspace.css'
 import './pages-board.css'
+import './overview.css'
 
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

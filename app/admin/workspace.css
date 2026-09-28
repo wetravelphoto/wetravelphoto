@@ -85,8 +85,20 @@
   --ad-control-lg: 40px;
   --ad-rail: 236px;
 
-  display: grid;
-  grid-template-columns: var(--ad-rail) minmax(0, 1fr);
+  /*
+   * ── A ROW, NOT A TWO-COLUMN GRID ──────────────────────────────────────────
+   *
+   * It was `grid-template-columns: var(--ad-rail) 1fr`, which is the same
+   * layout while both children are present and a trap when they are not: the
+   * grid still reserves the rail's column, so anything that stops the rail
+   * rendering — a stale build, a failed import, the drawer breakpoint taking
+   * it out of flow — leaves the whole workspace squeezed into a 236px column
+   * with no clue as to why.
+   *
+   * A flex row cannot do that. The rail takes its width when it is there, and
+   * the screen takes everything when it is not.
+   */
+  display: flex;
   min-height: 100vh;
   background: var(--admin-bg);
   color: var(--admin-ink);
@@ -115,6 +127,9 @@
    its own height and nothing has to be told how tall it is. */
 
 .admin-main {
+  /* `min-width: 0` is what lets it shrink below its content — without it a
+     wide table inside pushes the rail off the side. */
+  flex: 1;
   min-width: 0;
   padding: 0;
   display: flex;
@@ -265,6 +280,7 @@
    two things that never move. */
 
 .ad-rail {
+  flex: 0 0 var(--ad-rail);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -549,7 +565,6 @@ button.ad-site:hover { background: var(--admin-hover); }
 .ad-rail-scrim { display: none; }
 
 @media (max-width: 860px) {
-  .admin-shell { grid-template-columns: minmax(0, 1fr); }
 
   .ad-rail {
     position: fixed;

@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Icon from '@/components/admin/Icon'
+import PageThumb from '@/components/admin/PageThumb'
 import {
   STATE_DOT,
   STATE_LABEL,
@@ -43,10 +44,6 @@ import {
  * which is a real menu drawn a few pixels above it.
  */
 
-/** The width the miniature is rendered at, before it is scaled down. */
-const SHOT_WIDTH = 1280
-const SHOT_HEIGHT = 800
-
 export default function PageCard({
   page,
   /** Rename this page. Absent for a built-in page, which cannot be renamed. */
@@ -60,32 +57,7 @@ export default function PageCard({
   view: 'grid' | 'list'
 }) {
   const [menu, setMenu] = useState(false)
-  const [shot, setShot] = useState<'waiting' | 'ready' | 'failed'>('waiting')
   const box = useRef<HTMLDivElement>(null)
-
-  /*
-   * ── HOW FAR DOWN THE MINIATURE IS SHRUNK ──────────────────────────────────
-   *
-   * The page is rendered at a desktop width and scaled to fit the card, so the
-   * miniature has the page's real proportions rather than its phone layout.
-   * The factor is the card's width over that desktop width, and it has to be
-   * measured because the card is a grid cell whose width is not known until
-   * the grid is laid out.
-   *
-   * It looks like a job for a container query — `scale(calc(100cqw / 1280))` —
-   * and it is not: `scale()` takes a NUMBER, that expression is a LENGTH, and
-   * CSS has no way to divide one length by another. The whole transform is
-   * then invalid and the iframe draws at full size, showing the top-left
-   * corner of the page and nothing else. Which is exactly what it did.
-   */
-  const frame = useCallback((el: HTMLDivElement | null) => {
-    if (!el) return
-    const fit = () => el.style.setProperty('--pc-scale', String(el.clientWidth / SHOT_WIDTH))
-    fit()
-    const watch = new ResizeObserver(fit)
-    watch.observe(el)
-    return () => watch.disconnect()
-  }, [])
 
   useEffect(() => {
     if (!menu) return
@@ -103,29 +75,7 @@ export default function PageCard({
 
   const preview = (
     <Link href={page.editHref} className="pc-shot" aria-label={`Open the editor for ${page.label}`}>
-      <div className="pc-frame" ref={frame}>
-        {shot !== 'ready' && (
-          <div className="pc-skeleton" aria-hidden>
-            {shot === 'failed' && (
-              <span className="pc-skeleton-note">Preview unavailable</span>
-            )}
-          </div>
-        )}
-
-        <iframe
-            className="pc-iframe"
-            src={`/preview/${page.key}?thumb=1`}
-            title=""
-            aria-hidden="true"
-            tabIndex={-1}
-            loading="lazy"
-            width={SHOT_WIDTH}
-            height={SHOT_HEIGHT}
-            data-ready={shot === 'ready' || undefined}
-            onLoad={() => setShot('ready')}
-            onError={() => setShot('failed')}
-          />
-      </div>
+      <PageThumb page={page.key} />
 
       {/* Looks like a button, is not one: a button inside a link is a control
           whose behaviour depends on which pixel you hit. */}

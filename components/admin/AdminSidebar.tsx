@@ -106,8 +106,11 @@ const FOOT: Item[] = [
  * which is how its owner would abbreviate it, and not GP, which is how a
  * naive first-and-last rule abbreviates it.
  */
-function initials(name: string): string {
-  const parts = name.replace(/@.*$/, '').split(/[.\s_-]+/).filter(Boolean)
+function initials(name: string | null | undefined): string {
+  // Never throws. It is called from inside the render of a component that
+  // wraps every admin screen, so a missing name here would take the whole
+  // workspace down rather than draw one empty circle.
+  const parts = (name ?? '').replace(/@.*$/, '').split(/[.\s_-]+/).filter(Boolean)
   if (parts.length === 0) return '?'
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
   return (parts[0][0] + parts[1][0]).toUpperCase()
@@ -117,7 +120,7 @@ export default function AdminSidebar({
   email,
   unreadCount = 0,
   platformAdmin = false,
-  siteName,
+  siteName = '',
   siteLogoUrl = null,
   role,
   open = false,
@@ -127,7 +130,7 @@ export default function AdminSidebar({
   /** Real unread messages. Zero draws nothing — see the badge below. */
   unreadCount?: number
   platformAdmin?: boolean
-  siteName: string
+  siteName?: string
   siteLogoUrl?: string | null
   /** owner / admin / editor. There are no plans in this build, so this is the
       only true thing to put in the badge's place. */
@@ -245,7 +248,7 @@ export default function AdminSidebar({
                 initials(siteName)
               )}
             </span>
-            <span className="ad-site-name">{siteName}</span>
+            <span className="ad-site-name">{siteName || 'Your site'}</span>
             <Icon name="chevron-down" size={14} className="ad-site-chev" />
           </Link>
         ) : (
@@ -258,7 +261,7 @@ export default function AdminSidebar({
                 initials(siteName)
               )}
             </span>
-            <span className="ad-site-name">{siteName}</span>
+            <span className="ad-site-name">{siteName || 'Your site'}</span>
           </div>
         )}
       </div>

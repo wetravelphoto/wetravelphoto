@@ -285,3 +285,23 @@ span[data-field]:empty {
   transition: none !important;
   scroll-behavior: auto !important;
 }
+
+/*
+ * A miniature does not scroll, so it must not offer to.
+ *
+ * The frame shows the top of a page that is taller than the frame — that is
+ * the crop, and it is deliberate. But the iframe is a scrolling container, so
+ * the browser drew it a scrollbar: a grey stripe down the right of every card,
+ * over the photograph, pointing at an interaction that cannot happen (nothing
+ * in thumb mode takes a pointer event).
+ */
+.pv-root[data-thumb] { overflow: hidden; }
+
+html:has(> body > .pv-root[data-thumb]),
+body:has(> .pv-root[data-thumb]) {
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+html:has(> body > .pv-root[data-thumb])::-webkit-scrollbar,
+body:has(> .pv-root[data-thumb])::-webkit-scrollbar { display: none; }

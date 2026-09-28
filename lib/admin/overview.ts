@@ -148,55 +148,75 @@ export async function audience(tenantId: string, days: Window): Promise<Audience
   }
 }
 
-/** The galleries and stories touched most recently, newest first. */
+/**
+ * The galleries and stories touched most recently, newest first.
+ *
+ * ── Two plain queries, and the counting done here ───────────────────────────
+ *
+ * The first version asked for the albums with `photos(id)` embedded, to get
+ * the photo count in one round trip. PostgREST answers an embed it cannot
+ * resolve — a relationship it does not see, a policy that blocks the child —
+ * with an ERROR for the whole request, not with an album and no photos. So a
+ * site with a gallery showed none, and the panel read "nothing yet" to
+ * somebody looking at a gallery they had just made. The old dashboard had the
+ * same embed and the same hole.
+ *
+ * Two flat selects cannot fail that way, and the tally is arithmetic.
+ *
+ * Ordering is done here too: `updated_at` is null on a row nobody has edited
+ * since it was made, and where the database puts nulls in an ordering is not
+ * something worth depending on. Sorted on "whichever of the two it has".
+ */
 export async function recentContent(tenantId: string, limit = 4): Promise<RecentItem[]> {
   const supabase = await createClient()
 
-  const [albums, posts] = await Promise.all([
-    supabase
-      .from('albums')
-      .select('id, title, slug, privacy_type, updated_at, cover_photo_id, cover_custom_path, photos(id)')
-      .eq('tenant_id', tenantId)
-      .order('updated_at', { ascending: false })
-      .limit(limit),
+  const [albums, posts, photos] = await Promise.all([
+    supabase.from('albums').select('*').eq('tenant_id', tenantId).limit(40),
     supabase
       .from('blog_posts')
-      .select('id, title, status, updated_at, featured_custom_path')
+      .select('id, title, status, updated_at, created_at, featured_custom_path')
       .eq('tenant_id', tenantId)
-      .order('updated_at', { ascending: false })
-      .limit(limit),
+      .limit(40),
+    supabase.from('photos').select('album_id').eq('tenant_id', tenantId).limit(5000),
   ])
 
+  /** How many photographs each gallery has. */
+  const counts = new Map<string, number>()
+  for (const photo of photos.data ?? []) {
+    const key = photo.album_id as string | null
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+
+  const rows = (albums.data ?? []) as Record<string, unknown>[]
   const { attachCovers } = await import('@/lib/album-covers')
   const withCovers = await attachCovers(
-    (albums.data ?? []) as unknown as {
-      id: string
-      cover_photo_id: string | null
-      cover_custom_path: string | null
-    }[]
+    rows as unknown as { id: string; cover_photo_id: string | null; cover_custom_path: string | null }[]
   )
   const coverById = new Map(withCovers.map((a) => [a.id, a.coverUrl]))
 
-  const galleries: RecentItem[] = (albums.data ?? []).map((a) => {
-    const count = (a.photos as { id: string }[] | null)?.length ?? 0
-    const isSample = a.slug === SAMPLE_ALBUM_SLUG
+  const when = (row: { updated_at?: unknown; created_at?: unknown }) =>
+    (row.updated_at as string) || (row.created_at as string) || ''
+
+  const galleries: RecentItem[] = rows.map((a) => {
+    const id = a.id as string
+    const count = counts.get(id) ?? 0
     return {
-      id: a.id,
-      title: a.title,
+      id,
+      title: (a.title as string) || 'Untitled gallery',
       kind: 'gallery',
-      href: `/admin/trips/${a.id}`,
+      href: `/admin/trips/${id}`,
       note: `Gallery · ${count} ${count === 1 ? 'photo' : 'photos'}`,
-      thumbUrl: coverById.get(a.id) ?? null,
+      thumbUrl: coverById.get(id) ?? null,
       state: a.privacy_type === 'public' ? 'live' : 'idle',
       stateLabel: a.privacy_type === 'public' ? 'Public' : 'Private',
-      sample: isSample,
-      updatedAt: a.updated_at,
+      sample: a.slug === SAMPLE_ALBUM_SLUG,
+      updatedAt: when(a) || null,
     }
   })
 
   const stories: RecentItem[] = (posts.data ?? []).map((p) => ({
     id: p.id,
-    title: p.title,
+    title: p.title || 'Untitled story',
     kind: 'story',
     href: `/admin/journal/${p.id}`,
     note: 'Journal',
@@ -204,7 +224,7 @@ export async function recentContent(tenantId: string, limit = 4): Promise<Recent
     state: p.status === 'published' ? 'live' : 'idle',
     stateLabel: p.status === 'published' ? 'Published' : 'Draft',
     sample: false,
-    updatedAt: p.updated_at,
+    updatedAt: when(p) || null,
   }))
 
   return [...galleries, ...stories]

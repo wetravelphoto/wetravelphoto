@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { requireEditor } from '@/lib/auth'
+import { currentUser, requireEditor } from '@/lib/auth'
 import { getSiteSettings } from '@/lib/site'
 import { currentSite } from '@/lib/tenant'
 import { PLATFORM } from '@/lib/platform'
@@ -26,7 +26,7 @@ export default async function AdminDashboard({
   const supabase = await createClient()
   const days = windowOf((await searchParams)?.days)
 
-  const [guide, settings, site, draft, seen, recent, unread] = await Promise.all([
+  const [guide, settings, site, draft, seen, recent, unread, user] = await Promise.all([
     startHere(tenantId),
     getSiteSettings(),
     currentSite(),
@@ -38,6 +38,7 @@ export default async function AdminDashboard({
       .select('id', { count: 'exact', head: true })
       .eq('tenant_id', tenantId)
       .eq('is_read', false),
+    currentUser(),
   ])
 
   const host = site?.primaryHost ?? null
@@ -83,8 +84,22 @@ export default async function AdminDashboard({
     },
   ]
 
-  /** What to call them. Their own name if the site has one, else the account. */
-  const firstName = (settings.owner_name || '').trim().split(/\s+/)[0] || 'there'
+  /*
+   * ── WHAT TO CALL THEM ─────────────────────────────────────────────────────
+   *
+   * Their own name, then the name on the account, and then NOTHING — the
+   * greeting drops the name rather than inventing one. The first version fell
+   * back to "there", and a site whose owner name had not been filled in was
+   * greeted every morning with "Welcome back, there."
+   *
+   * A name is either known or it is not. "Welcome back." is a complete
+   * sentence; "Welcome back, there." is a form letter with a missing field
+   * showing.
+   */
+  const fromSettings = (settings.owner_name || '').trim().split(/\s+/)[0]
+  const fromAccount = (user?.email ?? '').split('@')[0].split(/[.\-_]/)[0]
+  const named = fromSettings || fromAccount || null
+  const firstName = named ? named.charAt(0).toUpperCase() + named.slice(1) : null
 
   return (
     <Overview

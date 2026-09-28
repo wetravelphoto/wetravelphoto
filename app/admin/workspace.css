@@ -672,3 +672,28 @@ button.ad-site:hover { background: var(--admin-hover); }
   align-items: center;
   gap: var(--ad-2);
 }
+
+/*
+ * ── FOR A SCREEN READER, AND NOT FOR A SCREEN ───────────────────────────────
+ *
+ * The admin had no rule for this. The editor did (app/edit/canvas.css), and
+ * the markup borrowed its class name — so every label meant only for a screen
+ * reader was drawn on the page: "How far back" beside the date picker, and
+ * "Website published" a second time at the end of its own row.
+ *
+ * Clipped rather than hidden: `display: none` and `visibility: hidden` take an
+ * element out of the accessibility tree as well, which removes the only reason
+ * it exists.
+ */
+.cv-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

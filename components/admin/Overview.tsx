@@ -44,7 +44,9 @@ export default function Overview({
   unread,
   essentials,
 }: {
-  firstName: string
+  /** Null when nothing on file says what to call them — the greeting then
+      drops the name rather than inventing one. */
+  firstName: string | null
   siteName: string
   host: string | null
   hasDraft: boolean
@@ -62,7 +64,7 @@ export default function Overview({
     <div className="ov">
       <header className="pb-head">
         <div className="pb-head-words">
-          <h1 className="pb-title">Welcome back, {firstName}.</h1>
+          <h1 className="pb-title">{firstName ? `Welcome back, ${firstName}.` : 'Welcome back.'}</h1>
           <p className="pb-sub">Your work, your website, and what’s next.</p>
         </div>
 
@@ -276,8 +278,15 @@ export default function Overview({
                   <span className="pc-name">{item.label}</span>
                   <span className="pc-path">{item.detail}</span>
                 </span>
-                <Link href={item.href} className="ov-essential-go">
-                  {item.done ? <span className="cv-sr">{item.label}</span> : item.cta}
+                {/* Done: the chevron alone, with the name on the LINK rather
+                    than in a span inside it — one element, one name, and
+                    nothing that becomes visible if a stylesheet goes missing. */}
+                <Link
+                  href={item.href}
+                  className="ov-essential-go"
+                  aria-label={item.done ? item.label : undefined}
+                >
+                  {!item.done && item.cta}
                   <Icon name="chevron-right" size={14} />
                 </Link>
               </li>

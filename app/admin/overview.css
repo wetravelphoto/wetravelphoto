@@ -17,8 +17,8 @@
 .ov-top {
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
-  gap: var(--ad-5);
-  margin-bottom: var(--ad-8);
+  gap: var(--lg-5);
+  margin-bottom: var(--lg-8);
 }
 
 /* With the checklist finished and gone, the site takes the whole row rather
@@ -33,19 +33,19 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--admin-line);
-  border-radius: var(--ad-radius-lg);
+  border-radius: var(--lg-radius-lg);
   background: var(--admin-panel);
-  box-shadow: var(--ad-shadow);
+  box-shadow: var(--lg-shadow);
 }
 
-.ov-site-shot { border-radius: var(--ad-radius-lg) var(--ad-radius-lg) 0 0; overflow: hidden; }
+.ov-site-shot { border-radius: var(--lg-radius-lg) var(--lg-radius-lg) 0 0; overflow: hidden; }
 
 /* The checklist is as tall as it needs to be. Stretching it to match the site
    card beside it leaves a panel that is mostly empty space, which reads as
    something missing rather than as something finished. */
 .ov-steps { align-self: start; }
 
-.ov-site-foot { padding: 12px var(--ad-4); gap: var(--ad-3); }
+.ov-site-foot { padding: 12px var(--lg-4); gap: var(--lg-3); }
 
 .ov-site-host {
   display: inline-flex;
@@ -66,18 +66,18 @@
 
 .ov-panel {
   border: 1px solid var(--admin-line);
-  border-radius: var(--ad-radius-lg);
+  border-radius: var(--lg-radius-lg);
   background: var(--admin-panel);
-  box-shadow: var(--ad-shadow);
-  padding: var(--ad-5);
+  box-shadow: var(--lg-shadow);
+  padding: var(--lg-5);
 }
 
 .ov-panel-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--ad-3);
-  margin-bottom: var(--ad-4);
+  gap: var(--lg-3);
+  margin-bottom: var(--lg-4);
 }
 
 .ov-h2 {
@@ -108,7 +108,7 @@
 
 .ov-bar {
   height: 4px;
-  margin-bottom: var(--ad-5);
+  margin-bottom: var(--lg-5);
   border-radius: 2px;
   background: var(--admin-selected);
   overflow: hidden;
@@ -128,7 +128,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: var(--ad-3) 0;
+  padding: var(--lg-3) 0;
 }
 
 .ov-steps-list li + li { border-top: 1px solid var(--admin-line); }
@@ -178,8 +178,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ad-4);
-  margin-bottom: var(--ad-4);
+  gap: var(--lg-4);
+  margin-bottom: var(--lg-4);
 }
 
 .ov-window {
@@ -190,10 +190,10 @@
 
 .ov-window select {
   appearance: none;
-  height: var(--ad-control);
+  height: var(--lg-control);
   padding: 0 32px 0 12px;
   border: 1px solid var(--admin-line-strong);
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: var(--admin-panel);
   font-family: var(--admin-font);
   font-size: 13px;
@@ -211,8 +211,8 @@
 .ov-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--ad-4);
-  margin-bottom: var(--ad-8);
+  gap: var(--lg-4);
+  margin-bottom: var(--lg-8);
 }
 
 @media (max-width: 1080px) {
@@ -226,8 +226,8 @@
 .ov-stat {
   display: flex;
   align-items: flex-start;
-  gap: var(--ad-3);
-  padding: var(--ad-4);
+  gap: var(--lg-3);
+  padding: var(--lg-4);
 }
 
 a.ov-stat:hover { border-color: var(--admin-line-strong); }
@@ -238,7 +238,7 @@ a.ov-stat:hover { border-color: var(--admin-line-strong); }
   width: 34px;
   height: 34px;
   flex-shrink: 0;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: var(--admin-hover);
   color: var(--admin-soft);
 }
@@ -267,7 +267,7 @@ a.ov-stat:hover { border-color: var(--admin-line-strong); }
 .ov-split {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  gap: var(--ad-5);
+  gap: var(--lg-5);
 }
 
 @media (max-width: 1080px) {
@@ -281,14 +281,14 @@ a.ov-stat:hover { border-color: var(--admin-line-strong); }
 .ov-essentials li {
   display: flex;
   align-items: center;
-  gap: var(--ad-3);
+  gap: var(--lg-3);
   padding: 10px 0;
 }
 
 .ov-recent li + li,
 .ov-essentials li + li { border-top: 1px solid var(--admin-line); }
 
-.ov-recent-link { display: flex; align-items: center; gap: var(--ad-3); flex: 1; min-width: 0; }
+.ov-recent-link { display: flex; align-items: center; gap: var(--lg-3); flex: 1; min-width: 0; }
 
 .ov-thumb {
   display: grid;
@@ -296,7 +296,7 @@ a.ov-stat:hover { border-color: var(--admin-line-strong); }
   width: 64px;
   height: 42px;
   flex-shrink: 0;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: var(--admin-hover);
   color: var(--admin-mute);
   overflow: hidden;
@@ -334,11 +334,11 @@ a.ov-stat:hover { border-color: var(--admin-line-strong); }
 .ov-foot {
   display: flex;
   align-items: center;
-  gap: var(--ad-2);
-  margin: var(--ad-5) 0 0;
-  padding: 12px var(--ad-4);
+  gap: var(--lg-2);
+  margin: var(--lg-5) 0 0;
+  padding: 12px var(--lg-4);
   border: 1px solid var(--admin-line);
-  border-radius: var(--ad-radius);
+  border-radius: var(--lg-radius);
   background: var(--admin-panel);
   font-size: 13px;
   color: var(--admin-soft);

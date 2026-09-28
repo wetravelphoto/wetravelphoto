@@ -105,10 +105,10 @@ export default function PageCard({
           {STATE_LABEL[page.state]}
         </span>
 
-        <div className="ad-menu-wrap">
+        <div className="lg-menu-wrap">
           <button
             type="button"
-            className="ad-ico pc-more"
+            className="lg-ico pc-more"
             aria-label={`Actions for ${page.label}`}
             aria-haspopup="menu"
             aria-expanded={menu}
@@ -118,8 +118,8 @@ export default function PageCard({
           </button>
 
           {menu && (
-            <div className="ad-menu" data-at="down-end" role="menu">
-              <Link href={page.editHref} className="ad-menu-item" role="menuitem">
+            <div className="lg-menu" data-at="down-end" role="menu">
+              <Link href={page.editHref} className="lg-menu-item" role="menuitem">
                 <Icon name="design" size={15} />
                 Open editor
               </Link>
@@ -127,7 +127,7 @@ export default function PageCard({
               {onRename && (
                 <button
                   type="button"
-                  className="ad-menu-item"
+                  className="lg-menu-item"
                   role="menuitem"
                   onClick={() => {
                     setMenu(false)
@@ -144,7 +144,7 @@ export default function PageCard({
                 * editor, which is where this goes — rather than a second
                 * screen that would be a second place to keep in step.
                 */}
-              <Link href={`${page.editHref}?panel=seo`} className="ad-menu-item" role="menuitem">
+              <Link href={`${page.editHref}?panel=seo`} className="lg-menu-item" role="menuitem">
                 <Icon name="settings" size={15} />
                 Page settings
               </Link>
@@ -154,7 +154,7 @@ export default function PageCard({
                   href={page.path}
                   target="_blank"
                   rel="noreferrer"
-                  className="ad-menu-item"
+                  className="lg-menu-item"
                   role="menuitem"
                 >
                   <Icon name="external" size={15} />
@@ -164,10 +164,10 @@ export default function PageCard({
 
               {onDelete && (
                 <>
-                  <div className="ad-menu-sep" />
+                  <div className="lg-menu-sep" />
                   <button
                     type="button"
-                    className="ad-menu-item"
+                    className="lg-menu-item"
                     role="menuitem"
                     data-danger
                     onClick={() => {

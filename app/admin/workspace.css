@@ -64,31 +64,31 @@
   /* Eight, with four where eight is too much. Written down so a new screen
      does not have to guess, and so "a bit more room" is a token and not a
      number somebody invented at 2am. */
-  --ad-1: 4px;
-  --ad-2: 8px;
-  --ad-3: 12px;
-  --ad-4: 16px;
-  --ad-5: 20px;
-  --ad-6: 24px;
-  --ad-8: 32px;
-  --ad-10: 40px;
+  --lg-1: 4px;
+  --lg-2: 8px;
+  --lg-3: 12px;
+  --lg-4: 16px;
+  --lg-5: 20px;
+  --lg-6: 24px;
+  --lg-8: 32px;
+  --lg-10: 40px;
 
-  --ad-radius-sm: 6px;
-  --ad-radius: 8px;
-  --ad-radius-lg: 10px;
+  --lg-radius-sm: 6px;
+  --lg-radius: 8px;
+  --lg-radius-lg: 10px;
   /* One shadow, and it is nearly invisible. Anything heavier reads as a
      template rather than as a tool. */
-  --ad-shadow: 0 1px 2px rgba(17, 17, 19, 0.04);
-  --ad-shadow-pop: 0 8px 24px rgba(17, 17, 19, 0.10), 0 1px 2px rgba(17, 17, 19, 0.06);
+  --lg-shadow: 0 1px 2px rgba(17, 17, 19, 0.04);
+  --lg-shadow-pop: 0 8px 24px rgba(17, 17, 19, 0.10), 0 1px 2px rgba(17, 17, 19, 0.06);
 
-  --ad-control: 36px;
-  --ad-control-lg: 40px;
-  --ad-rail: 236px;
+  --lg-control: 36px;
+  --lg-control-lg: 40px;
+  --lg-rail: 236px;
 
   /*
    * ── A ROW, NOT A TWO-COLUMN GRID ──────────────────────────────────────────
    *
-   * It was `grid-template-columns: var(--ad-rail) 1fr`, which is the same
+   * It was `grid-template-columns: var(--lg-rail) 1fr`, which is the same
    * layout while both children are present and a trap when they are not: the
    * grid still reserves the rail's column, so anything that stops the rail
    * rendering — a stale build, a failed import, the drawer breakpoint taking
@@ -109,7 +109,7 @@
 .admin-shell :focus-visible {
   outline: 2px solid var(--admin-ink);
   outline-offset: 2px;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -136,51 +136,51 @@
   flex-direction: column;
 }
 
-.ad-top {
+.lg-top {
   position: sticky;
   top: 0;
   z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ad-4);
+  gap: var(--lg-4);
   min-height: 62px;
-  padding: 0 var(--ad-8);
+  padding: 0 var(--lg-8);
   background: var(--admin-bg);
   border-bottom: 1px solid var(--admin-line);
 }
 
-.ad-crumb {
+.lg-crumb {
   display: flex;
   align-items: center;
-  gap: var(--ad-2);
+  gap: var(--lg-2);
   margin: 0;
   font-size: 13px;
   color: var(--admin-mute);
   min-width: 0;
 }
 
-.ad-crumb a { color: inherit; }
-.ad-crumb a:hover { color: var(--admin-ink); }
-.ad-crumb-here { color: var(--admin-ink); }
-.ad-crumb-sep { color: var(--admin-line-strong); }
+.lg-crumb a { color: inherit; }
+.lg-crumb a:hover { color: var(--admin-ink); }
+.lg-crumb-here { color: var(--admin-ink); }
+.lg-crumb-sep { color: var(--admin-line-strong); }
 
-.ad-top-actions {
+.lg-top-actions {
   display: flex;
   align-items: center;
-  gap: var(--ad-2);
+  gap: var(--lg-2);
   flex-shrink: 0;
 }
 
-.ad-screen {
+.lg-screen {
   flex: 1;
   min-width: 0;
-  padding: var(--ad-8);
+  padding: var(--lg-8);
 }
 
 @media (max-width: 860px) {
-  .ad-top { padding: 0 var(--ad-4); }
-  .ad-screen { padding: var(--ad-5) var(--ad-4) var(--ad-8); }
+  .lg-top { padding: 0 var(--lg-4); }
+  .lg-screen { padding: var(--lg-5) var(--lg-4) var(--lg-8); }
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────────
@@ -188,15 +188,15 @@
    that destroys something. A fourth weight is a decision nobody can make
    consistently twice. */
 
-.ad-btn {
+.lg-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--ad-2);
-  height: var(--ad-control);
+  gap: var(--lg-2);
+  height: var(--lg-control);
   padding: 0 14px;
   border: 1px solid var(--admin-line-strong);
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: var(--admin-panel);
   color: var(--admin-ink);
   font-family: var(--admin-font);
@@ -208,29 +208,29 @@
   transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
 
-.ad-btn:hover:not(:disabled) { background: var(--admin-hover); }
-.ad-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.lg-btn:hover:not(:disabled) { background: var(--admin-hover); }
+.lg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.ad-btn-primary {
+.lg-btn-primary {
   background: var(--admin-ink);
   border-color: var(--admin-ink);
   color: #fff;
 }
 
-.ad-btn-primary:hover:not(:disabled) { background: #26262b; border-color: #26262b; }
+.lg-btn-primary:hover:not(:disabled) { background: #26262b; border-color: #26262b; }
 
-.ad-btn-quiet {
+.lg-btn-quiet {
   border-color: transparent;
   background: none;
   color: var(--admin-soft);
 }
 
-.ad-btn-quiet:hover:not(:disabled) { background: var(--admin-hover); color: var(--admin-ink); }
+.lg-btn-quiet:hover:not(:disabled) { background: var(--admin-hover); color: var(--admin-ink); }
 
-.ad-btn-danger { color: var(--admin-danger); }
+.lg-btn-danger { color: var(--admin-danger); }
 
 /* The count on Publish. Inside a dark button, so it inverts. */
-.ad-btn-count {
+.lg-btn-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -245,11 +245,11 @@
 }
 
 /* Nothing waiting: it is not an action, it is a statement. */
-.ad-published-note {
+.lg-published-note {
   display: inline-flex;
   align-items: center;
-  gap: var(--ad-2);
-  height: var(--ad-control);
+  gap: var(--lg-2);
+  height: var(--lg-control);
   padding: 0 12px;
   font-size: 13px;
   color: var(--admin-soft);
@@ -257,30 +257,30 @@
 
 /* ── Icon-only ─────────────────────────────────────────────────────────────── */
 
-.ad-ico {
+.lg-ico {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--ad-control);
-  height: var(--ad-control);
+  width: var(--lg-control);
+  height: var(--lg-control);
   padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: none;
   color: var(--admin-soft);
   cursor: pointer;
   transition: background 0.14s ease, color 0.14s ease;
 }
 
-.ad-ico:hover { background: var(--admin-hover); color: var(--admin-ink); }
+.lg-ico:hover { background: var(--admin-hover); color: var(--admin-ink); }
 
 /* ── The rail ───────────────────────────────────────────────────────────────
    Branding at the top, account at the bottom, and only the navigation between
    them scrolls — so on a short screen the two things you always want are the
    two things that never move. */
 
-.ad-rail {
-  flex: 0 0 var(--ad-rail);
+.lg-rail {
+  flex: 0 0 var(--lg-rail);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -291,12 +291,12 @@
   border-right: 1px solid var(--admin-line);
 }
 
-.ad-rail-head {
+.lg-rail-head {
   flex-shrink: 0;
-  padding: var(--ad-5) var(--ad-4) var(--ad-3);
+  padding: var(--lg-5) var(--lg-4) var(--lg-3);
 }
 
-.ad-brand {
+.lg-brand {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -306,13 +306,13 @@
   letter-spacing: -0.02em;
 }
 
-.ad-brand-mark {
+.lg-brand-mark {
   display: grid;
   place-items: center;
   width: 26px;
   height: 26px;
   flex-shrink: 0;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: var(--admin-ink);
   color: #fff;
 }
@@ -321,25 +321,25 @@
    Directly under the platform's name, because the first question in a
    multi-site tool is always "which one am I in". */
 
-.ad-site {
+.lg-site {
   display: flex;
   align-items: center;
-  gap: var(--ad-2);
+  gap: var(--lg-2);
   width: 100%;
-  margin-top: var(--ad-4);
+  margin-top: var(--lg-4);
   padding: 7px 8px;
   border: 1px solid transparent;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: none;
   font-family: var(--admin-font);
   text-align: left;
   color: var(--admin-ink);
 }
 
-button.ad-site { cursor: pointer; }
-button.ad-site:hover { background: var(--admin-hover); }
+button.lg-site { cursor: pointer; }
+button.lg-site:hover { background: var(--admin-hover); }
 
-.ad-site-avatar {
+.lg-site-avatar {
   display: grid;
   place-items: center;
   width: 26px;
@@ -354,9 +354,9 @@ button.ad-site:hover { background: var(--admin-hover); }
   letter-spacing: 0.02em;
 }
 
-.ad-site-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.lg-site-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-.ad-site-name {
+.lg-site-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -366,21 +366,21 @@ button.ad-site:hover { background: var(--admin-hover); }
   font-weight: 500;
 }
 
-.ad-site-chev { flex-shrink: 0; color: var(--admin-mute); }
+.lg-site-chev { flex-shrink: 0; color: var(--admin-mute); }
 
 /* ── Navigation ─────────────────────────────────────────────────────────────── */
 
-.ad-nav {
+.lg-nav {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--ad-2) var(--ad-3) var(--ad-4);
+  padding: var(--lg-2) var(--lg-3) var(--lg-4);
 }
 
-.ad-nav-group + .ad-nav-group { margin-top: var(--ad-5); }
+.lg-nav-group + .lg-nav-group { margin-top: var(--lg-5); }
 
-.ad-nav-label {
-  margin: 0 0 var(--ad-1);
+.lg-nav-label {
+  margin: 0 0 var(--lg-1);
   padding: 0 8px;
   font-size: 10px;
   font-weight: 600;
@@ -389,37 +389,37 @@ button.ad-site:hover { background: var(--admin-hover); }
   color: var(--admin-mute);
 }
 
-.ad-nav-item {
+.lg-nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
   height: 34px;
   padding: 0 8px;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   font-size: 13.5px;
   font-weight: 450;
   color: var(--admin-soft);
   transition: background 0.14s ease, color 0.14s ease;
 }
 
-.ad-nav-item svg { flex-shrink: 0; color: var(--admin-mute); }
-.ad-nav-item:hover { background: var(--admin-hover); color: var(--admin-ink); }
-.ad-nav-item:hover svg { color: var(--admin-soft); }
+.lg-nav-item svg { flex-shrink: 0; color: var(--admin-mute); }
+.lg-nav-item:hover { background: var(--admin-hover); color: var(--admin-ink); }
+.lg-nav-item:hover svg { color: var(--admin-soft); }
 
 /* Selected: a pale neutral panel, dark text, dark icon. No accent bar, no
    colour — the page you are on is not a state that needs a hue. */
-.ad-nav-item[aria-current='page'] {
+.lg-nav-item[aria-current='page'] {
   background: var(--admin-selected);
   color: var(--admin-ink);
   font-weight: 550;
 }
 
-.ad-nav-item[aria-current='page'] svg { color: var(--admin-ink); }
+.lg-nav-item[aria-current='page'] svg { color: var(--admin-ink); }
 
-.ad-nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* A real number of unread messages, or nothing at all. */
-.ad-nav-count {
+.lg-nav-count {
   flex-shrink: 0;
   min-width: 18px;
   padding: 1px 6px;
@@ -439,14 +439,14 @@ button.ad-site:hover { background: var(--admin-hover); }
  * not exist. A dead link in a sidebar is worse than an honest gap: it is
  * discovered by clicking, at which point the whole workspace is suspect.
  */
-.ad-nav-item[data-soon] {
+.lg-nav-item[data-soon] {
   color: var(--admin-mute);
   cursor: not-allowed;
 }
 
-.ad-nav-item[data-soon]:hover { background: none; color: var(--admin-mute); }
+.lg-nav-item[data-soon]:hover { background: none; color: var(--admin-mute); }
 
-.ad-nav-soon {
+.lg-nav-soon {
   flex-shrink: 0;
   padding: 1px 6px;
   border: 1px solid var(--admin-line);
@@ -459,21 +459,21 @@ button.ad-site:hover { background: var(--admin-hover); }
 
 /* ── The account, at the foot ───────────────────────────────────────────────── */
 
-.ad-rail-foot {
+.lg-rail-foot {
   flex-shrink: 0;
-  padding: var(--ad-2) var(--ad-3) var(--ad-3);
+  padding: var(--lg-2) var(--lg-3) var(--lg-3);
   border-top: 1px solid var(--admin-line);
 }
 
-.ad-account {
+.lg-account {
   display: flex;
   align-items: center;
-  gap: var(--ad-2);
+  gap: var(--lg-2);
   width: 100%;
-  margin-top: var(--ad-2);
+  margin-top: var(--lg-2);
   padding: 7px 8px;
   border: 1px solid transparent;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: none;
   font-family: var(--admin-font);
   text-align: left;
@@ -481,9 +481,9 @@ button.ad-site:hover { background: var(--admin-hover); }
   cursor: pointer;
 }
 
-.ad-account:hover { background: var(--admin-hover); }
+.lg-account:hover { background: var(--admin-hover); }
 
-.ad-account-name {
+.lg-account-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -495,7 +495,7 @@ button.ad-site:hover { background: var(--admin-hover); }
 
 /* The account's ROLE, which is real. There are no plans in this build, so
    there is no plan badge to show — see lib/entitlements.ts. */
-.ad-account-role {
+.lg-account-role {
   flex-shrink: 0;
   padding: 1px 7px;
   border: 1px solid var(--admin-line);
@@ -508,31 +508,31 @@ button.ad-site:hover { background: var(--admin-hover); }
 
 /* ── Menus ──────────────────────────────────────────────────────────────────── */
 
-.ad-menu-wrap { position: relative; }
+.lg-menu-wrap { position: relative; }
 
-.ad-menu {
+.lg-menu {
   position: absolute;
   z-index: 60;
   min-width: 200px;
-  padding: var(--ad-1);
+  padding: var(--lg-1);
   border: 1px solid var(--admin-line);
-  border-radius: var(--ad-radius);
+  border-radius: var(--lg-radius);
   background: var(--admin-panel);
-  box-shadow: var(--ad-shadow-pop);
+  box-shadow: var(--lg-shadow-pop);
 }
 
-.ad-menu[data-at='up'] { bottom: calc(100% + 6px); left: 0; }
-.ad-menu[data-at='down'] { top: calc(100% + 6px); left: 0; }
-.ad-menu[data-at='down-end'] { top: calc(100% + 6px); right: 0; }
+.lg-menu[data-at='up'] { bottom: calc(100% + 6px); left: 0; }
+.lg-menu[data-at='down'] { top: calc(100% + 6px); left: 0; }
+.lg-menu[data-at='down-end'] { top: calc(100% + 6px); right: 0; }
 
-.ad-menu-item {
+.lg-menu-item {
   display: flex;
   align-items: center;
-  gap: var(--ad-2);
+  gap: var(--lg-2);
   width: 100%;
   padding: 7px 10px;
   border: 0;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: none;
   font-family: var(--admin-font);
   font-size: 13px;
@@ -541,18 +541,18 @@ button.ad-site:hover { background: var(--admin-hover); }
   cursor: pointer;
 }
 
-.ad-menu-item:hover { background: var(--admin-hover); }
-.ad-menu-item:disabled { color: var(--admin-mute); cursor: not-allowed; }
-.ad-menu-item:disabled:hover { background: none; }
-.ad-menu-item[data-danger] { color: var(--admin-danger); }
+.lg-menu-item:hover { background: var(--admin-hover); }
+.lg-menu-item:disabled { color: var(--admin-mute); cursor: not-allowed; }
+.lg-menu-item:disabled:hover { background: none; }
+.lg-menu-item[data-danger] { color: var(--admin-danger); }
 
-.ad-menu-sep {
+.lg-menu-sep {
   height: 1px;
-  margin: var(--ad-1) 6px;
+  margin: var(--lg-1) 6px;
   background: var(--admin-line);
 }
 
-.ad-menu-note {
+.lg-menu-note {
   padding: 6px 10px 8px;
   font-size: 11.5px;
   line-height: 1.45;
@@ -561,12 +561,12 @@ button.ad-site:hover { background: var(--admin-hover); }
 
 /* ── Small screens: the rail becomes a drawer ───────────────────────────────── */
 
-.ad-rail-toggle { display: none; }
-.ad-rail-scrim { display: none; }
+.lg-rail-toggle { display: none; }
+.lg-rail-scrim { display: none; }
 
 @media (max-width: 860px) {
 
-  .ad-rail {
+  .lg-rail {
     position: fixed;
     top: 0;
     bottom: 0;
@@ -576,12 +576,12 @@ button.ad-site:hover { background: var(--admin-hover); }
     max-height: none;
     transform: translateX(-100%);
     transition: transform 0.2s ease;
-    box-shadow: var(--ad-shadow-pop);
+    box-shadow: var(--lg-shadow-pop);
   }
 
-  .ad-rail[data-open] { transform: translateX(0); }
+  .lg-rail[data-open] { transform: translateX(0); }
 
-  .ad-rail-scrim {
+  .lg-rail-scrim {
     display: block;
     position: fixed;
     inset: 0;
@@ -591,13 +591,13 @@ button.ad-site:hover { background: var(--admin-hover); }
     background: rgba(17, 17, 19, 0.35);
   }
 
-  .ad-rail-toggle { display: inline-flex; }
+  .lg-rail-toggle { display: inline-flex; }
 
   /* The drawer's own close button, so it can be dismissed from inside it. */
-  .ad-rail-close { display: inline-flex !important; }
+  .lg-rail-close { display: inline-flex !important; }
 }
 
-.ad-rail-close { display: none; }
+.lg-rail-close { display: none; }
 
 /* ── The shared primitives, retuned ─────────────────────────────────────────
    Every other admin screen draws with these. Uppercase headings and square
@@ -622,14 +622,14 @@ button.ad-site:hover { background: var(--admin-hover); }
 
 .admin-shell .admin-panel {
   border: 1px solid var(--admin-line);
-  border-radius: var(--ad-radius-lg);
-  box-shadow: var(--ad-shadow);
+  border-radius: var(--lg-radius-lg);
+  box-shadow: var(--lg-shadow);
 }
 
 .admin-shell .admin-meta { font-size: 12.5px; color: var(--admin-mute); }
 
 .admin-shell .admin-btn {
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   text-transform: none;
   letter-spacing: 0;
 }
@@ -637,7 +637,7 @@ button.ad-site:hover { background: var(--admin-hover); }
 .admin-shell .admin-input,
 .admin-shell .admin-select {
   border: 1px solid var(--admin-line-strong);
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
 }
 
 /* ── The top bar on a small screen ──────────────────────────────────────────
@@ -651,26 +651,26 @@ button.ad-site:hover { background: var(--admin-hover); }
  * reads, which is the same as removing it while still paying for the space.
  */
 @media (max-width: 640px) {
-  .ad-crumb-area { display: none; }
-  .ad-btn-label { display: none; }
-  .ad-btn-shrink { width: var(--ad-control); padding: 0; }
+  .lg-crumb-area { display: none; }
+  .lg-btn-label { display: none; }
+  .lg-btn-shrink { width: var(--lg-control); padding: 0; }
 }
 
-.ad-btn-label-narrow { display: none; }
+.lg-btn-label-narrow { display: none; }
 
 @media (max-width: 520px) {
-  .ad-btn-label-wide { display: none; }
-  .ad-btn-label-narrow { display: inline; }
-  .ad-top { padding: 0 var(--ad-3); gap: var(--ad-2); }
+  .lg-btn-label-wide { display: none; }
+  .lg-btn-label-narrow { display: inline; }
+  .lg-top { padding: 0 var(--lg-3); gap: var(--lg-2); }
 }
 
 /* The two halves of the breadcrumb need the same gap as the rest of the row,
    which they lost when the area was wrapped so it could be dropped on a
    phone. */
-.ad-crumb-area {
+.lg-crumb-area {
   display: inline-flex;
   align-items: center;
-  gap: var(--ad-2);
+  gap: var(--lg-2);
 }
 
 /*

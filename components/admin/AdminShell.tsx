@@ -97,18 +97,18 @@ export default function AdminShell({
       {drawer && (
         <button
           type="button"
-          className="ad-rail-scrim"
+          className="lg-rail-scrim"
           aria-label="Close navigation"
           onClick={() => setDrawer(false)}
         />
       )}
 
       <main className="admin-main">
-        <header className="ad-top">
-          <p className="ad-crumb">
+        <header className="lg-top">
+          <p className="lg-crumb">
             <button
               type="button"
-              className="ad-ico ad-rail-toggle"
+              className="lg-ico lg-rail-toggle"
               onClick={() => setDrawer(true)}
               aria-label="Open navigation"
               aria-expanded={drawer}
@@ -118,17 +118,17 @@ export default function AdminShell({
             {/* The area is dropped on a phone, where the name is the only part
                 there is room for and the only part that is news. */}
             {here.area && (
-              <span className="ad-crumb-area">
+              <span className="lg-crumb-area">
                 <span>{here.area}</span>
-                <span className="ad-crumb-sep" aria-hidden>
+                <span className="lg-crumb-sep" aria-hidden>
                   /
                 </span>
               </span>
             )}
-            <span className="ad-crumb-here">{here.name}</span>
+            <span className="lg-crumb-here">{here.name}</span>
           </p>
 
-          <div className="ad-top-actions">
+          <div className="lg-top-actions">
             {failed && (
               <span role="alert" style={{ fontSize: 12.5, color: 'var(--admin-danger)' }}>
                 {failed}
@@ -142,17 +142,17 @@ export default function AdminShell({
               href="/"
               target="_blank"
               rel="noreferrer"
-              className="ad-btn ad-btn-shrink"
+              className="lg-btn lg-btn-shrink"
               aria-label="Preview site in a new tab"
             >
-              <span className="ad-btn-label">Preview site</span>
+              <span className="lg-btn-label">Preview site</span>
               <Icon name="external" size={14} />
             </Link>
 
             {waiting > 0 ? (
               <button
                 type="button"
-                className="ad-btn ad-btn-primary"
+                className="lg-btn lg-btn-primary"
                 disabled={pending}
                 onClick={() => {
                   setFailed(null)
@@ -166,19 +166,19 @@ export default function AdminShell({
                   })
                 }}
               >
-                <span className="ad-btn-label-wide">
+                <span className="lg-btn-label-wide">
                   {pending ? 'Publishing…' : 'Publish changes'}
                 </span>
-                <span className="ad-btn-label-narrow" aria-hidden>
+                <span className="lg-btn-label-narrow" aria-hidden>
                   {pending ? 'Publishing…' : 'Publish'}
                 </span>
-                {!pending && <span className="ad-btn-count">{waiting}</span>}
+                {!pending && <span className="lg-btn-count">{waiting}</span>}
               </button>
             ) : (
               /* Nothing is waiting. Said, rather than drawn as a button you
                  cannot press — which looks identical to one you have not
                  earned the right to press yet. */
-              <span className="ad-published-note">
+              <span className="lg-published-note">
                 <Icon name="check" size={14} />
                 All changes published
               </span>
@@ -186,7 +186,7 @@ export default function AdminShell({
           </div>
         </header>
 
-        <div className="ad-screen">{children}</div>
+        <div className="lg-screen">{children}</div>
       </main>
     </div>
   )

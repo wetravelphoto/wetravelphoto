@@ -148,7 +148,7 @@ export default function PagesBoard({
 
         <button
           type="button"
-          className="ad-btn pb-new"
+          className="lg-btn pb-new"
           disabled={pending}
           onClick={() => setNaming({ page: null })}
         >
@@ -257,7 +257,7 @@ export default function PagesBoard({
           <span>
             {pages.length} {pages.length === 1 ? 'page' : 'pages'}
           </span>
-          <span className="ad-crumb-sep" aria-hidden>
+          <span className="lg-crumb-sep" aria-hidden>
             ·
           </span>
           <span>
@@ -372,12 +372,12 @@ function NameDialog({
         </label>
 
         <div className="pb-dialog-foot">
-          <button type="button" className="ad-btn" onClick={onClose}>
+          <button type="button" className="lg-btn" onClick={onClose}>
             Cancel
           </button>
           <button
             type="submit"
-            className="ad-btn ad-btn-primary"
+            className="lg-btn lg-btn-primary"
             disabled={busy || !title.trim() || !address}
           >
             {busy ? 'Saving…' : page ? 'Save' : 'Create page'}

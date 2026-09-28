@@ -68,7 +68,7 @@ export default function Overview({
           <p className="pb-sub">Your work, your website, and what’s next.</p>
         </div>
 
-        <Link href="/admin/trips/new" className="ad-btn pb-new">
+        <Link href="/admin/trips/new" className="lg-btn pb-new">
           <Icon name="plus" size={15} />
           Upload photos
         </Link>
@@ -110,7 +110,7 @@ export default function Overview({
               <span className="pc-dot" data-tone={hasDraft ? 'waiting' : 'live'} aria-hidden />
               {hasDraft ? 'Live, with unpublished changes' : 'Live'}
             </span>
-            <Link href="/edit/home" className="ad-btn ad-btn-primary ov-continue">
+            <Link href="/edit/home" className="lg-btn lg-btn-primary ov-continue">
               Continue editing
               <Icon name="external" size={13} />
             </Link>
@@ -151,7 +151,7 @@ export default function Overview({
                     <span className="ov-step-note">{step.detail}</span>
                   </span>
                   {!step.done && (
-                    <Link href={step.href} className="ad-ico ov-step-go" aria-label={step.title}>
+                    <Link href={step.href} className="lg-ico ov-step-go" aria-label={step.title}>
                       <Icon name="chevron-right" size={16} />
                     </Link>
                   )}

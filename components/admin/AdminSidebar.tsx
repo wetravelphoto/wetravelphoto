@@ -169,21 +169,21 @@ export default function AdminSidebar({
     const inside = (
       <>
         <Icon name={item.icon} />
-        <span className="ad-nav-name">{item.label}</span>
+        <span className="lg-nav-name">{item.label}</span>
         {/* Only when there is something unread. A badge showing 0 is a badge
             reporting that nothing happened. */}
         {count > 0 && (
-          <span className="ad-nav-count" aria-label={`${count} unread`}>
+          <span className="lg-nav-count" aria-label={`${count} unread`}>
             {count}
           </span>
         )}
-        {item.soon && <span className="ad-nav-soon">Soon</span>}
+        {item.soon && <span className="lg-nav-soon">Soon</span>}
       </>
     )
 
     if (!item.href) {
       return (
-        <span key={item.label} className="ad-nav-item" data-soon title={item.soon} aria-disabled>
+        <span key={item.label} className="lg-nav-item" data-soon title={item.soon} aria-disabled>
           {inside}
         </span>
       )
@@ -193,7 +193,7 @@ export default function AdminSidebar({
       <Link
         key={item.label}
         href={item.href}
-        className="ad-nav-item"
+        className="lg-nav-item"
         aria-current={here(item) ? 'page' : undefined}
         onClick={onClose}
       >
@@ -210,11 +210,11 @@ export default function AdminSidebar({
     : GROUPS
 
   return (
-    <aside className="ad-rail" data-open={open || undefined} aria-label="Workspace">
-      <div className="ad-rail-head">
+    <aside className="lg-rail" data-open={open || undefined} aria-label="Workspace">
+      <div className="lg-rail-head">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Link href="/admin" className="ad-brand">
-            <span className="ad-brand-mark" aria-hidden>
+          <Link href="/admin" className="lg-brand">
+            <span className="lg-brand-mark" aria-hidden>
               <Icon name="overview" size={14} strokeWidth={2} />
             </span>
             {/* Lowercase on purpose: it is the wordmark, not a sentence. */}
@@ -222,7 +222,7 @@ export default function AdminSidebar({
           </Link>
           <button
             type="button"
-            className="ad-ico ad-rail-close"
+            className="lg-ico lg-rail-close"
             onClick={onClose}
             aria-label="Close navigation"
           >
@@ -239,8 +239,8 @@ export default function AdminSidebar({
           * list, and gets the menu.
           */}
         {platformAdmin ? (
-          <Link href="/admin/sites" className="ad-site" onClick={onClose}>
-            <span className="ad-site-avatar" aria-hidden>
+          <Link href="/admin/sites" className="lg-site" onClick={onClose}>
+            <span className="lg-site-avatar" aria-hidden>
               {siteLogoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={siteLogoUrl} alt="" />
@@ -248,12 +248,12 @@ export default function AdminSidebar({
                 initials(siteName)
               )}
             </span>
-            <span className="ad-site-name">{siteName || 'Your site'}</span>
-            <Icon name="chevron-down" size={14} className="ad-site-chev" />
+            <span className="lg-site-name">{siteName || 'Your site'}</span>
+            <Icon name="chevron-down" size={14} className="lg-site-chev" />
           </Link>
         ) : (
-          <div className="ad-site">
-            <span className="ad-site-avatar" aria-hidden>
+          <div className="lg-site">
+            <span className="lg-site-avatar" aria-hidden>
               {siteLogoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={siteLogoUrl} alt="" />
@@ -261,56 +261,56 @@ export default function AdminSidebar({
                 initials(siteName)
               )}
             </span>
-            <span className="ad-site-name">{siteName || 'Your site'}</span>
+            <span className="lg-site-name">{siteName || 'Your site'}</span>
           </div>
         )}
       </div>
 
-      <nav className="ad-nav" aria-label="Sections">
+      <nav className="lg-nav" aria-label="Sections">
         {groups.map((group, i) => (
-          <div key={group.label ?? `top-${i}`} className="ad-nav-group">
-            {group.label && <p className="ad-nav-label">{group.label}</p>}
+          <div key={group.label ?? `top-${i}`} className="lg-nav-group">
+            {group.label && <p className="lg-nav-label">{group.label}</p>}
             {group.items.map(draw)}
           </div>
         ))}
       </nav>
 
-      <div className="ad-rail-foot" ref={foot}>
+      <div className="lg-rail-foot" ref={foot}>
         {FOOT.map(draw)}
 
-        <div className="ad-menu-wrap">
+        <div className="lg-menu-wrap">
           <button
             type="button"
-            className="ad-account"
+            className="lg-account"
             aria-expanded={account}
             aria-haspopup="menu"
             onClick={() => setAccount((v) => !v)}
           >
-            <span className="ad-site-avatar" aria-hidden>
+            <span className="lg-site-avatar" aria-hidden>
               {initials(email)}
             </span>
-            <span className="ad-account-name">{email.replace(/@.*$/, '')}</span>
-            {role && <span className="ad-account-role">{role}</span>}
-            <Icon name="chevron-down" size={14} className="ad-site-chev" />
+            <span className="lg-account-name">{email.replace(/@.*$/, '')}</span>
+            {role && <span className="lg-account-role">{role}</span>}
+            <Icon name="chevron-down" size={14} className="lg-site-chev" />
           </button>
 
           {account && (
-            <div className="ad-menu" data-at="up" role="menu" style={{ right: 0, left: 'auto' }}>
-              <p className="ad-menu-note" style={{ paddingTop: 8 }}>
+            <div className="lg-menu" data-at="up" role="menu" style={{ right: 0, left: 'auto' }}>
+              <p className="lg-menu-note" style={{ paddingTop: 8 }}>
                 {email}
               </p>
-              <div className="ad-menu-sep" />
-              <Link href="/admin/settings" className="ad-menu-item" role="menuitem" onClick={onClose}>
+              <div className="lg-menu-sep" />
+              <Link href="/admin/settings" className="lg-menu-item" role="menuitem" onClick={onClose}>
                 <Icon name="settings" size={15} />
                 Settings
               </Link>
-              <Link href="/" target="_blank" rel="noreferrer" className="ad-menu-item" role="menuitem">
+              <Link href="/" target="_blank" rel="noreferrer" className="lg-menu-item" role="menuitem">
                 <Icon name="external" size={15} />
                 View site
               </Link>
-              <div className="ad-menu-sep" />
+              <div className="lg-menu-sep" />
               <form action="/admin/logout" method="post">
-                <button type="submit" className="ad-menu-item" role="menuitem">
+                <button type="submit" className="lg-menu-item" role="menuitem">
                   Sign out
                 </button>
               </form>

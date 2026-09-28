@@ -16,9 +16,9 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--ad-5);
+  gap: var(--lg-5);
   flex-wrap: wrap;
-  margin-bottom: var(--ad-6);
+  margin-bottom: var(--lg-6);
 }
 
 .pb-head-words { min-width: 0; }
@@ -44,9 +44,9 @@
 .pb-site {
   display: flex;
   align-items: center;
-  gap: var(--ad-3);
+  gap: var(--lg-3);
   flex-wrap: wrap;
-  margin: var(--ad-4) 0 0;
+  margin: var(--lg-4) 0 0;
   font-size: 13.5px;
 }
 
@@ -70,13 +70,13 @@
   color: var(--admin-soft);
 }
 
-.pb-new { flex-shrink: 0; height: var(--ad-control-lg); }
+.pb-new { flex-shrink: 0; height: var(--lg-control-lg); }
 
 .pb-error {
-  margin: 0 0 var(--ad-4);
+  margin: 0 0 var(--lg-4);
   padding: 10px 12px;
   border: 1px solid rgba(180, 35, 24, 0.25);
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: rgba(180, 35, 24, 0.05);
   font-size: 13px;
   color: var(--admin-danger);
@@ -88,18 +88,18 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--ad-4);
+  gap: var(--lg-4);
   flex-wrap: wrap;
-  margin-bottom: var(--ad-5);
+  margin-bottom: var(--lg-5);
   border-bottom: 1px solid var(--admin-line);
 }
 
-.pb-tabs { display: flex; gap: var(--ad-5); }
+.pb-tabs { display: flex; gap: var(--lg-5); }
 
 .pb-tab {
   display: inline-flex;
   align-items: center;
-  gap: var(--ad-2);
+  gap: var(--lg-2);
   padding: 0 0 10px;
   border: 0;
   /* The underline IS the selection, so it has to sit on the toolbar's own
@@ -139,18 +139,18 @@
 .pb-tools {
   display: flex;
   align-items: center;
-  gap: var(--ad-2);
-  padding-bottom: var(--ad-2);
+  gap: var(--lg-2);
+  padding-bottom: var(--lg-2);
 }
 
 .pb-find {
   display: flex;
   align-items: center;
-  gap: var(--ad-2);
-  height: var(--ad-control);
+  gap: var(--lg-2);
+  height: var(--lg-control);
   padding: 0 10px;
   border: 1px solid var(--admin-line-strong);
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: var(--admin-panel);
   color: var(--admin-mute);
 }
@@ -174,10 +174,10 @@
 
 .pb-view {
   display: flex;
-  height: var(--ad-control);
+  height: var(--lg-control);
   padding: 2px;
   border: 1px solid var(--admin-line-strong);
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: var(--admin-panel);
 }
 
@@ -201,10 +201,10 @@
 .pb-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--ad-5);
+  gap: var(--lg-5);
 }
 
-.pb-grid[data-view='list'] { grid-template-columns: minmax(0, 1fr); gap: var(--ad-3); }
+.pb-grid[data-view='list'] { grid-template-columns: minmax(0, 1fr); gap: var(--lg-3); }
 
 /* Two columns where three would make each card too small to recognise, one
    where two would. Driven by the CONTENT width, not the window's, so the same
@@ -224,9 +224,9 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--admin-line);
-  border-radius: var(--ad-radius-lg);
+  border-radius: var(--lg-radius-lg);
   background: var(--admin-panel);
-  box-shadow: var(--ad-shadow);
+  box-shadow: var(--lg-shadow);
   transition: border-color 0.14s ease;
 }
 
@@ -240,13 +240,13 @@
  * open so what it opens can be seen.
  */
 .pc-shot {
-  border-radius: var(--ad-radius-lg) var(--ad-radius-lg) 0 0;
+  border-radius: var(--lg-radius-lg) var(--lg-radius-lg) 0 0;
   overflow: hidden;
 }
 
 /* And above the cards that come after it in the grid, or the menu opens
    underneath the next one along. */
-.pc:has(.ad-menu) { z-index: 5; }
+.pc:has(.lg-menu) { z-index: 5; }
 
 .pc:hover,
 .pc:focus-within { border-color: var(--admin-line-strong); }
@@ -324,14 +324,14 @@
  */
 .pc-open {
   position: absolute;
-  right: var(--ad-3);
-  bottom: var(--ad-3);
+  right: var(--lg-3);
+  bottom: var(--lg-3);
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 0 12px;
   height: 32px;
-  border-radius: var(--ad-radius-sm);
+  border-radius: var(--lg-radius-sm);
   background: var(--admin-ink);
   color: #fff;
   font-size: 12.5px;
@@ -355,7 +355,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px var(--ad-3) 11px var(--ad-4);
+  padding: 11px var(--lg-3) 11px var(--lg-4);
   min-height: 52px;
 }
 
@@ -418,7 +418,7 @@
   width: 168px;
   flex-shrink: 0;
   border-right: 1px solid var(--admin-line);
-  border-radius: var(--ad-radius-lg) 0 0 var(--ad-radius-lg);
+  border-radius: var(--lg-radius-lg) 0 0 var(--lg-radius-lg);
 }
 
 /* The frame keeps its 16:10 and sets the row's height, rather than stretching
@@ -436,9 +436,9 @@
 /* ── Nothing to show ────────────────────────────────────────────────────────── */
 
 .pb-empty {
-  padding: 56px var(--ad-6);
+  padding: 56px var(--lg-6);
   border: 1px dashed var(--admin-line-strong);
-  border-radius: var(--ad-radius-lg);
+  border-radius: var(--lg-radius-lg);
   text-align: center;
 }
 
@@ -451,16 +451,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ad-4);
+  gap: var(--lg-4);
   flex-wrap: wrap;
-  margin-top: var(--ad-8);
-  padding-top: var(--ad-4);
+  margin-top: var(--lg-8);
+  padding-top: var(--lg-4);
   border-top: 1px solid var(--admin-line);
   font-size: 12.5px;
   color: var(--admin-mute);
 }
 
-.pb-foot-facts { display: flex; align-items: center; gap: var(--ad-2); margin: 0; }
+.pb-foot-facts { display: flex; align-items: center; gap: var(--lg-2); margin: 0; }
 
 .pb-foot-link {
   display: inline-flex;
@@ -480,21 +480,21 @@
   z-index: 90;
   display: grid;
   place-items: center;
-  padding: var(--ad-4);
+  padding: var(--lg-4);
   background: rgba(17, 17, 19, 0.32);
 }
 
 .pb-dialog {
   width: min(420px, 100%);
-  padding: var(--ad-6);
-  border-radius: var(--ad-radius-lg);
+  padding: var(--lg-6);
+  border-radius: var(--lg-radius-lg);
   background: var(--admin-panel);
-  box-shadow: var(--ad-shadow-pop);
+  box-shadow: var(--lg-shadow-pop);
 }
 
 .pb-dialog-foot {
   display: flex;
   justify-content: flex-end;
-  gap: var(--ad-2);
-  margin-top: var(--ad-5);
+  gap: var(--lg-2);
+  margin-top: var(--lg-5);
 }

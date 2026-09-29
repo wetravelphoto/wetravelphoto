@@ -1,68 +1,52 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- THE REHEARSAL ROOM
+-- PRODUCTION SCHEMA SNAPSHOT — 2026-09-29
 -- ════════════════════════════════════════════════════════════════════════════
 --
--- A local stand-in for the live database, so a migration can be run for real
--- before it is run for real:
+-- What production actually contains, as reported by db/survey.sql run against
+-- the live Supabase database on 2026-09-29 (PostgreSQL 17.6).
 --
---   createdb wtp
---   psql -d wtp -f db/test-fixture.sql
---   psql -d wtp -v ON_ERROR_STOP=1 -f db/migrations/<the new one>.sql
---   psql -d wtp -f db/verify-tenant-isolation.sql
+-- THIS FILE IS DOCUMENTATION. Do not run it against production. It exists so
+-- that "what does the database look like" is a file in version control rather
+-- than a belief, after three occasions on which the belief was wrong:
 --
--- ── Regenerated 2026-09-29 from the real schema ─────────────────────────────
+--   · site_settings still carried `constraint single_row check (id = 1)`
+--     from the single-site era, which nothing in the repository mentioned;
+--   · albums.allow_downloads was read in three places before it existed;
+--   · photos.album_id cascades, and db/test-fixture.sql declared NO ACTION.
 --
--- Every table, column, default, constraint, index and policy below is taken
--- from db/schema-2026-09.sql, which is the output of db/survey.sql run against
--- production. The two files are meant to agree; if you change one, change both,
--- and re-run the S1 checks in claude/photo-migration-plan.md.
+-- ── How faithful this is ────────────────────────────────────────────────────
 --
--- The previous version of this file was hand-written and had drifted badly:
--- it declared 6 columns on `photos` where production has 19, knew nothing of
--- page_views.visitor_hash, and had NO ACTION on nine foreign keys that
--- production cascades. A rehearsal against it proved the opposite of the truth
--- — deleting an album FAILED locally and succeeds in production.
+-- Columns, types, nullability, defaults, foreign keys with their delete
+-- actions, unique constraints, indexes, RLS status and every policy are
+-- TRANSCRIBED from the survey output. Two things are not:
 --
--- ── What is stubbed, and what that costs ────────────────────────────────────
+--   1. CHECK predicates. The survey output was pasted back in an abbreviated
+--      form ("CHECK cover_fit IN ('cover','contain')") rather than the literal
+--      text pg_get_constraintdef returns. The predicates below are a faithful
+--      reconstruction of that meaning, not a byte-for-byte copy.
+--   2. The tenant helper functions. Part 5 of the survey returned the trigger
+--      list only, so the function bodies here come from
+--      db/migrations/2026-09-15_tenant_scoping.sql — they are the INTENDED
+--      definitions, not verified ones. See db/schema-verified.md.
 --
--- Bare PostgreSQL has no Supabase. These stand-ins exist only here:
+-- Everything else is production truth as of the date above.
 --
---   · the roles anon, authenticated, service_role;
---   · the `auth` schema, an `auth.users` table, and `auth.uid()` reading the
---     same request settings Supabase's does.
+-- ── Things recorded here that look wrong and were NOT changed ───────────────
 --
--- They are SHAPED like Supabase's, not equivalent to it. A test that passes
--- here proves the SQL is correct and the policy logic holds against a fake
--- session; it does not prove anything about real Supabase auth, JWT handling,
--- or PostgREST. Treat a local pass as necessary, never sufficient.
+-- Production is the source of truth. Where it disagrees with the application
+-- or with an older migration, the disagreement is documented, flagged in
+-- db/schema-verified.md, and left alone.
 --
--- Production is PostgreSQL 17.6. This fixture is normally rehearsed on
--- whatever the local machine has; say which when reporting a result.
+--   · orders.status DEFAULT 'pending_payment' is not in orders_status_check.
+--   · newsletter_signups_email_key is UNIQUE (email) — globally, not per site.
+--   · profiles_role_check forbids 'admin', which lib/auth.ts checks for.
+--   · albums and blog_posts each carry TWO identical unique indexes on
+--     (tenant_id, slug).
+--   · photos.watermark_enabled, blog_posts.cover_photo_id and
+--     blog_posts.featured_photo_id are columns no application code uses.
+--   · site_settings.instagram_token still exists beside site_secrets.
 --
 -- ════════════════════════════════════════════════════════════════════════════
-
-do $$ begin
-  if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
-  if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
-  if not exists (select 1 from pg_roles where rolname='service_role') then create role service_role nologin; end if;
-end $$;
-
-create extension if not exists pgcrypto;
-create schema if not exists auth;
-
--- Supabase owns this table. Only the column profiles.id references is needed.
-create table if not exists auth.users (
-  id uuid primary key default gen_random_uuid()
-);
-
--- Same shape as Supabase's.
-create or replace function auth.uid() returns uuid
-language sql stable as $$
-  select coalesce(
-    nullif(current_setting('request.jwt.claim.sub', true), ''),
-    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
-  )::uuid
-$$;
 
 -- A `language sql` function body is parsed when the function is created, and
 -- these read `tenants` and `profiles`, which do not exist yet — while those
@@ -1161,71 +1145,3 @@ end $$;
 create trigger site_draft_touch
   before update on public.site_draft
   for each row execute function public.touch_site_draft();
-
--- ── A small, valid site to rehearse against ─────────────────────────────────
--- Enough rows to exercise the cascades and the tenant policies. Every NOT NULL
--- column production has is supplied here, which is itself a check: a seed that
--- fails means the fixture and production disagree about what is required.
-
-insert into auth.users (id) values
-  ('11111111-1111-1111-1111-111111111111'),
-  ('22222222-2222-2222-2222-222222222222');
-
-insert into tenants (id, name, domain) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'Site One', 'one.example'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', 'Site Two', 'two.example');
-
-insert into tenant_domains (tenant_id, host, is_primary) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'one.example', true),
-  ('aaaaaaaa-0000-0000-0000-000000000002', 'two.example', true);
-
-insert into profiles (id, tenant_id, email, role, is_platform_admin) values
-  ('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', 'owner@one.example', 'owner', false),
-  ('22222222-2222-2222-2222-222222222222', 'aaaaaaaa-0000-0000-0000-000000000002', 'owner@two.example', 'owner', false);
-
-insert into site_settings (tenant_id, site_title) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'Site One'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', 'Site Two');
-
-insert into albums (id, tenant_id, title, slug, privacy_type) values
-  ('bbbbbbbb-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Public Gallery',  'public-gallery',  'public'),
-  ('bbbbbbbb-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'Private Gallery', 'private-gallery', 'client_only'),
-  ('bbbbbbbb-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000002', 'Other Site',      'other-site',      'public');
-
-insert into photos (id, tenant_id, album_id, storage_path, sort_order) values
-  ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000001', 't/one/photos/a/1/2400.webp', 0),
-  ('cccccccc-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000001', 't/one/photos/a/2/2400.webp', 1),
-  ('cccccccc-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 't/one/photos/b/1/2400.webp', 0);
-
-update albums set cover_photo_id = 'cccccccc-0000-0000-0000-000000000001'
-  where id = 'bbbbbbbb-0000-0000-0000-000000000001';
-
-insert into blog_posts (id, tenant_id, album_id, title, slug, status) values
-  ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
-   'bbbbbbbb-0000-0000-0000-000000000001', 'First Light', 'first-light', 'published');
-
-insert into clients (id, tenant_id, name, email) values
-  ('eeeeeeee-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'A Client', 'client@one.example');
-
-insert into album_clients (album_id, client_id) values
-  ('bbbbbbbb-0000-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-000000000001');
-
-insert into favorites (album_id, photo_id, client_id) values
-  ('bbbbbbbb-0000-0000-0000-000000000002', 'cccccccc-0000-0000-0000-000000000003', 'eeeeeeee-0000-0000-0000-000000000001');
-
-insert into downloads (photo_id, client_id) values
-  ('cccccccc-0000-0000-0000-000000000003', 'eeeeeeee-0000-0000-0000-000000000001');
-
--- Views on both a gallery and a story. These are what made the OLD fixture
--- refuse `delete from albums`: page_views.album_id was NO ACTION there and is
--- CASCADE in production.
-insert into page_views (album_id, visitor_hash) values
-  ('bbbbbbbb-0000-0000-0000-000000000001', 'hash-one');
-insert into page_views (post_id, visitor_hash) values
-  ('dddddddd-0000-0000-0000-000000000001', 'hash-two');
-
-insert into page_sections (tenant_id, page, type, position, settings) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'home', 'hero', 0, '{}'::jsonb);
-
-insert into site_draft (tenant_id, pages) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', '{}'::jsonb);

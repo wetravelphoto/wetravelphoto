@@ -190,16 +190,50 @@ async function main() {
 
   const db = adapter(client)
   /*
-   * Test rows only — and `photo.derivatives` counts as one here, because
-   * blocks 9b and 9c use the real kind. They have to: the allow-list and the
-   * resource check inside `enqueue_jobs` are among the things being tested,
-   * and a made-up kind would go nowhere near either. Nothing else in this
-   * database ever holds a job, so clearing the kind is safe; the photographs
-   * 9c invents are cleaned up by their storage path in that block's own
-   * `finally`.
+   * EVERY JOB BELONGING TO THE TWO TEST SITES, not just the kinds this file
+   * writes.
+   *
+   * It used to clear `test.%` and `photo.derivatives` only, and that was an
+   * isolation hole with teeth: `drain(db, { tenantId })` calls `claim_jobs`,
+   * which takes the oldest claimable job for that SITE whatever its kind. One
+   * leftover row of any other kind — from an interrupted run, or from
+   * scripts/jobs-concurrency.sh, whose own cleanup is equally narrow — gets
+   * claimed by a drain here, fails for want of a handler, and moves the
+   * `claimed`/`failed` counts every block below asserts on. Demonstrated: three
+   * foreign queued rows turn this suite from 61/61 into 59/61.
+   *
+   * These two sites' queues belong to this file for the duration, so clearing
+   * them wholesale is both safe and the only thing that makes the suite
+   * independent of what ran before it. The photographs block 9c invents are
+   * cleared here too rather than only in its own `finally`, so an interrupted
+   * run cannot poison the next one.
    */
-  const wipe = () =>
-    client.query("delete from jobs where kind like 'test.%' or kind = 'photo.derivatives'")
+  const wipe = async () => {
+    await client.query('delete from jobs where tenant_id = any($1::uuid[])', [
+      [TENANT_A, TENANT_B],
+    ])
+    await client.query("delete from photos where storage_path like 'mk/batch/%'")
+  }
+
+  /**
+   * AND THE QUEUE REALLY IS EMPTY BEFORE WE START.
+   *
+   * A guard rather than a hope: if something outside this file is writing jobs
+   * for these sites, every count below is meaningless, and a suite that reports
+   * a confusing failure twenty assertions later is worse than one that says so
+   * here.
+   */
+  const assertEmpty = async (where: string) => {
+    const n = Number(
+      (
+        await client.query(
+          'select count(*)::int as n from jobs where tenant_id = any($1::uuid[])',
+          [[TENANT_A, TENANT_B]]
+        )
+      ).rows[0].n
+    )
+    ok(`the queue is empty before ${where}`, n === 0, `${n} rows left over`)
+  }
   const one = async (sql: string, params: unknown[] = []) =>
     (await client.query(sql, params)).rows[0]
 
@@ -211,6 +245,10 @@ async function main() {
         [tenant, kind]
       )
       .then((r) => r.rows[0].id as string)
+
+  // ── 0. A CLEAN QUEUE, ASSERTED ────────────────────────────────────────────
+  await wipe()
+  await assertEmpty('the suite starts')
 
   // ── 1. A job that works ───────────────────────────────────────────────────
   {
@@ -301,10 +339,11 @@ async function main() {
   // ── 6. TWO WORKERS OVER THE SAME QUEUE ────────────────────────────────────
   //
   // The one that matters on Vercel, and the only place the real worker code,
-  // the real SQL and real concurrency meet. Two drains started at the same
-  // instant over six jobs: every job done, none done twice.
+  // the real SQL and real concurrency meet. Two drains racing over six jobs:
+  // every job done, none done twice.
   {
     await wipe()
+    await assertEmpty('the two-worker race')
     for (let i = 0; i < 6; i++) {
       await client.query(
         "insert into jobs (tenant_id, kind, payload) values ($1, 'test.ok', jsonb_build_object('n', $2::int))",
@@ -323,11 +362,40 @@ async function main() {
     const h1 = testHandlers()
     const h2 = testHandlers()
 
-    const [r1, r2] = await Promise.all([
-      drain(db, { tenantId: TENANT_A, resolve: h1.resolve }),
-      drain(adapter(second), { tenantId: TENANT_A, resolve: h2.resolve }),
-    ])
+    /*
+     * TWO DRAINS AT ONCE, REPEATED UNTIL THE QUEUE IS EMPTY — not once.
+     *
+     * The first version ran each drain once and asserted the two between them
+     * finished all six. That is not a property this design has, and the test
+     * was intermittently right: `drain` stops the moment `claim_jobs` returns
+     * no rows, and under `for update skip locked` that is a TRANSIENT when the
+     * other worker holds the locks on what is left. Both then stop early with
+     * `errors: []` and `outOfTime: false`, having claimed two each of six.
+     *
+     * Stopping there is correct for the real drain — the cron comes back, and a
+     * worker that waited on another's locks would burn its whole function
+     * budget doing nothing. So the code is right and the assertion was wrong.
+     *
+     * What IS guaranteed, and what this now asserts: however the two interleave
+     * and however many passes it takes, every job runs EXACTLY ONCE and never
+     * twice. The loop is bounded so a genuine stall fails rather than hangs.
+     */
+    const r1s: Awaited<ReturnType<typeof drain>>[] = []
+    const r2s: Awaited<ReturnType<typeof drain>>[] = []
+    let passes = 0
+    for (; passes < 10; passes++) {
+      const [a, b] = await Promise.all([
+        drain(db, { tenantId: TENANT_A, resolve: h1.resolve }),
+        drain(adapter(second), { tenantId: TENANT_A, resolve: h2.resolve }),
+      ])
+      r1s.push(a)
+      r2s.push(b)
+      if (a.claimed + b.claimed === 0) break
+    }
     await second.end()
+
+    const claimed1 = r1s.reduce((t, r) => t + r.claimed, 0)
+    const claimed2 = r2s.reduce((t, r) => t + r.claimed, 0)
 
     const done = Number((await one("select count(*)::int as n from jobs where kind='test.ok' and status='done'")).n)
     const most = Number((await one("select coalesce(max(attempts),0)::int as n from jobs where kind='test.ok'")).n)
@@ -335,15 +403,16 @@ async function main() {
       (n) => (h1.ran['test.ok:' + n] ?? 0) + (h2.ran['test.ok:' + n] ?? 0) === 1
     )
 
-    ok('two workers finish all six jobs', done === 6, `${done} done`)
-    ok('and no job was run twice', most === 1, `one job reached attempt ${most}`)
+    ok('two workers between them finish all six jobs', done === 6, `${done} done after ${passes} pass(es)`)
+    ok('AND NO JOB WAS RUN TWICE', most === 1, `one job reached attempt ${most}`)
     ok('every job ran exactly once, across both workers', eachRanOnce,
        JSON.stringify({ one: h1.ran, two: h2.ran }))
-    ok('the two workers are different', r1.worker !== r2.worker)
-    ok('and between them they claimed six', r1.claimed + r2.claimed === 6,
-       `${r1.claimed} + ${r2.claimed}`)
-    ok('with both doing some of it', r1.claimed > 0 && r2.claimed > 0,
-       `${r1.claimed} + ${r2.claimed} — one worker did all of it, so this proved nothing`)
+    ok('the two workers are different', r1s[0]!.worker !== r2s[0]!.worker)
+    ok('and between them they claimed six, no more', claimed1 + claimed2 === 6,
+       `${claimed1} + ${claimed2}`)
+    ok('with both doing some of it', claimed1 > 0 && claimed2 > 0,
+       `${claimed1} + ${claimed2} — one worker did all of it, so this proved nothing`)
+    ok('and it did not take an absurd number of passes', passes <= 6, `${passes} passes`)
   }
 
   // ── 7. One site's drain never spends its time on another's work ───────────
@@ -378,12 +447,28 @@ async function main() {
     const elapsed = Date.now() - started
 
     const left = Number((await one("select count(*)::int as n from jobs where kind='test.slow' and status='queued'")).n)
-    const stuck = Number((await one("select count(*)::int as n from jobs where kind='test.slow' and status='running'")).n)
+    /*
+     * HELD BY THIS WORKER, not merely `running`.
+     *
+     * The property being defended is that a drain never claims a job it then
+     * fails to run — which is about the rows THIS invocation took. Counting
+     * every `running` row made the assertion answerable by anything else on the
+     * database, which is how it once failed for a reason that had nothing to do
+     * with the budget.
+     */
+    const stuck = Number(
+      (
+        await client.query(
+          "select count(*)::int as n from jobs where kind = 'test.slow' and status = 'running' and locked_by = $1",
+          [report.worker]
+        )
+      ).rows[0].n
+    )
 
     ok('it stops when the budget is spent', report.outOfTime === true)
     ok('without overrunning it badly', elapsed < 2000, `${elapsed}ms against a 700ms budget`)
     ok('the rest are still queued for the next run', left > 0, `${left} left`)
-    ok('AND NONE IS LEFT SITTING IN running', stuck === 0,
+    ok('AND NONE OF ITS OWN IS LEFT SITTING IN running', stuck === 0,
        `${stuck} claimed but never run — they would wait out a ten-minute lease for nothing`)
     ok('it did some of the work', report.done > 0, `done ${report.done}`)
   }
@@ -464,18 +549,26 @@ async function main() {
     ok('nor a photograph that is not theirs',
        notMine.error !== null && notMine.queued === 0, `error ${notMine.error}`)
 
-    // And the worker finishes what the photographer queued.
+    // And the worker finishes what the photographer queued. Drained to empty
+    // rather than in one pass, for the reason spelled out in block 6.
     const h = testHandlers()
     const map: Record<string, number> = {}
-    const report = await drain(db, {
-      tenantId: TENANT_A,
-      resolve: (kind) => (kind === 'photo.derivatives'
-        ? async ({ payload }) => { map[String(payload.photoId)] = (map[String(payload.photoId)] ?? 0) + 1 }
-        : h.resolve(kind)),
-    })
+    const resolve = (kind: string) =>
+      kind === 'photo.derivatives'
+        ? async ({ payload }: { payload: Record<string, unknown> }) => {
+            map[String(payload.photoId)] = (map[String(payload.photoId)] ?? 0) + 1
+          }
+        : h.resolve(kind)
 
-    ok('the worker runs what the photographer queued', report.done === 2, `done ${report.done}`)
-    ok('exactly once each', map[mine[0]!] === 1 && map[mine[1]!] === 1, JSON.stringify(map))
+    let totalDone = 0
+    for (let pass = 0; pass < 10; pass++) {
+      const r = await drain(db, { tenantId: TENANT_A, resolve })
+      totalDone += r.done
+      if (r.claimed === 0) break
+    }
+
+    ok('the worker runs what the photographer queued', totalDone === 2, `done ${totalDone}`)
+    ok('exactly once each, never twice', map[mine[0]!] === 1 && map[mine[1]!] === 1, JSON.stringify(map))
     ok('and both are marked done',
        Number((await one("select count(*)::int as n from jobs where kind='photo.derivatives' and status='done'")).n) === 2)
   }

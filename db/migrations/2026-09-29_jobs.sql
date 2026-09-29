@@ -93,8 +93,9 @@
 -- DEFINER also makes the worker's rights exactly its job. service_role gets
 -- EXECUTE on two functions and nothing else: it cannot read the queue, cannot
 -- empty it, and cannot finish a job it does not hold. Every DEFINER function
--- here sets `search_path = public`, which is what stops a caller redirecting
--- the names inside it.
+-- here sets `search_path = ''` and writes every name out in full, which is what
+-- stops a caller redirecting the names inside it — see the longer note above
+-- `enqueue_jobs` for why an empty path rather than `public`.
 --
 -- ── Tenancy from the first row ──────────────────────────────────────────────
 --
@@ -505,32 +506,63 @@ begin
      and attempts >= max_attempts
      and (p_tenant is null or tenant_id = p_tenant);
 
+  /*
+   * A CTE, NOT A SUBQUERY IN `where id in (…)`, AND THIS IS NOT A STYLE
+   * CHOICE — it is a correctness fix for a bug that shipped in the first draft
+   * of this file and was caught by an intermittent test failure.
+   *
+   * The first version was:
+   *
+   *     update jobs j set … where j.id in (
+   *       select c.id from jobs c where … order by … limit p_limit
+   *       for update skip locked)
+   *
+   * which reads as "take at most p_limit rows" and is not what it does. The
+   * planner turns it into a Nested Loop Semi Join with the LIMIT/LockRows
+   * subquery on the INNER side, so the subquery is RE-EXECUTED once per
+   * candidate row of the outer scan — and because `skip locked` locks whatever
+   * it returns, each re-execution hands back a DIFFERENT row. Measured against
+   * five queued rows:
+   *
+   *     select count(*) from claim_jobs('w', 1, …)   →  5
+   *
+   * One call, `p_limit => 1`, five rows claimed and five attempts burned. In
+   * production that is a drain claiming a batch, running only the first, and
+   * abandoning the rest `running` under a ten-minute lease with an attempt
+   * spent — and after five such rounds each would be failed as "the worker did
+   * not report back" having never been run once.
+   *
+   * A CTE containing FOR UPDATE is never inlined and is materialised exactly
+   * once, so `limit p_limit` means what it says. `db/verify-jobs.sql` asserts
+   * it does, and that assertion fails against the form above.
+   *
+   * `for update skip locked` is still the whole concurrency story: two workers
+   * running this at the same instant each lock a different set of rows and
+   * neither waits for the other; a row already locked is passed over rather
+   * than queued behind. Without `skip locked` the second worker would block and
+   * then claim the SAME rows the first had just taken.
+   */
   return query
+  with picked as (
+    select c.id
+      from public.jobs c
+     where (p_tenant is null or c.tenant_id = p_tenant)
+       and (
+             (c.status = 'queued'  and c.run_after <= now())
+          or (c.status = 'running' and c.lease_until < now())
+       )
+     order by c.run_after, c.created_at
+     limit p_limit
+     for update skip locked
+  )
   update public.jobs j
      set status      = 'running',
          attempts    = j.attempts + 1,
          locked_at   = now(),
          locked_by   = p_worker,
          lease_until = now() + p_lease
-   where j.id in (
-     /*
-      * `for update skip locked` is the whole concurrency story. Two workers
-      * running this at the same instant each lock a different set of rows and
-      * neither waits for the other; a row already locked is passed over rather
-      * than queued behind. Without `skip locked` the second worker would block
-      * and then claim the SAME rows the first had just taken.
-      */
-     select c.id
-       from public.jobs c
-      where (p_tenant is null or c.tenant_id = p_tenant)
-        and (
-              (c.status = 'queued'  and c.run_after <= now())
-           or (c.status = 'running' and c.lease_until < now())
-        )
-      order by c.run_after, c.created_at
-      limit p_limit
-      for update skip locked
-   )
+    from picked
+   where j.id = picked.id
   returning j.*;
 end $$;
 

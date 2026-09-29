@@ -31,6 +31,49 @@ create temp view t as
          'aaaaaaaa-0000-0000-0000-000000000002'::uuid as b;
 
 
+-- ── A CLEAN QUEUE, AND PROOF OF IT ──────────────────────────────────────────
+--
+-- Every count in this file is taken over `jobs`, and several blocks call
+-- `claim_jobs` without naming a site — so one committed row left behind by
+-- anything else makes the whole suite report nonsense. It used to rely on the
+-- database happening to be tidy, and that failed the first time a stray row
+-- from another harness was committed: block 1's "a job that is not due yet is
+-- left alone" reported `6 claimed`.
+--
+-- Inside the transaction that always rolls back, so it destroys nothing that
+-- outlives the run.
+
+delete from jobs;
+
+/*
+ * AND THE PLANNER IS TOLD THE TABLE IS EMPTY, WHICH IS THE DANGEROUS CASE.
+ *
+ * Not housekeeping — it is what makes block 1b deterministic. The over-claim
+ * bug it guards against is PLAN-DEPENDENT: the `where id in (select … limit N
+ * for update skip locked)` form only over-claims when the planner puts that
+ * subquery on the inner side of a Nested Loop Semi Join, which it does when it
+ * believes the table is small. Measured against the buggy form:
+ *
+ *     stats say the table is empty  → p_limit 1 claimed 5
+ *     stats say it holds 500 rows   → p_limit 1 claimed 1
+ *
+ * So without this line the assertion below passes against the bug about half
+ * the time, which is worse than not having it. Empty is also the honest case:
+ * a queue that is keeping up is a queue with almost nothing in it.
+ *
+ * Rolled back with everything else, so production statistics are untouched.
+ */
+analyze jobs;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from jobs;
+  insert into job_res (step, expected, actual, pass) values
+    ('the queue starts empty', '0 rows', n || ' rows', n = 0);
+end $$;
+
+
 -- ── 1. A claim takes the job, counts the attempt, and leases it ─────────────
 
 do $$
@@ -67,6 +110,63 @@ begin
 
   perform set_config('job.ok', v_id::text, true);
   perform set_config('job.future', v_future::text, true);
+end $$;
+
+
+-- ── 1b. p_limit MEANS AT MOST p_limit ───────────────────────────────────────
+--
+-- The assertion that would have caught the bug this file's sibling suites found
+-- by accident, and the reason `claim_jobs` uses a CTE rather than
+-- `where id in (select … limit N for update skip locked)`.
+--
+-- That form reads as "take at most N" and is not what it does: the planner puts
+-- the LIMIT/LockRows subquery on the inner side of a Nested Loop Semi Join, so
+-- it is re-executed once per candidate row and `skip locked` hands back a new
+-- row each time. One call with `p_limit => 1` against five queued jobs claimed
+-- all five and burned an attempt on each. The drain runs only the first, so the
+-- other four sit `running` under a ten-minute lease having never been run —
+-- and after five such rounds each is failed as "the worker did not report
+-- back".
+--
+-- Deterministic, so this belongs here rather than in a suite that races.
+
+do $$
+declare
+  v_a    uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  n_one  int;
+  n_left int;
+  n_three int;
+  n_left3 int;
+  n_burn int;
+begin
+  -- Its own rows only. Block 1's job is `running` under a live lease and its
+  -- other is not due yet, so neither is claimable and neither needs removing —
+  -- and removing them would pull the ground from under block 2.
+  insert into jobs (tenant_id, kind) select v_a, 'test.limit' from generate_series(1, 5);
+
+  select count(*) into n_one
+    from public.claim_jobs('limit-worker', 1, interval '5 minutes', v_a);
+  select count(*) into n_left from jobs
+   where tenant_id = v_a and kind = 'test.limit' and status = 'queued';
+
+  select count(*) into n_three
+    from public.claim_jobs('limit-worker-2', 3, interval '5 minutes', v_a);
+  select count(*) into n_left3 from jobs
+   where tenant_id = v_a and kind = 'test.limit' and status = 'queued';
+
+  -- And nothing that was not claimed had an attempt spent on it.
+  select count(*) into n_burn
+    from jobs
+   where tenant_id = v_a and kind = 'test.limit' and status = 'queued' and attempts > 0;
+
+  insert into job_res (step, expected, actual, pass) values
+    ('p_limit 1 claims exactly one of five',  '1', n_one || '',   n_one = 1),
+    ('and leaves the other four queued',      '4', n_left || '',  n_left = 4),
+    ('p_limit 3 claims exactly three',        '3', n_three || '', n_three = 3),
+    ('and leaves the last one queued',        '1', n_left3 || '', n_left3 = 1),
+    ('a job still queued has no attempt spent on it', '0', n_burn || '', n_burn = 0);
+
+  delete from jobs where tenant_id = v_a and kind = 'test.limit';
 end $$;
 
 

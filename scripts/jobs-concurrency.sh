@@ -55,8 +55,30 @@ ok() { # ok <name> <expected> <actual>
   fi
 }
 
-cleanup() { Q "delete from jobs where kind = 'test.concurrency'" >/dev/null 2>&1; }
-trap cleanup EXIT
+# ── EVERY JOB FOR THE TEST SITE, not just this file's own kind ──────────────
+#
+# It used to delete `kind = 'test.concurrency'` only, and that was an isolation
+# hole with teeth. The workers below call `claim_jobs(..., $TENANT)`, which
+# takes the oldest claimable job for that SITE whatever its kind — so one
+# leftover row from .mk/jobs.ts or from an interrupted run gets claimed instead
+# of a row this file created, and the assertions that count who holds the
+# `test.concurrency` rows report a collision that never happened.
+#
+# Demonstrated: a single foreign queued row for this tenant turns this suite
+# into `13 passed, 1 failed — two workers can collide`, which is exactly the
+# intermittent failure this fix is for.
+#
+# This site's queue belongs to this file for the duration, so it clears the lot.
+cleanup() { Q "delete from jobs where tenant_id = '$TENANT'" >/dev/null 2>&1; }
+
+# A guard rather than a hope: if the queue is not what this file put there,
+# every count below is meaningless and it should say so here rather than fail
+# confusingly ten assertions later.
+expect_queue() { # expect_queue <n> <where>
+  local n
+  n=$(Q "select count(*) from jobs where tenant_id = '$TENANT'")
+  ok "the queue holds only this test's $1 row(s) before $2" "$1" "${n:-?}"
+}
 
 TENANT=$(Q "select id from tenants order by created_at, id limit 1")
 if [ -z "$TENANT" ]; then
@@ -64,11 +86,14 @@ if [ -z "$TENANT" ]; then
   exit 1
 fi
 
+# Installed only now that $TENANT is known — `cleanup` names it.
+trap cleanup EXIT
 cleanup
 
 # ── 1. Two jobs, two workers. Each must get one, and never the same one. ─────
 
 Q "insert into jobs (tenant_id, kind) values ('$TENANT','test.concurrency'), ('$TENANT','test.concurrency')" >/dev/null
+expect_queue 2 "two workers, two jobs"
 
 A_OUT=$(mktemp); B_OUT=$(mktemp)
 
@@ -115,6 +140,7 @@ ok "neither job was claimed twice" "1" \
 
 cleanup
 Q "insert into jobs (tenant_id, kind) values ('$TENANT','test.concurrency')" >/dev/null
+expect_queue 1 "one job, two workers"
 
 C_OUT=$(mktemp); D_OUT=$(mktemp)
 
@@ -157,6 +183,7 @@ ok "and was claimed exactly once"                     "1" \
 cleanup
 Q "insert into jobs (tenant_id, kind)
    select '$TENANT', 'test.concurrency' from generate_series(1, 3)" >/dev/null
+expect_queue 3 "the six-way race"
 
 RACE=$(mktemp -d)
 for w in 1 2 3 4 5 6; do

@@ -59,15 +59,36 @@ create sequence if not exists order_number_seq;
 create sequence if not exists site_settings_id_seq;
 create sequence if not exists site_draft_steps_id_seq;
 
--- ── The tenant helpers ──────────────────────────────────────────────────────
--- Bodies taken from db/migrations/2026-09-15_tenant_scoping.sql and
--- db/migrations/2026-09-24_no_guessing_tenant.sql. Production's own
--- definitions were NOT captured by the 2026-09-29 survey (Part 5 returned the
--- trigger list only), so these are the intended definitions, not verified ones.
--- See db/schema-verified.md, "Not yet verified".
+-- ── Functions ───────────────────────────────────────────────────────────────
+--
+-- Production's function inventory was surveyed on 2026-09-29. Nine functions
+-- exist in `public`, and every one of their VOLATILITY and SECURITY attributes
+-- matches the migration that created it — no drift. The attribute on each
+-- function below is production truth, confirmed:
+--
+--   apply_tenant_policy      INVOKER  VOLATILE
+--   apply_tenant_policy_via  INVOKER  VOLATILE
+--   current_tenant_id        DEFINER  STABLE
+--   default_tenant_id        DEFINER  STABLE
+--   is_platform_admin        DEFINER  STABLE
+--   push_draft_step          INVOKER  VOLATILE
+--   tenant_for_insert        DEFINER  STABLE
+--   tenant_of                DEFINER  STABLE
+--   touch_site_draft         INVOKER  VOLATILE
+--
+-- The BODIES are not production output — the survey returns signatures and
+-- attributes, not source. They are taken from the migrations that created
+-- them, which the attributes above corroborate. See db/schema-verified.md.
+--
+-- DEFINER + STABLE on the four tenant readers is load-bearing, not incidental:
+-- definer because a policy on `profiles` that reads `profiles` through an
+-- invoker function recurses forever, and stable so Postgres evaluates them
+-- once per statement rather than once per row.
 
 create or replace function public.default_tenant_id() returns uuid
 language sql stable security definer set search_path = public as $$
+  -- ORDER BY is the whole point of this redefinition. Without it "the first
+  -- tenant" means "any tenant".
   select id from tenants order by created_at asc, id asc limit 1;
 $$;
 
@@ -86,18 +107,32 @@ language sql stable security definer set search_path = public as $$
   select coalesce(public.current_tenant_id(), public.default_tenant_id());
 $$;
 
+-- Parameter names matter: they are part of the signature for a named-argument
+-- call. Production has (parent, key_value, key_column) — taken from
+-- db/migrations/2026-09-15_tenant_scoping.sql, which production matches.
 create or replace function public.tenant_of(
-  parent regclass, key uuid, parent_key text default 'id'
-) returns uuid
+  parent     regclass,
+  key_value  uuid,
+  key_column text default 'id'
+)
+returns uuid
 language plpgsql stable security definer set search_path = public as $$
-declare result uuid;
+declare
+  found uuid;
 begin
-  if key is null then return null; end if;
-  execute format('select tenant_id from %s where %I = $1', parent::text, parent_key)
-    into result using key;
-  return result;
+  if key_value is null then
+    return null;
+  end if;
+
+  execute format('select tenant_id from %s where %I = $1', parent::text, key_column)
+     into found
+    using key_value;
+
+  return found;
 end $$;
 
+-- INVOKER and VOLATILE, in production and in the migration. These two generate
+-- policies; the next migration calls them by name.
 create or replace function public.apply_tenant_policy(target regclass)
 returns void language plpgsql as $$
 declare
@@ -126,6 +161,57 @@ begin
   execute format(
     'create policy "Tenant members manage" on %s for all using %s with check %s',
     tbl, check_expr, check_expr);
+end $$;
+
+-- Undo steps, coalesced in the database so a burst of slider drags is one step.
+-- SECURITY INVOKER on purpose: it runs with the caller's own rights, so RLS
+-- still decides which site's rows it can touch. Body from
+-- db/migrations/2026-09-22_draft_steps.sql.
+create or replace function public.push_draft_step(
+  p_tenant   uuid,
+  p_snapshot jsonb,
+  p_label    text,
+  p_window   interval default interval '1.5 seconds',
+  p_keep     int      default 50
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  last_label text;
+  last_write timestamptz;
+begin
+  -- A new edit makes whatever was undone unreachable, as in every editor.
+  delete from site_draft_steps where tenant_id = p_tenant and stack = 'redo';
+
+  select edit_label, updated_at
+    into last_label, last_write
+    from site_draft
+   where tenant_id = p_tenant;
+
+  -- Still the same burst: the same thing edited, moments ago. The step kept
+  -- at the start of the burst already holds the state before it.
+  if last_label is not null
+     and last_label = p_label
+     and last_write > clock_timestamp() - p_window then
+    return;
+  end if;
+
+  insert into site_draft_steps (tenant_id, stack, snapshot, label)
+  values (p_tenant, 'undo', p_snapshot, p_label);
+
+  -- Newest p_keep only.
+  delete from site_draft_steps
+   where tenant_id = p_tenant
+     and stack = 'undo'
+     and id not in (
+       select id from site_draft_steps
+        where tenant_id = p_tenant and stack = 'undo'
+        order by id desc
+        limit p_keep
+     );
 end $$;
 
 create table album_clients (
@@ -1130,6 +1216,14 @@ grant delete, insert, references, select, trigger, truncate, update
 -- as inferred rather than verified.
 grant usage, select on all sequences in schema public
   to anon, authenticated, service_role;
+
+-- ── Function-level grants ───────────────────────────────────────────────────
+-- From db/migrations/2026-09-22_draft_steps.sql. Undo history is an editor's
+-- tool; anon has no business calling it.
+revoke all on function public.push_draft_step(uuid, jsonb, text, interval, int)
+  from public, anon;
+grant execute on function public.push_draft_step(uuid, jsonb, text, interval, int)
+  to authenticated;
 
 -- ── The only trigger in the public schema ───────────────────────────────────
 -- Verified 2026-09-29: this is the ONLY non-internal trigger production has.

@@ -20,8 +20,8 @@ The full picture is in **`db/schema-2026-09.sql`**, transcribed from
 **not installed**: `vector` 0.8.2, `pg_cron` 1.6.4, `pg_trgm` 1.6.
 
 **Shape.** 34 tables in `public`, 473 columns, RLS enabled on all 34, 53
-policies, one trigger (`site_draft_touch` on `site_draft`), and no trigger
-anywhere else.
+policies, **9 functions**, one trigger (`site_draft_touch` on `site_draft`), and
+no trigger anywhere else.
 
 **Size.** Small: `photos` ~83 rows, `page_views` ~63, `page_sections` ~28,
 `site_settings` 4, everything else at or near zero. This is a good moment to do
@@ -167,7 +167,7 @@ tenant columns still default to `tenant_for_insert()`.
 
 ## Reconstructed, not transcribed
 
-Two parts of `db/schema-2026-09.sql` are not byte-for-byte production output.
+Three parts of `db/schema-2026-09.sql` are not byte-for-byte production output.
 
 1. **CHECK predicates.** The survey result was returned in an abbreviated form
    (`CHECK cover_fit IN ('cover','contain')`) rather than the literal text
@@ -178,25 +178,57 @@ Two parts of `db/schema-2026-09.sql` are not byte-for-byte production output.
 2. **Sequence grants.** `db/survey.sql` covers table grants only. The snapshot's
    `grant usage, select on all sequences` is Supabase's default and is required
    for an `authenticated` insert into `site_settings`; it was **not** surveyed.
+3. **Function bodies.** The survey returns each function's signature, security
+   mode and volatility, not its source. The bodies come from the migrations
+   listed in the function table above, and the attributes corroborate them.
 
 ---
 
-## Not yet verified
+## 2026-09-29 — the function inventory
 
-**The function inventory.** Part 5 of the survey returned the trigger list but
-not the function list. The existence of `current_tenant_id()`,
-`is_platform_admin()`, `tenant_of()` and `tenant_for_insert()` is proved
-indirectly — the policies and column defaults reference them and production
-works — but their **volatility and `security definer` status are not confirmed**,
-and `apply_tenant_policy()` / `apply_tenant_policy_via()` are not confirmed to
-exist at all. The next migration calls those two helpers by name.
+Nine functions in `public`. Every VOLATILITY and SECURITY attribute matches the
+migration that created it. **No drift.**
 
-The bodies in `db/schema-2026-09.sql` therefore come from
-`db/migrations/2026-09-15_tenant_scoping.sql` — the intended definitions, not
-verified ones. The query that would close this is in `db/survey.sql`, Part 5,
-first statement.
+| function | security | volatility | created by |
+|---|---|---|---|
+| `apply_tenant_policy(target regclass)` | INVOKER | VOLATILE | `2026-09-15_tenant_scoping.sql` |
+| `apply_tenant_policy_via(target regclass, fk_column text, parent regclass, parent_key text)` | INVOKER | VOLATILE | same |
+| `current_tenant_id()` | **DEFINER** | STABLE | same |
+| `default_tenant_id()` | **DEFINER** | STABLE | same, redefined by `2026-09-24_no_guessing_tenant.sql` |
+| `is_platform_admin()` | **DEFINER** | STABLE | `2026-09-15_tenant_scoping.sql` |
+| `push_draft_step(p_tenant uuid, p_snapshot jsonb, p_label text, p_window interval, p_keep integer)` | INVOKER | VOLATILE | `2026-09-22_draft_steps.sql` |
+| `tenant_for_insert()` | **DEFINER** | STABLE | `2026-09-15_tenant_scoping.sql` |
+| `tenant_of(parent regclass, key_value uuid, key_column text)` | **DEFINER** | STABLE | same |
+| `touch_site_draft()` | INVOKER | VOLATILE | `2026-09-22_draft_steps.sql` |
 
----
+**DEFINER + STABLE on the four tenant readers is load-bearing.** Definer because
+a policy on `profiles` that reads `profiles` through an invoker function recurses
+forever; stable so Postgres evaluates them once per statement rather than once
+per row. The migration says as much, and production agrees.
+
+**`apply_tenant_policy` and `apply_tenant_policy_via` both exist.** The P1
+migration calls them by name, so that dependency is confirmed rather than
+assumed. They are INVOKER and VOLATILE — correct for a function whose whole job
+is to run DDL as the caller.
+
+The survey returns signatures and attributes, not source, so the BODIES in
+`db/schema-2026-09.sql` still come from the migrations. The attributes above
+corroborate them: a body that had been edited in place would be unlikely to keep
+the same security and volatility markers.
+
+### Two things this inventory corrected in our own files
+
+1. **`push_draft_step` was missing entirely** from the first snapshot, along
+   with its function-level grants (`revoke all … from public, anon`,
+   `grant execute … to authenticated`). `lib/drafts/steps.ts:182` calls it by
+   RPC on every draft write, so a rehearsal of anything touching undo history
+   would have failed locally for a reason that does not exist in production.
+   Restored from `2026-09-22_draft_steps.sql`.
+2. **`tenant_of`'s parameter names were wrong** in our reconstruction —
+   `(parent, key, parent_key)` instead of production's
+   `(parent, key_value, key_column)`. Parameter names are part of the signature
+   for a named-argument call, so this was a genuine defect in the fixture, not a
+   cosmetic one. Production matches its migration; our file was the outlier.
 
 ## A test that is now wrong about production
 

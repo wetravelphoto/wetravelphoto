@@ -300,9 +300,9 @@ holds exactly one of the 55.
 sitting, which was the condition recorded below before deployment. The three
 function definitions in both were **copied verbatim from the migration**, and
 `scripts/fixture-matches-migration.sh` is what stops that copy drifting: it
-builds the fixture, records 402 facts about `jobs`, drops the lot, lets the
+builds the fixture, records 403 facts about `jobs`, drops the lot, lets the
 migration build it instead, and diffs. Shown to catch a single changed column
-default.
+default. It covers `page_views` the same way since S4 — see below.
 
 ### The bug the deployment does not contain
 
@@ -479,6 +479,122 @@ row that is not a duplicate and skips the ones that are. That is what the code
 sends now. Pressing "Process photographs" a second time would have failed the
 whole insert, in production, on the first day.
 
+
+---
+
+## 2026-09-29 — analytics, DEPLOYED TO PRODUCTION
+
+**Supabase migration version `20260929231653`,
+`analytics_instrumentation_2026_09_29`.** The file's SHA256 was checked against
+the committed copy before it was applied:
+
+```
+c1acb1ae3a68c21094622820c768343e1e5fba63de6ee2f769ba5d4ddd4bfbdf
+```
+
+### The preflight, run immediately before
+
+`tenant_id` comes out of this migration NOT NULL and `page_views_identity`
+requires exactly one of `page_key`/`album_id`/`post_id`, so the migration cannot
+be applied to a table holding a row that satisfies neither. It refuses rather
+than inventing a site or deleting anything — proved locally by seeding such a row
+and watching it roll back without even adding the column. One query settles it in
+advance, and it was run:
+
+| | |
+|---|---|
+| `page_views` total | **77** |
+| album only | 54 |
+| post only | 23 |
+| both album and post | **0** |
+| neither | **0** |
+| rows failing the new identity rule | **0** |
+
+So there was no blocker: every existing row could be attributed to a site, and
+every one already satisfied the constraint that was about to be added.
+
+### Verified against the live database afterwards, not assumed
+
+| | |
+|---|---|
+| the 77 rows | all still there |
+| `tenant_id` | populated on all 77, `uuid NOT NULL`, FK to `tenants(id)` ON DELETE CASCADE |
+| ownership | **0** rows where the site disagrees with the row's album or story |
+| identity | **0** rows failing `page_views_identity` |
+| the five metadata columns | still NULL on every legacy row — `path`, `page_key`, `referrer_host`, `session_hash`, `device` |
+| preserved columns | `id`, `album_id`, `post_id`, `visitor_hash`, `viewed_at` — names, types and meanings unchanged |
+| indexes | `page_views_pkey`, `page_views_album_idx`, `page_views_post_idx`, `page_views_tenant_time` |
+| constraints | the three FKs, plus `page_views_identity`, `_path_is_a_path`, `_page_key_shape`, `_referrer_is_a_host`, `_session_shape`, `_device_bucket`, `_visitor_is_a_hash` |
+| RLS | enabled, and `Tenant members manage` is the **only** policy: ALL, `tenant_id = current_tenant_id() or is_platform_admin()`, both USING and WITH CHECK |
+| `"Anyone can record a view"` | **gone** |
+| table grants | `anon`: none. `authenticated`: SELECT. `service_role`: SELECT, DELETE. **No direct INSERT for anybody.** |
+| `record_page_view` | DEFINER, `search_path = ''`, returns `uuid`, EXECUTE to `service_role` only among application roles |
+| its session rule | the FINAL one: a NULL session is accepted, a non-null one must match `^[0-9a-f]{32}$` |
+
+### And a live smoke test, as the role that actually writes
+
+Run as `service_role` against production: the homepage, `page_key = home`,
+`device = desktop`, `referrer_host = instagram.com`, **`session_hash = NULL`**.
+`record_page_view` created the row. The test row was deleted and `page_views`
+returned to exactly 77.
+
+That the smoke test used a NULL session is the point of it. The first version of
+this migration refused one, which would have made a browser with site data
+blocked an uncounted visitor — systematic undercounting of exactly the people
+most likely to have blocked storage, over a column that exists only for
+within-visit funnels. The deployed function accepts it.
+
+### The counts, and one that went DOWN
+
+Production is now **35 tables, 494 columns, 13 functions, 54 policies**, RLS on
+all 35. No table was added or dropped.
+
+**54 is one fewer than the 55 after the queue**, and that is the change rather
+than an error in it: `"Anyone can record a view"` was `for insert with check
+(true)` — anybody at all, no account needed, could POST to PostgREST and write a
+view against any gallery on the platform with any visitor hash and any timestamp.
+Dropping it is most of what S4 was for. `Tenant members manage` was dropped and
+recreated in the same migration, so it is a replacement and not a second policy.
+
+### The reconciliation, and what now stops it drifting
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` were updated in the same
+sitting. The table definition, all seven CHECKs, the tenant foreign key, both
+indexes, the policy, the grant block and `record_page_view` were **copied from
+the migration**, and the fixture's own two seeded views gained the `tenant_id`
+their parents belong to, because the column is NOT NULL. Both files were
+confirmed to declare `page_views` identically to each other, and the rebuilt
+fixture's table was compared against the production description column by column.
+
+`scripts/fixture-matches-migration.sh` now guards both tables. It builds the
+fixture, records the facts, then **strips everything S4 added** — the policy
+first (the column cannot be dropped while a policy names it), then the six
+columns, which takes their CHECKs and indexes with them, then the function, then
+the grants back to their pre-S4 breadth — and lets the migration put it all back.
+403 facts compared for `jobs`, 175 for `page_views`. Shown to bite twice: making
+the fixture's session CHECK case-insensitive, and adding a fourth device bucket,
+each reported as drift with a clean diff and exit 1.
+
+### One thing the extended guard found, which was the guard's own fault
+
+The first version compared each column's raw `attnum`. Dropping six columns and
+letting the migration add them back leaves gaps, so the rebuilt ones came back as
+12–17 where the fixture had 6–11 — identical names, identical types, identical
+order, reported as drift. The same would have been true between the two databases
+anyway: production reached those columns by `add column` (6–11) and the fixture
+declares them inline (1–11), so the raw numbers were never comparable.
+
+Position is now compared as a **rank among the live columns**, which still
+catches a reordering and is immune to the drop. Dropping the position from the
+comparison altogether would have been the easy fix and the wrong one — column
+order is exactly the kind of thing a careless edit to the fixture gets wrong.
+
+### From the advisors, after deployment
+
+No S4-specific security finding. `page_views_tenant_time` and
+`page_views_post_idx` report as unused, which is expected immediately after
+creation and worth re-checking once there is real traffic — the same follow-up
+already recorded for the queue's three indexes.
 
 ---
 

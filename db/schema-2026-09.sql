@@ -24,9 +24,34 @@
 -- everything else is: so that "what does the database look like" stays a file
 -- rather than a belief.
 --
--- Production is therefore now **35 tables, 488 columns, 12 functions**, RLS on
--- all 35, and 54 policies. The survey figures quoted below are the state before
+-- Production was therefore **35 tables, 488 columns, 12 functions**, RLS on all
+-- 35, and 55 policies. The survey figures quoted below are the state before
 -- that deployment.
+--
+-- (The policy figure was written here as 54 and was wrong by one. Production was
+-- counted directly on 2026-09-29: 55 after the queue, of which `jobs` holds
+-- exactly one, so 54 before it. `db/schema-verified.md` has the whole story;
+-- the schema files were right all along.)
+--
+-- ── UPDATED 2026-09-29 (late): analytics ────────────────────────────────────
+--
+-- `page_views` gained six columns, seven CHECK constraints, a tenant foreign
+-- key, two indexes, a replaced policy, narrowed grants and one function,
+-- deployed by db/migrations/2026-09-29_analytics.sql, recorded by Supabase as
+-- migration version **20260929231653** (`analytics_instrumentation_2026_09_29`),
+-- sha256 **c1acb1ae3a68c21094622820c768343e1e5fba63de6ee2f769ba5d4ddd4bfbdf**,
+-- and verified against the live database afterwards.
+--
+-- Production is therefore now **35 tables, 494 columns, 13 functions**, RLS on
+-- all 35, and **54 policies** — one FEWER than before, which is the whole point
+-- of the change: `"Anyone can record a view"` was `for insert with check (true)`
+-- and is gone. No table was added and none was dropped.
+--
+-- The 77 rows that existed before it all survived, all carry a `tenant_id`
+-- backfilled from their album or story, and all still carry NULL in the five
+-- new metadata columns — verified, because a fixture that filled them in would
+-- make every test about "what a pre-S4 row looks like" pass for the wrong
+-- reason.
 --
 -- ── How faithful this is ────────────────────────────────────────────────────
 --
@@ -468,12 +493,30 @@ create table page_sections (
   updated_at  timestamptz not null default now()
 );
 
+-- The six columns after `viewed_at` were added by
+-- db/migrations/2026-09-29_analytics.sql (Supabase migration version
+-- 20260929231653) and are in the order production reports them, which is the
+-- order `add column` created them. The first five columns are untouched: S4 was
+-- additive, and `album_id`, `post_id`, `visitor_hash` and `viewed_at` keep their
+-- names, their types and their meanings.
+--
+-- `tenant_id` is NOT NULL, verified against production after deployment: all 77
+-- pre-existing rows were backfilled from their album or story and none was left
+-- without a site. The other five are nullable FOR EVER, because a row written
+-- before that migration genuinely has no path, no session and no device, and
+-- production confirms all 77 of them still carry NULL in each.
 create table page_views (
   id            uuid not null default gen_random_uuid(),
   album_id      uuid,
   post_id       uuid,
   visitor_hash  text not null,
-  viewed_at     timestamptz not null default now()
+  viewed_at     timestamptz not null default now(),
+  tenant_id     uuid not null,
+  path          text,
+  page_key      text,
+  referrer_host text,
+  session_hash  text,
+  device        text
 );
 
 create table photo_shop_categories (
@@ -1249,6 +1292,182 @@ comment on function public.finish_job(uuid, text, text, boolean) is
   'the lease.';
 
 
+-- ── Analytics' one function ─────────────────────────────────────────────────
+--
+-- Here rather than up with the alphabetical list for the same reason as the
+-- queue's three: it belongs to one migration and reads as one thing. Unlike
+-- them its RETURN TYPE is `uuid`, so it does not depend on a table existing —
+-- only its body mentions `public.page_views`, which `set check_function_bodies
+-- = off` excuses.
+--
+-- Deployed 2026-09-29 by db/migrations/2026-09-29_analytics.sql (Supabase
+-- migration version 20260929231653, sha256
+-- c1acb1ae3a68c21094622820c768343e1e5fba63de6ee2f769ba5d4ddd4bfbdf).
+--
+-- COPIED VERBATIM from that migration. Verified against production after
+-- deployment: SECURITY DEFINER, `search_path = ''`, returns uuid, EXECUTE to
+-- `service_role` only, and carrying the FINAL nullable-session behaviour — a
+-- null session is accepted, a non-null one must match `^[0-9a-f]{32}$`. The
+-- long explanations of WHY each check is there live in the migration, and
+-- `db/verify-analytics.sql` is what checks the behaviour.
+--
+-- A live smoke test was run against production as `service_role` after
+-- deployment — homepage, page_key `home`, device `desktop`, referrer
+-- `instagram.com`, session NULL — the row was created, then deleted, and
+-- `page_views` returned to exactly 77 rows.
+
+create or replace function public.record_page_view(
+  p_tenant        uuid,
+  p_path          text,
+  p_visitor       text,
+  p_session       text,
+  p_device        text,
+  p_page_key      text default null,
+  p_album         uuid default null,
+  p_post          uuid default null,
+  p_referrer_host text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_expected text;
+  v_id       uuid;
+begin
+  -- 1. the site
+  if p_tenant is null
+     or not exists (select 1 from public.tenants t where t.id = p_tenant) then
+    raise exception 'record_page_view: no such site %', p_tenant;
+  end if;
+
+  -- 2. and whether this caller may record for it
+  --
+  -- `session_user` and `current_user` are written BARE, and `coalesce` below
+  -- too. They are not functions: the parser resolves them as SQL constructs,
+  -- there is no `pg_catalog.current_user` to call, and qualifying them fails
+  -- with "missing FROM-clause entry for table pg_catalog" — measured, not
+  -- assumed. Being parser constructs is also why `search_path = ''` cannot
+  -- reach them, which is the property that matters here.
+  if not (p_tenant = public.current_tenant_id() or public.is_platform_admin()
+          or pg_catalog.current_setting('role', true) = 'service_role'
+          or session_user = current_user) then
+    raise exception 'record_page_view: not permitted to record for site %', p_tenant;
+  end if;
+
+  -- 3. exactly one identity
+  if pg_catalog.num_nonnulls(p_page_key, p_album, p_post) <> 1 then
+    raise exception
+      'record_page_view: a view is of exactly one thing — a page, a gallery or '
+      'a story. Given page_key=%, album=%, post=%.', p_page_key, p_album, p_post;
+  end if;
+
+  -- 4/5/6. the resource, its owner, and the address it lives at
+  if p_album is not null then
+    select '/trips/' || a.slug into v_expected
+      from public.albums a
+     where a.id = p_album and a.tenant_id = p_tenant;
+    if v_expected is null then
+      raise exception
+        'record_page_view: gallery % does not belong to site %', p_album, p_tenant;
+    end if;
+
+  elsif p_post is not null then
+    select '/journal/' || p.slug into v_expected
+      from public.blog_posts p
+     where p.id = p_post and p.tenant_id = p_tenant;
+    if v_expected is null then
+      raise exception
+        'record_page_view: story % does not belong to site %', p_post, p_tenant;
+    end if;
+
+  else
+    v_expected := case p_page_key
+      when 'home'      then '/'
+      when 'about'     then '/about'
+      when 'contact'   then '/contact'
+      when 'journal'   then '/journal'
+      -- The editor calls it "galleries"; the public address has always been
+      -- /trips and links to it are out in the world. lib/sections/pages.ts.
+      when 'galleries' then '/trips'
+      when 'shop'      then '/shop'
+      else null
+    end;
+
+    if v_expected is null then
+      -- One of the photographer's own pages. Its key and its address both
+      -- live in the same stored list, so the address is read from there
+      -- rather than trusted.
+      select '/' || (e.value ->> 'slug') into v_expected
+        from public.site_settings s,
+             pg_catalog.jsonb_array_elements(
+               coalesce(s.custom_pages, '[]'::jsonb)) as e
+       where s.tenant_id = p_tenant
+         and e.value ->> 'key' = p_page_key
+       limit 1;
+    end if;
+
+    if v_expected is null then
+      raise exception
+        'record_page_view: site % has no page called %', p_tenant, p_page_key;
+    end if;
+  end if;
+
+  if p_path is distinct from v_expected then
+    raise exception
+      'record_page_view: that resource lives at %, not at %', v_expected, p_path;
+  end if;
+
+  -- 7. the shapes
+  if p_device is null or p_device not in ('phone', 'tablet', 'desktop') then
+    raise exception 'record_page_view: device must be phone, tablet or desktop, not %',
+      coalesce(p_device, 'null');
+  end if;
+
+  -- Null is allowed and means "this browser would not keep a per-tab value".
+  -- Anything else must be exactly what lib/analytics/session.ts mints: 16
+  -- random bytes as lower-case hex. `~` is case-sensitive, so an upper-case
+  -- hex string is refused, which is deliberate — one canonical spelling or the
+  -- column cannot be grouped by.
+  if p_session is not null and p_session !~ '^[0-9a-f]{32}$' then
+    raise exception
+      'record_page_view: a session id must be 32 lower-case hex characters, or null';
+  end if;
+
+  -- A hash. Not an address, not a user-agent, not an email — see the
+  -- page_views_visitor_is_a_hash constraint for what each clause rules out.
+  if p_visitor is null
+     or pg_catalog.length(p_visitor) not between 8 and 64
+     or p_visitor ~ '[[:space:]@/:]'
+     or p_visitor ~ '^[0-9.]+$' then
+    raise exception 'record_page_view: visitor hash is not a hash';
+  end if;
+
+  if p_referrer_host is not null
+     and not (p_referrer_host ~ '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'
+              and p_referrer_host like '%.%') then
+    raise exception
+      'record_page_view: referrer must be a bare host, not %', p_referrer_host;
+  end if;
+
+  insert into public.page_views
+    (tenant_id, path, page_key, album_id, post_id,
+     visitor_hash, session_hash, referrer_host, device)
+  values
+    (p_tenant, p_path, p_page_key, p_album, p_post,
+     p_visitor, p_session, p_referrer_host, p_device)
+  returning id into v_id;
+
+  return v_id;
+end $$;
+
+comment on function public.record_page_view(uuid, text, text, text, text, text, uuid, uuid, text) is
+  'The only way a page view is written. Validates the site, exactly one '
+  'identity, that an album or story belongs to that site, that the path is the '
+  'one that resource lives at, and every column shape. A null session is '
+  'allowed; anything else must be 32 lower-case hex characters.';
+
+
 -- ── Primary keys ────────────────────────────────────────────────────────────
 alter table album_clients          add constraint album_clients_pkey primary key (album_id, client_id);
 alter table albums                 add constraint albums_pkey primary key (id);
@@ -1365,6 +1584,11 @@ alter table page_views add constraint page_views_album_id_fkey
   foreign key (album_id) references albums(id) on delete cascade;
 alter table page_views add constraint page_views_post_id_fkey
   foreign key (post_id) references blog_posts(id) on delete cascade;
+-- S4. ON DELETE CASCADE, matching this table's other two and matching `jobs`.
+-- `app/actions/sites.ts` still deletes the rows explicitly and first; the
+-- cascade is the backstop for a path nobody thought of.
+alter table page_views add constraint page_views_tenant_id_fkey
+  foreign key (tenant_id) references tenants(id) on delete cascade;
 
 alter table photo_shop_categories add constraint photo_shop_categories_category_id_fkey
   foreign key (category_id) references shop_categories(id) on delete cascade;
@@ -1447,6 +1671,44 @@ alter table jobs add constraint jobs_status_check                check (status i
 alter table jobs add constraint jobs_max_attempts_check          check (max_attempts between 1 and 20);
 alter table orders add constraint orders_status_check              check (status in ('pending','paid','fulfilled','cancelled'));
 
+-- S4's seven, from db/migrations/2026-09-29_analytics.sql. Unlike almost every
+-- other CHECK in this file these are NOT a reconstruction — they were written by
+-- that migration and verified present in production by name after deployment,
+-- so the predicates here are the literal ones.
+--
+-- They say the same things `record_page_view` says, on purpose: the function is
+-- the door, and these are what the table IS. A future migration, a backfill or
+-- somebody at a psql prompt goes round the door; nothing goes round a CHECK.
+--
+-- `page_views_visitor_is_a_hash` is the one to read twice. `visitor_hash` is
+-- where an IP address would go if somebody ever decided hashing it was
+-- inconvenient, so the table refuses one: no colon rules out IPv6,
+-- `^[0-9.]+$` rules out IPv4, and no space, `@` or `/` rules out a user-agent,
+-- an email address and a URL.
+alter table page_views add constraint page_views_identity
+  check (num_nonnulls(page_key, album_id, post_id) = 1);
+alter table page_views add constraint page_views_path_is_a_path
+  check (path is null or (path ~ '^/[^?#[:space:]]*$' and length(path) <= 255));
+alter table page_views add constraint page_views_page_key_shape
+  check (page_key is null or page_key ~
+    '^(home|about|contact|journal|galleries|shop|p_[a-z0-9]{8})$');
+alter table page_views add constraint page_views_referrer_is_a_host
+  check (referrer_host is null or
+         (referrer_host ~ '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'
+          and referrer_host like '%.%'));
+-- Null is an ordinary value: a browser that will not keep a per-tab value is
+-- still a visitor, and the view is recorded without one. A session id that IS
+-- present is exactly 16 random bytes as LOWER-CASE hex — `~` is case-sensitive,
+-- so one canonical spelling, or the column cannot be grouped by.
+alter table page_views add constraint page_views_session_shape
+  check (session_hash is null or session_hash ~ '^[0-9a-f]{32}$');
+alter table page_views add constraint page_views_device_bucket
+  check (device is null or device in ('phone', 'tablet', 'desktop'));
+alter table page_views add constraint page_views_visitor_is_a_hash
+  check (length(visitor_hash) between 8 and 64
+         and visitor_hash !~ '[[:space:]@/:]'
+         and visitor_hash !~ '^[0-9.]+$');
+
 alter table products add constraint products_type_check            check (type in ('print','digital_download'));
 
 -- NOTE: lib/auth.ts EDIT_ROLES includes 'admin', which this forbids.
@@ -1498,6 +1760,12 @@ create unique index orders_order_number_idx         on orders (order_number);
 create index        orders_tenant_created_idx       on orders (tenant_id, created_at desc);
 create index        page_sections_page_idx          on page_sections (tenant_id, page, "position");
 create index        page_views_album_idx            on page_views (album_id, viewed_at desc);
+-- S4's two, verified present in production after deployment. `page_views_post_idx`
+-- is the album index's missing twin: lib/admin/overview.ts has queried by
+-- post_id since it was written with nothing to serve it. `page_views_tenant_time`
+-- is the shape every read after S4 begins with — this site, this window.
+create index        page_views_post_idx             on page_views (post_id, viewed_at desc) where post_id is not null;
+create index        page_views_tenant_time          on page_views (tenant_id, viewed_at desc);
 create index        photo_shop_categories_category_idx on photo_shop_categories (category_id);
 create index        photos_for_sale_idx             on photos (is_for_sale) where is_for_sale;
 create index        print_options_tenant_idx        on print_options (tenant_id, sort_order);
@@ -1528,9 +1796,15 @@ create unique index jobs_pending_dedupe on jobs (tenant_id, kind, dedupe_key)
 -- deliberate and must not be homogenised:
 --   · direct tenant_id scoping          ("Tenant members manage" on most tables)
 --   · scoping through a parent          (tenant_of(...) — album_clients, downloads,
---                                        favorites, photo_shop_categories, page_views)
+--                                        favorites, photo_shop_categories)
 --   · intentionally public SELECT       (albums, blog_posts, page_sections, site_settings, …)
---   · intentionally public INSERT-only  (contact_messages, newsletter_signups, page_views)
+--   · intentionally public INSERT-only  (contact_messages, newsletter_signups)
+--
+-- `page_views` used to be in BOTH of the last two and is now in neither. S4
+-- gave it a tenant_id of its own, so it scopes directly; and it dropped
+-- "Anyone can record a view", which was `with check (true)` — a policy under
+-- which anybody at all could write a row naming any gallery on the platform.
+-- Nothing may insert into it now; `record_page_view` is the whole write path.
 
 alter table album_clients          enable row level security;
 alter table albums                 enable row level security;
@@ -1573,19 +1847,23 @@ select public.apply_tenant_policy_via('downloads',             'photo_id', 'phot
 select public.apply_tenant_policy_via('favorites',             'album_id', 'albums');
 select public.apply_tenant_policy_via('photo_shop_categories', 'photo_id', 'photos');
 
--- page_views hangs off EITHER an album or a story, so the generic helper cannot
--- express it. Hand-written, exactly as production has it.
+-- page_views used to hang off EITHER an album or a story, with no site of its
+-- own, and its policy reached the site through whichever parent it had. S4
+-- replaced that with the direct form, because the parent-based one is false for
+-- every row that has neither — which is what a homepage view is, so a
+-- photographer could not have read their own homepage views at all.
+--
+-- Replaced rather than added to: `tenant_id` is NOT NULL and was backfilled
+-- from exactly those parents, so the two forms agree on every row that existed,
+-- and `tenant_of` was a function call per row on a table about to get much
+-- bigger. Verified against production after deployment as the ONLY policy on
+-- this table.
+--
+-- It is written out here rather than through `apply_tenant_policy` to match the
+-- migration's text exactly; the helper would produce the same predicate.
 create policy "Tenant members manage" on page_views for all
-  using (
-    public.tenant_of('albums'::regclass, album_id) = public.current_tenant_id()
-    or public.tenant_of('blog_posts'::regclass, post_id) = public.current_tenant_id()
-    or public.is_platform_admin()
-  )
-  with check (
-    public.tenant_of('albums'::regclass, album_id) = public.current_tenant_id()
-    or public.tenant_of('blog_posts'::regclass, post_id) = public.current_tenant_id()
-    or public.is_platform_admin()
-  );
+  using      (tenant_id = public.current_tenant_id() or public.is_platform_admin())
+  with check (tenant_id = public.current_tenant_id() or public.is_platform_admin());
 
 -- ── Direct tenant_id scoping ────────────────────────────────────────────────
 select public.apply_tenant_policy('albums');
@@ -1633,7 +1911,11 @@ create policy "Anyone reads site settings"           on site_settings       for 
 -- ── Public INSERT-only surfaces ─────────────────────────────────────────────
 create policy "Anyone can send a message"  on contact_messages   for insert with check (true);
 create policy "Anyone can sign up"         on newsletter_signups for insert with check (true);
-create policy "Anyone can record a view"   on page_views         for insert with check (true);
+-- "Anyone can record a view" on page_views, `for insert with check (true)`, was
+-- DROPPED by S4 and is deliberately absent. It let anybody at all — no account
+-- needed — POST to PostgREST and write a view against any gallery on the
+-- platform, with any visitor hash and any timestamp. Verified gone in
+-- production.
 
 -- ── Platform-owned and account tables ───────────────────────────────────────
 create policy "Tenant members read profiles" on profiles for select using (
@@ -1674,10 +1956,35 @@ create policy "Platform admins manage tenants" on tenants for all
 grant delete, insert, references, select, trigger, truncate, update
   on album_clients, albums, blog_posts, catalog_items, clients, contact_messages,
      downloads, favorites, instagram_media, newsletter_signups, order_items, orders,
-     page_sections, page_views, photo_shop_categories, photos, print_options,
+     page_sections, photo_shop_categories, photos, print_options,
      products, profiles, room_scenes, shop_categories, site_draft, site_settings,
      site_template, site_template_history, template_versions, templates, tenants
   to anon, authenticated, service_role;
+
+-- ANALYTICS IS THE SECOND TABLE NOBODY MAY WRITE TO DIRECTLY. `page_views` left
+-- the list above when S4 deployed, and these are the grants production carries,
+-- verified by name after deployment:
+--
+--   anon           NOTHING. A visitor causes a view to be recorded; they do not
+--                  get to write one.
+--   authenticated  SELECT, which RLS narrows to their own site — that is what
+--                  lib/admin/overview.ts and the album stats screen read.
+--   service_role   SELECT and DELETE. DELETE because `deleteSite()` removes a
+--                  site's rows; SELECT because **a filtered DELETE reads the
+--                  column it filters on**, so DELETE alone fails with
+--                  "permission denied for table page_views". That was a real
+--                  bug in S4's first draft, found by running the verification
+--                  as the real role rather than as the owner.
+--
+-- NO INSERT for anybody, service_role included: `record_page_view` is SECURITY
+-- DEFINER, so the row is written with the owner's rights, and the absence of the
+-- grant is what stops the admin client going round the validation.
+revoke all on table page_views from public;
+revoke all on table page_views from anon;
+revoke all on table page_views from authenticated;
+revoke all on table page_views from service_role;
+grant select on table page_views to authenticated;
+grant select, delete on table page_views to service_role;
 
 -- Editor-only: anon gets nothing.
 grant delete, insert, references, select, trigger, truncate, update
@@ -1721,6 +2028,15 @@ revoke all on function public.finish_job(uuid, text, text, boolean) from public,
 grant execute on function public.enqueue_jobs(uuid, text, jsonb)       to authenticated;
 grant execute on function public.claim_jobs(text, int, interval, uuid) to service_role;
 grant execute on function public.finish_job(uuid, text, text, boolean) to service_role;
+
+-- Analytics' one, from db/migrations/2026-09-29_analytics.sql. Verified against
+-- production 2026-09-29: `service_role` is the only application role that may
+-- call it, so a browser has no database path to analytics at all — stricter
+-- than the queue, where a photographer holds EXECUTE on enqueue_jobs.
+revoke all on function public.record_page_view(uuid, text, text, text, text, text, uuid, uuid, text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.record_page_view(uuid, text, text, text, text, text, uuid, uuid, text)
+  to service_role;
 
 -- ── The only trigger in the public schema ───────────────────────────────────
 -- Verified 2026-09-29: this is the ONLY non-internal trigger production has.

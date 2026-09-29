@@ -5,7 +5,6 @@ import { formatTripDate } from '@/lib/dates'
 import SiteHeader from '@/components/SiteHeader'
 import AlbumPasswordGate from '@/components/AlbumPasswordGate'
 import TripCover from '@/components/TripCover'
-import ViewTracker from '@/components/ViewTracker'
 import GalleryView from '@/components/GalleryView'
 import { getSiteSettings } from '@/lib/site'
 import { cookies } from 'next/headers'
@@ -74,7 +73,6 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
 
   return (
     <main>
-      <ViewTracker albumId={album.id} />
       <SiteHeader />
 
       {imageUrl && (

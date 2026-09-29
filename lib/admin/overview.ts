@@ -15,9 +15,9 @@ export { WINDOWS, windowOf, type Window } from '@/lib/admin/audience-window'
  *
  * ── The tenant filter that was missing ──────────────────────────────────────
  *
- * `page_views` has no `tenant_id` of its own — a row hangs off EITHER an album
- * or a story, one of the two being null. Row-level security scopes it through
- * whichever parent it has, and the old dashboard leaned on that and selected
+ * `page_views` had no `tenant_id` of its own — a row hung off EITHER an album
+ * or a story, one of the two being null. Row-level security scoped it through
+ * whichever parent it had, and the old dashboard leaned on that and selected
  * the table with no filter at all.
  *
  * Which is fine for a photographer and wrong for a platform admin, who passes
@@ -26,6 +26,21 @@ export { WINDOWS, windowOf, type Window } from '@/lib/admin/audience-window'
  * 2026-09-25: a comment saying "row-level security handles it" over a query
  * that names no tenant. The parents are resolved here and the views are asked
  * for by id.
+ *
+ * ── And since S4, the site is on the row ────────────────────────────────────
+ *
+ * `page_views.tenant_id` exists (2026-09-29), backfilled from exactly those
+ * parents, so the two filters below name it as well. That is not a second
+ * belt: it is what `npm run check:tenants` now insists on for this table, and
+ * it turns "this query is scoped because of the ids in it" into something a
+ * reader can see without following the ids.
+ *
+ * **What it deliberately does NOT do is widen the number.** S4 instruments
+ * every public page, so `page_views` now holds homepage and About views too —
+ * and this still counts galleries and stories only, because that is what the
+ * tile below it says. Widening it is a decision about what a dashboard claims,
+ * not a side effect of a migration; the `views` field's own comment stays true
+ * until somebody makes it.
  */
 
 export type Audience = {
@@ -87,6 +102,7 @@ async function audienceViews(
       ? supabase
           .from('page_views')
           .select('visitor_hash')
+          .eq('tenant_id', tenantId)
           .gte('viewed_at', since)
           .in('album_id', albumIds)
       : Promise.resolve({ data: [] as { visitor_hash: string }[] }),
@@ -94,6 +110,7 @@ async function audienceViews(
       ? supabase
           .from('page_views')
           .select('visitor_hash')
+          .eq('tenant_id', tenantId)
           .gte('viewed_at', since)
           .in('post_id', postIds)
       : Promise.resolve({ data: [] as { visitor_hash: string }[] }),

@@ -7,7 +7,6 @@ import SiteFooter from '@/components/SiteFooter'
 import PostBody from '@/components/blog/PostBody'
 import ShareRail from '@/components/blog/ShareRail'
 import JournalCard from '@/components/blog/JournalCard'
-import ViewTracker from '@/components/ViewTracker'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -93,7 +92,6 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
 
   return (
     <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <ViewTracker postId={post.id} />
       <SiteHeader />
       <ShareRail title={post.title} />
 

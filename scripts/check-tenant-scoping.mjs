@@ -86,6 +86,14 @@ const SCOPED = [
   // The queue is the one place where work for every site passes through one
   // piece of code, which is exactly the shape that leaks.
   'jobs',
+  // Added 2026-09-29 with S4, the day the table gained a tenant_id. It could
+  // not be on this list before: a view hung off an album or a story and the
+  // only way to scope it was the ids of those parents, which is a filter this
+  // checker cannot see. Now that the site is on the row, the two reads in
+  // lib/admin/overview.ts and the album stats screen name it, and any read
+  // written next has to as well. Analytics is the second place after the queue
+  // where every site's rows sit in one table that one screen reads.
+  'page_views',
 ]
 
 /**

@@ -7,6 +7,7 @@ import { photoUrl } from '@/lib/images'
 import { headers } from 'next/headers'
 import { currentSite, hostFromHeader } from '@/lib/tenant'
 import NoSiteHere from '@/components/NoSiteHere'
+import ViewTracker from '@/components/ViewTracker'
 import { PLATFORM } from '@/lib/platform'
 import './globals.css'
 import './home.css'
@@ -94,7 +95,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <link key={name} rel="stylesheet" href={fontHref(name)} />
         ))}
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Every public page, once each. It sends a pathname and nothing that
+            identifies anything; the server decides what is at that address on
+            this site, and refuses the editor, the admin and share links.
+            See components/ViewTracker.tsx. Mounted below `children` so it
+            cannot delay anything a visitor is waiting to see, and inside the
+            `site` branch so an unclaimed address records nothing. */}
+        <ViewTracker />
+      </body>
     </html>
   )
 }

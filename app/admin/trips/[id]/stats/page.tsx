@@ -22,6 +22,7 @@ export default async function AlbumStatsPage({ params }: { params: Promise<{ id:
   const { data: views } = await supabase
     .from('page_views')
     .select('visitor_hash, viewed_at')
+    .eq('tenant_id', tenantId)
     .eq('album_id', id)
     .gte('viewed_at', since.toISOString())
 

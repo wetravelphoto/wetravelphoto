@@ -15,7 +15,7 @@
 -- This is the one queue. It is a table rather than a service on purpose: the
 -- database is already here, already backed up, already scoped by site, and a
 -- second system to run and pay for is not yet earning its keep. If the day
--- comes when it is, the interface to replace is `claim_jobs` and `finish_job`.
+-- comes when it is, the interface to replace is the three functions below.
 --
 -- ── THE FOUR THINGS THAT MAKE IT SAFE ───────────────────────────────────────
 --
@@ -44,12 +44,70 @@
 --    somebody else, and then woke up cannot overwrite the new holder's result.
 --    It gets zero rows back and says so.
 --
+-- ── NOBODY WRITES TO THIS TABLE DIRECTLY ────────────────────────────────────
+--
+-- The queue's own columns are its integrity. `status`, `attempts`,
+-- `max_attempts`, `run_after`, `locked_by`, `lease_until` and `finished_at`
+-- are the machinery of notes 1 to 4, and a caller who can choose them can turn
+-- all four off: enqueue a row already `running` with a lease into next year and
+-- it is never picked up and never fails; enqueue one with `max_attempts` at a
+-- million and a crash loop runs for ever; write `locked_by` and take a job
+-- another worker holds.
+--
+-- Row-level security does not help with any of that. It decides WHICH ROWS a
+-- caller may touch, not WHAT THEY MAY PUT IN THEM — a policy of
+-- `tenant_id = current_tenant_id()` is perfectly satisfied by a malformed job
+-- on your own site.
+--
+-- So the table grants no INSERT, UPDATE or DELETE to anybody. Three functions
+-- are the whole interface, and each is SECURITY DEFINER so that it, and not
+-- the caller, holds the rights to the table:
+--
+--   · enqueue_jobs — for a signed-in photographer. Names four columns and
+--     leaves the other eleven to their defaults, so the machinery cannot be
+--     dictated. Checks the site the same way the table's policy would.
+--   · claim_jobs, finish_job — for the worker. Granted to service_role alone.
+--
+-- ── Why SECURITY DEFINER, and not INVOKER plus a grant ──────────────────────
+--
+-- The first draft of this migration made the two worker functions INVOKER and
+-- granted nothing to service_role, on the assumption that Supabase's default
+-- privileges would have given it what it needed. Checked instead of assumed:
+--
+--     select grantee, privilege_type from information_schema.role_table_grants
+--      where table_name = 'jobs';
+--     → authenticated: INSERT, SELECT.  postgres: ALL.  service_role: NOTHING.
+--
+-- The drain would have failed in production with "permission denied for table
+-- jobs", or worked only by accident on a default this file never stated. The
+-- same check found the other half of it: a `grant` is additive, so
+-- `grant select, insert to authenticated` on a database whose default
+-- privileges hand out ALL would have left `authenticated` holding UPDATE and
+-- DELETE as well, with nothing here saying so.
+--
+-- Both are fixed the same way, and it is the reason the grants below start by
+-- revoking: this file states the whole privilege set rather than adding to
+-- whatever was already there. Run it against a database with Supabase's
+-- default privileges or against one with none, and the result is the same.
+--
+-- DEFINER also makes the worker's rights exactly its job. service_role gets
+-- EXECUTE on two functions and nothing else: it cannot read the queue, cannot
+-- empty it, and cannot finish a job it does not hold. Every DEFINER function
+-- here sets `search_path = public`, which is what stops a caller redirecting
+-- the names inside it.
+--
 -- ── Tenancy from the first row ──────────────────────────────────────────────
+--
 -- `tenant_id` is NOT NULL with NO DEFAULT, the rule 2026-09-24_no_guessing
 -- established: a forgotten tenant is a hard error rather than a silent write
--- into the oldest site. `apply_tenant_policy` means a photographer can only
--- ever see and enqueue their own work, enforced by the database — the drain
--- runs as the service role and passes the tenant explicitly.
+-- into the oldest site. `apply_tenant_policy` governs what a photographer can
+-- READ. What they can QUEUE is governed by `enqueue_jobs`, which restates the
+-- same rule — because a definer function runs as the table's owner and is
+-- therefore not subject to the policy at all.
+--
+-- Nothing deletes jobs. `tenant_id references tenants(id) on delete cascade`
+-- means deleting a site takes its queue with it, which is why `jobs` is not in
+-- `TENANT_TABLES` in app/actions/sites.ts and why service_role needs no DELETE.
 --
 -- Safe to run twice.
 -- ════════════════════════════════════════════════════════════════════════════
@@ -60,9 +118,11 @@ create table if not exists jobs (
   id           uuid primary key default gen_random_uuid(),
   tenant_id    uuid not null references tenants(id) on delete cascade,
 
-  -- What to do. Matched against the handler registry in lib/jobs/handlers.ts;
-  -- a kind with no handler fails PERMANENTLY rather than retrying, because a
-  -- typo does not get better on the fifth attempt.
+  -- What to do. Allow-listed by `enqueue_jobs` and matched against the handler
+  -- registry in lib/jobs/handlers.ts; a kind with no handler fails PERMANENTLY
+  -- rather than retrying, because a typo does not get better on the fifth
+  -- attempt. The column is `text` rather than an enum so that a deploy which
+  -- retires a kind does not make rows already in the table unreadable.
   kind         text not null,
 
   -- What to do it to. Small and specific — an id, not a batch — so a failure
@@ -83,16 +143,16 @@ create table if not exists jobs (
    * spelled out with its own `where` clause rather than declared as a table
    * constraint.
    */
-  dedupe_key   text,
+  dedupe_key   text check (dedupe_key is null or length(dedupe_key) <= 200),
 
   status       text not null default 'queued'
                check (status in ('queued', 'running', 'done', 'failed')),
 
   -- Incremented BY THE CLAIM. See note 2 at the top.
   attempts     integer not null default 0,
-  max_attempts integer not null default 5 check (max_attempts >= 1),
+  max_attempts integer not null default 5 check (max_attempts between 1 and 20),
 
-  -- Not before this. Backoff moves it forward; a job queued for later sets it.
+  -- Not before this. Backoff moves it forward.
   run_after    timestamptz not null default now(),
 
   -- Who holds it and until when. Both null unless `status = 'running'`.
@@ -107,6 +167,17 @@ create table if not exists jobs (
   created_at   timestamptz not null default now(),
   finished_at  timestamptz
 );
+
+-- A PAYLOAD IS AN OBJECT, and this is a constraint rather than a line in
+-- enqueue_jobs so that it holds for every writer — the worker, a future
+-- function, and anything that reaches the table by a route nobody has thought
+-- of yet. A constraint is the only rule that cannot be gone round. Stated as
+-- its own statement rather than inline in the table, because `create table if
+-- not exists` skips the whole definition on a re-run and this file has to be
+-- safe to run twice.
+alter table jobs drop constraint if exists jobs_payload_object;
+alter table jobs add  constraint jobs_payload_object
+  check (jsonb_typeof(payload) = 'object');
 
 -- The claim query's index. Partial, because `done` and `failed` rows
 -- accumulate and none of them is ever a candidate.
@@ -129,21 +200,131 @@ create unique index if not exists jobs_pending_dedupe
 
 select public.apply_tenant_policy('jobs');
 
--- A visitor has no business knowing work exists. A photographer may read their
--- own queue (the admin shows what is waiting and what failed) and enqueue into
--- it; RLS narrows both to their own site. Nobody but the worker may change a
--- job, and the worker is the service role, which is not in this list at all —
--- it reaches the table through the two functions below.
-revoke all on jobs from anon;
-grant select, insert on jobs to authenticated;
+
+-- ── Grants: the whole privilege set, stated ─────────────────────────────────
+--
+-- Revoke first. See the long note at the top: a `grant` is additive, and this
+-- file must produce the same result on a database whose default privileges
+-- hand out ALL to anon, authenticated and service_role as on one that hands
+-- out nothing.
+
+revoke all on table jobs from public;
+revoke all on table jobs from anon;
+revoke all on table jobs from authenticated;
+revoke all on table jobs from service_role;
+
+-- A photographer may LOOK at their own queue — the admin shows what is waiting
+-- and what gave up — and the table's policy narrows that to their own site, so
+-- the read is scoped by the database rather than by the code that asks. They
+-- may not write to it by any route but `enqueue_jobs`.
+grant select on table jobs to authenticated;
+
+-- A visitor has no business knowing work exists, and the worker reaches the
+-- table only through its two functions. Neither gets a table privilege here,
+-- and that is the whole point rather than an omission.
+
+
+-- ── Enqueueing: the only way a photographer adds work ───────────────────────
+
+create or replace function public.enqueue_jobs(
+  p_tenant uuid,
+  p_kind   text,
+  p_items  jsonb
+)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  n int;
+begin
+  if p_tenant is null then
+    raise exception 'A job has to say which site it is for.' using errcode = '23502';
+  end if;
+
+  /*
+   * THE SAME RULE THE TABLE'S OWN POLICY STATES, RESTATED.
+   *
+   * Not a belt-and-braces duplicate: a SECURITY DEFINER function runs with the
+   * table owner's rights and row-level security does not apply to it at all.
+   * Without this line the function would be a way for any signed-in account to
+   * queue work onto any site on the platform — a bigger hole than the direct
+   * INSERT grant it replaces.
+   *
+   * `is_platform_admin()` is here because an admin working on somebody else's
+   * address legitimately acts as that site (lib/auth.ts: "you edit the site you
+   * are on"), and for them `current_tenant_id()` is their OWN profile's tenant,
+   * not the one on screen. Deriving the tenant here instead of accepting it
+   * would therefore file an admin's work under the wrong site.
+   */
+  if not (p_tenant = public.current_tenant_id() or public.is_platform_admin()) then
+    raise exception 'That is not your site.' using errcode = '42501';
+  end if;
+
+  /*
+   * AN ALLOW-LIST, IN SQL, ON PURPOSE.
+   *
+   * lib/jobs/types.ts has the same list, and .mk/jobs.ts asserts the two agree
+   * — but the TypeScript one is a convenience for the caller and this one is
+   * the boundary. Allowing a new kind of work to be queued by a browser is
+   * exactly the sort of change that should cost a migration somebody reads,
+   * rather than a line in a file that ships with the front end.
+   */
+  if p_kind is null or p_kind not in ('photo.derivatives') then
+    raise exception 'There is no job kind called "%".', coalesce(p_kind, 'null')
+      using errcode = '22023';
+  end if;
+
+  if p_items is null or jsonb_typeof(p_items) <> 'array' then
+    raise exception 'The work has to arrive as a list.' using errcode = '22023';
+  end if;
+
+  if jsonb_array_length(p_items) > 1000 then
+    raise exception 'That is more than a thousand jobs in one go.' using errcode = '22023';
+  end if;
+
+  /*
+   * FOUR COLUMNS NAMED, ELEVEN LEFT TO THEIR DEFAULTS.
+   *
+   * This is where the integrity actually lives, and it lives in what is ABSENT
+   * from the column list. `status` is 'queued', `attempts` is 0,
+   * `max_attempts` is 5, `run_after` is now(), and `locked_at`, `locked_by`,
+   * `lease_until`, `last_error` and `finished_at` are null — none of them
+   * reachable by the caller, because none of them is written here at all.
+   *
+   * The payload is checked for shape rather than content: what is IN it is the
+   * handler's business, and the handler reads it against its own tenant (see
+   * lib/jobs/derive.ts, which will not touch a photograph belonging to
+   * somebody else whatever the payload says).
+   */
+  insert into jobs (tenant_id, kind, payload, dedupe_key)
+  select
+    p_tenant,
+    p_kind,
+    case
+      when jsonb_typeof(item->'payload') = 'object' then item->'payload'
+      when item ? 'payload' then null   -- refused by the column's own check
+      else '{}'::jsonb
+    end,
+    nullif(item->>'dedupe_key', '')
+  from jsonb_array_elements(p_items) as item
+  on conflict do nothing;
+
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+comment on function public.enqueue_jobs(uuid, text, jsonb) is
+  'The only way work is added. Names four columns and leaves the machinery — '
+  'status, attempts, the lock and the lease — to its defaults, so a caller '
+  'cannot enqueue a job that is already running, already out of attempts, or '
+  'due in a decade. Checks the site the same way the table policy would, '
+  'because a definer function is not subject to it.';
 
 
 -- ── Claiming ────────────────────────────────────────────────────────────────
---
--- SECURITY INVOKER on purpose. The only caller is the service role, which
--- already bypasses row-level security, so DEFINER would hand out rights nobody
--- needs — and a definer function that anybody could execute would be a way to
--- reach every site's queue. Execute is granted to service_role alone.
 --
 -- `p_tenant` narrows it to one site: the nightly cron passes null and drains
 -- everybody, while the "Process photographs" button passes the tenant from the
@@ -158,8 +339,17 @@ create or replace function public.claim_jobs(
 returns setof jobs
 language plpgsql
 volatile
+security definer
+set search_path = public
 as $$
 begin
+  if p_worker is null or length(p_worker) = 0 then
+    raise exception 'A worker has to say who it is.' using errcode = '22023';
+  end if;
+  if p_limit is null or p_limit < 1 or p_limit > 100 then
+    raise exception 'Between one and a hundred jobs at a time.' using errcode = '22023';
+  end if;
+
   /*
    * FIRST, RETIRE THE CRASH LOOPS.
    *
@@ -212,7 +402,7 @@ end $$;
 comment on function public.claim_jobs(text, int, interval, uuid) is
   'Takes up to p_limit jobs for p_worker, counting the attempt as it goes. '
   'Also reclaims jobs whose lease ran out, and fails the ones that have no '
-  'attempts left. The only way a worker should reach the jobs table.';
+  'attempts left. The only way a worker reaches the jobs table.';
 
 
 -- ── Finishing ───────────────────────────────────────────────────────────────
@@ -226,6 +416,8 @@ create or replace function public.finish_job(
 returns jobs
 language plpgsql
 volatile
+security definer
+set search_path = public
 as $$
 declare
   v_job   jobs;
@@ -268,14 +460,14 @@ begin
   end if;
 
   /*
-   * BACKOFF, WITH JITTER.
+   * EXPONENTIAL BACKOFF, FACTOR OF 4, WITH JITTER.
    *
-   * 10s, 40s, 160s, 640s, then capped at an hour — quadratic rather than
-   * doubling, because the failures this is for (a rate limit, a service
-   * having a bad minute) are not fixed by trying again in eleven seconds.
-   * The ±25% jitter matters once there is more than one job: a hundred jobs
-   * that all failed against the same outage would otherwise all come back at
-   * the same instant and reproduce it.
+   * 10s, 40s, 160s, 640s, then capped at an hour — each wait four times the
+   * one before it rather than twice, because the failures this is for (a rate
+   * limit, a service having a bad minute) are not fixed by trying again in
+   * eleven seconds. The ±25% jitter matters once there is more than one job: a
+   * hundred jobs that all failed against the same outage would otherwise all
+   * come back at the same instant and reproduce it.
    */
   v_delay := least(
     interval '1 hour',
@@ -292,12 +484,24 @@ begin
 end $$;
 
 comment on function public.finish_job(uuid, text, text, boolean) is
-  'Marks a job done, or re-queues it with backoff, or fails it when the '
-  'attempts are spent. Returns null if the caller no longer holds the lease.';
+  'Marks a job done, or re-queues it with exponential backoff, or fails it '
+  'when the attempts are spent. Returns null if the caller no longer holds '
+  'the lease.';
 
-revoke all on function public.claim_jobs(text, int, interval, uuid) from public, anon, authenticated;
-revoke all on function public.finish_job(uuid, text, text, boolean)  from public, anon, authenticated;
+
+-- ── Function grants, stated the same way as the table's ─────────────────────
+
+revoke all on function public.enqueue_jobs(uuid, text, jsonb)            from public, anon, authenticated, service_role;
+revoke all on function public.claim_jobs(text, int, interval, uuid)      from public, anon, authenticated, service_role;
+revoke all on function public.finish_job(uuid, text, text, boolean)      from public, anon, authenticated, service_role;
+
+-- The photographer's door. Runs as the owner, so the checks inside it are what
+-- stands between a signed-in account and another site's queue.
+grant execute on function public.enqueue_jobs(uuid, text, jsonb) to authenticated;
+
+-- The worker's two. service_role has no privilege on the table itself, so this
+-- is the whole of what the drain can do.
 grant execute on function public.claim_jobs(text, int, interval, uuid) to service_role;
-grant execute on function public.finish_job(uuid, text, text, boolean)  to service_role;
+grant execute on function public.finish_job(uuid, text, text, boolean) to service_role;
 
 commit;

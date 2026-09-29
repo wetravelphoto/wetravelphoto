@@ -255,14 +255,19 @@ declare
 begin
   select string_agg(
            format('%s  %-38s expected %-10s got %s',
-                  case when pass then '  ok  ' else ' FAIL ' end,
+                  -- COALESCE, because a comparison against a null is neither
+                  -- true nor false. `v_out.status = 'done'` where nothing came
+                  -- back is UNKNOWN, and an unknown result printed as FAIL but
+                  -- counted as neither is a report that disagrees with itself —
+                  -- which is how 4 failures were once summarised as 2.
+                  case when coalesce(pass, false) then '  ok  ' else ' FAIL ' end,
                   step, expected, actual),
            E'\n' order by ord)
     into report
     from iso_res;
 
-  select count(*) into failed from iso_res where not pass;
-  select count(*) into known  from iso_res where not pass and step like '%(known)%';
+  select count(*) into failed from iso_res where not coalesce(pass, false);
+  select count(*) into known  from iso_res where not coalesce(pass, false) and step like '%(known)%';
 
   raise exception E'\n\n%\n\n%\n\nNothing was kept — this transaction always rolls back.\n',
     report,

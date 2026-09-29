@@ -294,9 +294,70 @@ not version parity; see the note at the top of this file).
 | | |
 |---|---|
 | the migration runs twice with no error | yes |
-| `db/verify-jobs.sql` | 48 of 48 |
+| `db/verify-jobs.sql` | 72 of 72 |
 | `scripts/jobs-concurrency.sh` | 14 of 14 |
-| `.mk/jobs.ts` (the worker, against this database) | 41 of 41 |
+| `.mk/jobs.ts` (the worker, against this database) | 53 of 53 |
+
+### The privilege model, checked rather than assumed
+
+The first draft granted `select, insert` to `authenticated`, left the worker
+functions SECURITY INVOKER, and granted `service_role` nothing — on the
+assumption that Supabase's default privileges would have given the worker what
+it needed. Asked instead:
+
+```sql
+select grantee, privilege_type from information_schema.role_table_grants
+ where table_schema = 'public' and table_name = 'jobs';
+→ authenticated: INSERT, SELECT.   postgres: ALL.   service_role: NOTHING.
+select defaclrole::regrole, defaclobjtype, defaclacl from pg_default_acl;
+→ (0 rows)
+```
+
+**Two defects, both of which the whole suite passed straight through**, because
+every assertion in it ran as the table's owner — who holds every privilege and
+bypasses row-level security, and who is nobody in production:
+
+1. **The drain would have failed** with `permission denied for table jobs`, or
+   worked only by accident on a default this repo never stated. Reproduced by
+   reverting the functions to INVOKER: `db/verify-jobs.sql` reports 4 failures
+   and `.mk/jobs.ts` 31.
+2. **A `grant` is additive.** On a database whose default privileges hand out
+   ALL — which Supabase's bootstrap normally does, and which this fixture does
+   not — `grant select, insert to authenticated` would have left `authenticated`
+   holding UPDATE and DELETE as well, with nothing in the migration saying so.
+
+Both are fixed by stating the whole privilege set rather than adding to
+whatever was there: the migration **revokes from `public`, `anon`,
+`authenticated` and `service_role` first**, then grants. The result is
+identical on a database with Supabase's default privileges and on one with
+none. The resulting set, read back from the catalogue:
+
+| | |
+|---|---|
+| `jobs` table | `authenticated`: SELECT. Nobody else, by any route. |
+| `enqueue_jobs` | EXECUTE to `authenticated` |
+| `claim_jobs`, `finish_job` | EXECUTE to `service_role` |
+| all three functions | SECURITY DEFINER, `search_path = public` |
+
+`service_role` has **no privilege on the table at all** — claiming and
+finishing are the whole of what the worker can do, and it cannot read the
+queue, empty it, or finish a job it does not hold.
+
+One fixture/production difference worth recording: Supabase creates
+`service_role` with `BYPASSRLS`; `db/test-fixture.sql` creates a plain role.
+The DEFINER design makes that irrelevant for `jobs` — the functions run with
+the table owner's rights either way — which is a second reason to prefer it
+over INVOKER plus a table grant.
+
+### A reporting bug in our own harness, found the same way
+
+`db/verify-jobs.sql` summarised four failures as two. `pass` is a boolean
+expression, and `v_out.status = 'done'` where nothing came back is **unknown**,
+not false: `case when pass then 'ok' else 'FAIL' end` printed FAIL, while
+`count(*) where not pass` did not count it. Both suites now `coalesce(pass,
+false)`, so an unknown result is a failure in the summary as well as in the
+listing. `db/verify-tenant-isolation.sql` had the same latent miscount and was
+corrected with it.
 
 ### One thing the rehearsal caught that reading did not
 

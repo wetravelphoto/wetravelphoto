@@ -1,8 +1,10 @@
 import { Client } from 'pg'
 import { drain } from '@/lib/jobs/run'
 import { HANDLERS } from '@/lib/jobs/handlers'
-import { JOB_KINDS, PermanentJobError, type JobHandler } from '@/lib/jobs/types'
+import { JOB_KINDS, PermanentJobError, type JobHandler, type JobKind } from '@/lib/jobs/types'
+import { enqueue } from '@/lib/jobs/queue'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { readFileSync } from 'node:fs'
 
 /**
  * THE WORKER, AGAINST A REAL DATABASE
@@ -44,14 +46,40 @@ const fail: string[] = []
 const ok = (n: string, good: boolean, d = '') =>
   good ? pass++ : fail.push(`${n}${d ? '\n    ' + d : ''}`)
 
+/**
+ * The adapter runs every RPC **as `service_role`**, which is the role the drain
+ * actually has in production.
+ *
+ * Not a detail. The first version of the migration left `claim_jobs` SECURITY
+ * INVOKER and granted service_role nothing, and this suite passed — because it
+ * was connecting as the table's owner, who holds every privilege and bypasses
+ * row-level security. On production the drain would have failed with
+ * "permission denied for table jobs". A harness that runs as the owner is a
+ * harness that cannot see a grant problem, which is most of what there is to
+ * see here.
+ *
+ * Setup and inspection below still run as the owner — building fixtures is not
+ * something the worker ever does — so `set role` is scoped to the two calls
+ * the worker makes and reset immediately after.
+ */
 function adapter(client: Client): SupabaseClient {
   return {
     async rpc(name: string, args: Record<string, unknown>) {
       const keys = Object.keys(args)
       const params = keys.map((k, i) => `${k} => $${i + 1}`).join(', ')
-      const values = keys.map((k) => args[k])
+      /*
+       * Objects and arrays go over as JSON text, because that is what
+       * PostgREST sends: a real call arrives as a JSON body and Postgres casts
+       * it to jsonb. Handing `pg` a JS array instead makes it a Postgres ARRAY
+       * literal, which is a different type and a different bug from the one
+       * this suite is looking for.
+       */
+      const values = keys.map((k) =>
+        args[k] !== null && typeof args[k] === 'object' ? JSON.stringify(args[k]) : args[k]
+      )
 
       try {
+        await client.query('set role service_role')
         if (name === 'claim_jobs') {
           const r = await client.query(
             `select to_jsonb(t) as row from public.claim_jobs(${params}) t`,
@@ -68,6 +96,48 @@ function adapter(client: Client): SupabaseClient {
         return { data: r.rows[0]?.row ?? null, error: null }
       } catch (e) {
         return { data: null, error: { message: e instanceof Error ? e.message : String(e) } }
+      } finally {
+        await client.query('reset role')
+      }
+    },
+  } as unknown as SupabaseClient
+}
+
+/**
+ * The same shim, as a SIGNED-IN PHOTOGRAPHER.
+ *
+ * `enqueue()` is called with the photographer's own client, so the only
+ * faithful way to test it is to be one: the role decides whether the EXECUTE
+ * grant is there, and the JWT claim is what `current_tenant_id()` inside
+ * `enqueue_jobs` reads to decide whose site this is.
+ */
+function photographerAdapter(client: Client, userId: string): SupabaseClient {
+  return {
+    async rpc(name: string, args: Record<string, unknown>) {
+      const keys = Object.keys(args)
+      const params = keys.map((k, i) => `${k} => $${i + 1}`).join(', ')
+      /*
+       * Objects and arrays go over as JSON text, because that is what
+       * PostgREST sends: a real call arrives as a JSON body and Postgres casts
+       * it to jsonb. Handing `pg` a JS array instead makes it a Postgres ARRAY
+       * literal, which is a different type and a different bug from the one
+       * this suite is looking for.
+       */
+      const values = keys.map((k) =>
+        args[k] !== null && typeof args[k] === 'object' ? JSON.stringify(args[k]) : args[k]
+      )
+      try {
+        await client.query(`select set_config('request.jwt.claims', $1, false)`, [
+          JSON.stringify({ sub: userId }),
+        ])
+        await client.query('set role authenticated')
+        const r = await client.query(`select public.${name}(${params}) as v`, values)
+        return { data: r.rows[0]?.v ?? null, error: null }
+      } catch (e) {
+        return { data: null, error: { message: e instanceof Error ? e.message : String(e) } }
+      } finally {
+        await client.query('reset role')
+        await client.query(`select set_config('request.jwt.claims', '', false)`)
       }
     },
   } as unknown as SupabaseClient
@@ -119,7 +189,14 @@ async function main() {
   }
 
   const db = adapter(client)
-  const wipe = () => client.query("delete from jobs where kind like 'test.%'")
+  // Test rows only. `photo.derivatives` appears because block 9b uses the real
+  // kind — it has to, since the allow-list in `enqueue_jobs` is the thing being
+  // exercised — so the payloads it uses name photographs that do not exist and
+  // are cleaned up by id rather than by kind.
+  const wipe = () =>
+    client.query(
+      "delete from jobs where kind like 'test.%' or (kind = 'photo.derivatives' and payload->>'photoId' in ('a','b','x'))"
+    )
   const one = async (sql: string, params: unknown[] = []) =>
     (await client.query(sql, params)).rows[0]
 
@@ -319,6 +396,65 @@ async function main() {
     ok('and the rest wait', h.ran['test.ok'] === 2, `ran ${h.ran['test.ok']}`)
   }
 
+  // ── 9b. THE WHOLE ROUND TRIP, through the real modules ────────────────────
+  //
+  // enqueue() as a photographer → claim → run → finish as the worker. Every
+  // block above starts by inserting rows as the table's owner, which is a
+  // route that exists nowhere in the application; this is the one that uses
+  // the doors the application actually has.
+  {
+    await wipe()
+    const me = (await one('select id from profiles where tenant_id = $1 limit 1', [TENANT_A]))
+      .id as string
+    const asPhotographer = photographerAdapter(client, me)
+
+    const first = await enqueue(asPhotographer, TENANT_A, [
+      { kind: 'photo.derivatives' as JobKind, payload: { photoId: 'a' }, dedupeKey: 'a' },
+      { kind: 'photo.derivatives' as JobKind, payload: { photoId: 'b' }, dedupeKey: 'b' },
+    ])
+
+    ok('a photographer can enqueue through enqueue()', first.queued === 2 && first.error === null,
+       `queued ${first.queued}, error ${first.error}`)
+
+    // Pressing the button again queues nothing new.
+    const second = await enqueue(asPhotographer, TENANT_A, [
+      { kind: 'photo.derivatives' as JobKind, payload: { photoId: 'a' }, dedupeKey: 'a' },
+    ])
+    ok('and the same work twice is a no-op', second.queued === 0 && second.duplicates === 1,
+       `queued ${second.queued}, duplicates ${second.duplicates}`)
+
+    // The machinery is the database's, not the caller's.
+    const row = await one("select * from jobs where dedupe_key = 'a'")
+    ok('the row it made carries no caller-chosen state',
+       row.status === 'queued' && row.attempts === 0 && row.max_attempts === 5 &&
+       row.locked_by === null && row.lease_until === null && row.finished_at === null,
+       JSON.stringify({ status: row.status, attempts: row.attempts, max: row.max_attempts,
+                        locked_by: row.locked_by, finished_at: row.finished_at }))
+    ok('and the payload it was given', row.payload?.photoId === 'a', JSON.stringify(row.payload))
+
+    // Onto somebody else's site: refused by the function, not by this code.
+    const cross = await enqueue(asPhotographer, TENANT_B, [
+      { kind: 'photo.derivatives' as JobKind, payload: { photoId: 'x' } },
+    ])
+    ok('a photographer cannot enqueue onto another site',
+       cross.error !== null && cross.queued === 0, `error ${cross.error}`)
+
+    // And the worker finishes what the photographer queued.
+    const h = testHandlers()
+    const map: Record<string, number> = {}
+    const report = await drain(db, {
+      tenantId: TENANT_A,
+      resolve: (kind) => (kind === 'photo.derivatives'
+        ? async ({ payload }) => { map[String(payload.photoId)] = (map[String(payload.photoId)] ?? 0) + 1 }
+        : h.resolve(kind)),
+    })
+
+    ok('the worker runs what the photographer queued', report.done === 2, `done ${report.done}`)
+    ok('exactly once each', map.a === 1 && map.b === 1, JSON.stringify(map))
+    ok('and both are marked done',
+       Number((await one("select count(*)::int as n from jobs where kind='photo.derivatives' and status='done'")).n) === 2)
+  }
+
   // ── 10. Every declared kind has a handler ─────────────────────────────────
   //
   // Typescript already requires this (HANDLERS is Record<JobKind, …>), so this
@@ -328,6 +464,61 @@ async function main() {
     for (const kind of JOB_KINDS) {
       ok(`every kind has a handler: ${kind}`, typeof HANDLERS[kind] === 'function')
     }
+  }
+
+  // ── 11. THE ALLOW-LIST IN SQL AND THE ONE IN TYPESCRIPT AGREE ─────────────
+  //
+  // `enqueue_jobs` will not queue a kind it has not been told about, and that
+  // list is written in the migration because it is the boundary — a browser
+  // can call that function. `JOB_KINDS` is the same list in TypeScript, for
+  // the caller's convenience. Two copies of one list is a thing that drifts,
+  // and the direction it drifts silently is the bad one: add a kind here,
+  // enqueue it, and every job is refused by the database with an error a
+  // photographer cannot act on.
+  //
+  // Read out of the migration rather than out of the database, so this holds
+  // on a machine with no Postgres at all.
+  {
+    const migration = readFileSync(
+      '/home/claude/build/db/migrations/2026-09-29_jobs.sql',
+      'utf8'
+    )
+    const clause = /p_kind not in \(([^)]*)\)/.exec(migration)
+    ok('the migration still has a kind allow-list', clause !== null)
+
+    if (clause) {
+      const allowed = [...clause[1]!.matchAll(/'([^']+)'/g)].map((m) => m[1]!).sort()
+      const declared = [...JOB_KINDS].sort()
+      ok(
+        'the SQL allow-list matches JOB_KINDS',
+        JSON.stringify(allowed) === JSON.stringify(declared),
+        `SQL: ${allowed.join(', ')}\n    TypeScript: ${declared.join(', ')}`
+      )
+    }
+  }
+
+  // ── 12. And the worker really is running as service_role ──────────────────
+  //
+  // Every assertion above is worth exactly as much as this one: if the adapter
+  // were quietly connecting as the owner, none of them would have tested a
+  // privilege.
+  {
+    await client.query('set role service_role')
+    const who = (await client.query('select current_user as u')).rows[0].u
+    await client.query('reset role')
+    ok('the drain\'s calls run as service_role', who === 'service_role', `ran as ${who}`)
+
+    // And as service_role it cannot reach the table directly — the proof that
+    // the claim above went through the function's rights, not its own.
+    await client.query('set role service_role')
+    let direct = 'allowed — NOT BLOCKED'
+    try {
+      await client.query('select count(*) from jobs')
+    } catch (e) {
+      direct = e instanceof Error && /permission denied/.test(e.message) ? 'blocked' : 'other'
+    }
+    await client.query('reset role')
+    ok('and cannot read the jobs table on its own', direct === 'blocked', direct)
   }
 
   await wipe()

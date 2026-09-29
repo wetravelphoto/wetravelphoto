@@ -376,7 +376,11 @@ begin
 end $$;
 
 
--- ── 12. Row level security, from the other side ─────────────────────────────
+-- ── 12. Row level security narrows what a photographer can SEE ─────────────
+--
+-- The write half of this used to live here and has moved to block 13, because
+-- `authenticated` no longer has any way to write to this table at all — which
+-- is the point of the change and is asserted there rather than assumed here.
 
 do $$
 declare
@@ -389,12 +393,13 @@ declare
   v_me     uuid;
   n_mine   int;
   n_theirs int;
-  n_anon   int;
-  anon_read text;
-  n_ins    int;
-  ins_err  text := 'allowed — NOT BLOCKED';
+  n_all    int;
 begin
   perform set_config('iso.owner_role', session_user, true);
+
+  -- Something on each site to look for.
+  insert into jobs (tenant_id, kind) values (v_a, 'test.visible'), (v_b, 'test.visible');
+  select count(*) into n_all from jobs;
 
   select id into v_me from profiles where tenant_id = v_a limit 1;
   perform set_config('request.jwt.claims',
@@ -404,44 +409,317 @@ begin
   select count(*) into n_mine   from jobs where tenant_id = v_a;
   select count(*) into n_theirs from jobs where tenant_id = v_b;
 
-  -- A photographer may queue their own work...
-  insert into jobs (tenant_id, kind) values (v_a, 'test.rls');
-  get diagnostics n_ins = row_count;
-
-  -- ...and must not be able to queue work onto somebody else's site.
-  begin
-    insert into jobs (tenant_id, kind) values (v_b, 'test.rls-cross');
-    ins_err := 'allowed — NOT BLOCKED';
-  exception
-    when insufficient_privilege or check_violation then ins_err := 'blocked';
-    when others then ins_err := 'inconclusive (' || sqlerrm || ')';
-  end;
-
-  perform set_config('request.jwt.claims', '', true);
-  perform set_config('role', 'anon', true);
-  /*
-   * `revoke all on jobs from anon` means a visitor does not get an empty
-   * result — the read is refused before row-level security is consulted at
-   * all. Two gates rather than one, and the outer one is the stricter, so the
-   * error IS the pass here.
-   */
-  begin
-    select count(*) into n_anon from jobs;
-    anon_read := n_anon || ' rows';
-  exception when insufficient_privilege then
-    n_anon := 0;
-    anon_read := 'refused outright';
-  end;
-
   perform set_config('role', current_setting('iso.owner_role'), true);
 
   insert into job_res (step, expected, actual, pass) values
-    ('a photographer sees their own queue',      '1 or more', n_mine || '',   n_mine >= 1),
-    ('and none of another site''s',              '0',         n_theirs || '', n_theirs = 0),
-    ('a photographer can queue their own work',  '1 row',     n_ins || ' rows', n_ins = 1),
-    ('but not onto another site',                'blocked',   ins_err,
-       ins_err in ('blocked', 'inconclusive')),
-    ('a visitor reaches no work at all',         'nothing',   anon_read,      n_anon = 0);
+    ('a photographer sees their own queue', '1 or more', n_mine || '',   n_mine >= 1),
+    ('and none of another site''s',         '0',         n_theirs || '', n_theirs = 0),
+    ('while the owner sees both',           'more than one site''s',
+       n_all || ' in total', n_all > n_mine);
+end $$;
+
+
+-- ── 13. THE PRIVILEGE BOUNDARY, exercised as the real roles ─────────────────
+--
+-- Everything above this point runs as the table's OWNER, which is nobody in
+-- production: the owner bypasses row-level security AND holds every table
+-- privilege, so a suite that only ever runs as the owner proves nothing about
+-- what `authenticated` or `service_role` can actually do.
+--
+-- That is not hypothetical. The first version of this migration left the two
+-- worker functions SECURITY INVOKER and granted service_role nothing, and
+-- every assertion above passed — because none of them was service_role. On
+-- production the drain would have failed with "permission denied for table
+-- jobs", or worked by accident on a Supabase default this file never stated.
+--
+-- So these run `set role` and ask the question from where it matters.
+
+do $$
+declare
+  v_a       uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  v_b       uuid := 'aaaaaaaa-0000-0000-0000-000000000002';
+  v_me      uuid;
+  v_id      uuid;
+  v_job     jobs;
+  n         int;
+  wrote     text;
+  updated   text;
+  deleted   text;
+  cross_err text;
+  kind_err  text;
+  claim_err text;
+  finish_err text;
+  read_err  text;
+begin
+  perform set_config('jb.owner_role', session_user, true);
+  select id into v_me from profiles where tenant_id = v_a limit 1;
+
+  -- ── As a signed-in photographer ──────────────────────────────────────────
+  perform set_config('request.jwt.claims', json_build_object('sub', v_me)::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- May look at their own queue.
+  begin
+    select count(*) into n from jobs where tenant_id = v_a;
+    read_err := 'allowed';
+  exception when insufficient_privilege then
+    read_err := 'REFUSED';
+  end;
+
+  -- May NOT write to the table by any direct route.
+  begin
+    insert into jobs (tenant_id, kind) values (v_a, 'photo.derivatives');
+    wrote := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then wrote := 'blocked';
+    when others then wrote := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    update jobs set max_attempts = 999 where tenant_id = v_a;
+    updated := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then updated := 'blocked';
+    when others then updated := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    delete from jobs where tenant_id = v_a;
+    deleted := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then deleted := 'blocked';
+    when others then deleted := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- May NOT drive the worker's half of the queue.
+  begin
+    perform public.claim_jobs('impostor', 1, interval '1 minute', v_a);
+    claim_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then claim_err := 'blocked';
+    when others then claim_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    perform public.finish_job(gen_random_uuid(), 'impostor');
+    finish_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then finish_err := 'blocked';
+    when others then finish_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- MAY enqueue, through the one door.
+  select public.enqueue_jobs(v_a, 'photo.derivatives',
+           jsonb_build_array(jsonb_build_object(
+             'payload', jsonb_build_object('photoId', 'p1'),
+             'dedupe_key', 'p1'))) into n;
+
+  -- ...but not onto another site...
+  begin
+    perform public.enqueue_jobs(v_b, 'photo.derivatives', '[{}]'::jsonb);
+    cross_err := 'allowed — NOT BLOCKED';
+  exception when others then cross_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- ...and not a kind the database has not been told about.
+  begin
+    perform public.enqueue_jobs(v_a, 'shell.exec', '[{}]'::jsonb);
+    kind_err := 'allowed — NOT BLOCKED';
+  exception when others then kind_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  perform set_config('role', current_setting('jb.owner_role'), true);
+
+  select * into v_job from jobs where tenant_id = v_a and dedupe_key = 'p1';
+
+  insert into job_res (step, expected, actual, pass) values
+    ('photographer may read their own queue',  'allowed', read_err,  read_err = 'allowed'),
+    ('photographer cannot INSERT directly',    'blocked', wrote,     wrote like 'blocked%'),
+    ('photographer cannot UPDATE directly',    'blocked', updated,   updated like 'blocked%'),
+    ('photographer cannot DELETE directly',    'blocked', deleted,   deleted like 'blocked%'),
+    ('photographer cannot claim jobs',         'blocked', claim_err, claim_err like 'blocked%'),
+    ('photographer cannot finish jobs',        'blocked', finish_err, finish_err like 'blocked%'),
+    ('photographer CAN enqueue their own work','1',       n || '',   n = 1),
+    ('but not onto another site',              'blocked', cross_err, cross_err like 'blocked%'),
+    ('and not an unknown kind',                'blocked', kind_err,  kind_err like 'blocked%');
+
+  -- ── And the queued row carries none of the caller's choosing ─────────────
+  insert into job_res (step, expected, actual, pass) values
+    ('an enqueued job starts queued',       'queued', v_job.status, v_job.status = 'queued'),
+    ('with no attempts used',               '0', v_job.attempts::text, v_job.attempts = 0),
+    ('the standard attempt limit',          '5', v_job.max_attempts::text, v_job.max_attempts = 5),
+    ('due now, not at some chosen time',    'yes',
+       case when v_job.run_after <= now() then 'yes' else 'no' end, v_job.run_after <= now()),
+    ('holding no lock',                     'null',
+       coalesce(v_job.locked_by, 'null') || '/' || coalesce(v_job.lease_until::text, 'null') ||
+       '/' || coalesce(v_job.locked_at::text, 'null'),
+       v_job.locked_by is null and v_job.lease_until is null and v_job.locked_at is null),
+    ('and not already finished',            'null', coalesce(v_job.finished_at::text, 'null'),
+       v_job.finished_at is null),
+    ('the payload arrived intact',          '{"photoId": "p1"}', v_job.payload::text,
+       v_job.payload = '{"photoId":"p1"}'::jsonb);
+end $$;
+
+
+-- ── 14. The worker's own privileges, as service_role ────────────────────────
+
+do $$
+declare
+  v_a       uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  v_job     jobs;
+  v_out     jobs;
+  n         int;
+  read_err  text;
+  ins_err   text;
+  del_err   text;
+  enq_err   text;
+  claim_fail  text;
+  finish_fail text;
+begin
+  perform set_config('jb.owner_role', session_user, true);
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('role', 'service_role', true);
+
+  /*
+   * THE ONE THAT WOULD HAVE BROKEN IN PRODUCTION.
+   *
+   * Caught rather than allowed to abort: with the first version of this
+   * migration — SECURITY INVOKER functions and no table grant for
+   * service_role — this raises `permission denied for table jobs`, and a
+   * suite that dies on the first surprise reports nothing about the rest.
+   */
+  begin
+    select * into v_job from public.claim_jobs('the-drain', 1, interval '10 minutes', v_a);
+  exception when others then
+    claim_fail := sqlerrm;
+  end;
+
+  -- It can finish what it holds.
+  if v_job.id is not null then
+    begin
+      select * into v_out from public.finish_job(v_job.id, 'the-drain');
+    exception when others then
+      finish_fail := sqlerrm;
+    end;
+  end if;
+
+  -- It cannot read, insert into, or empty the table.
+  begin
+    select count(*) into n from jobs;
+    read_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then read_err := 'blocked';
+    when others then read_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    insert into jobs (tenant_id, kind, status, attempts)
+    values (v_a, 'photo.derivatives', 'done', 99);
+    ins_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then ins_err := 'blocked';
+    when others then ins_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    delete from jobs;
+    del_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then del_err := 'blocked';
+    when others then del_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- And enqueueing is not its door either.
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives', '[{}]'::jsonb);
+    enq_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then enq_err := 'blocked';
+    when others then enq_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  perform set_config('role', current_setting('jb.owner_role'), true);
+
+  insert into job_res (step, expected, actual, pass) values
+    ('THE WORKER CAN CLAIM',            'a job',
+       coalesce(v_job.id::text, coalesce(claim_fail, 'nothing')), v_job.id is not null),
+    ('and the claim really took it',    'running/the-drain',
+       coalesce(v_job.status, '?') || '/' || coalesce(v_job.locked_by, '?'),
+       v_job.status = 'running' and v_job.locked_by = 'the-drain'),
+    ('THE WORKER CAN FINISH',           'done',
+       coalesce(v_out.status, coalesce(finish_fail, 'nothing')), v_out.status = 'done'),
+    ('the worker cannot read the table', 'blocked', read_err, read_err like 'blocked%'),
+    ('the worker cannot insert rows',    'blocked', ins_err,  ins_err like 'blocked%'),
+    ('the worker cannot empty the queue','blocked', del_err,  del_err like 'blocked%'),
+    ('the worker cannot enqueue',        'blocked', enq_err,  enq_err like 'blocked%');
+end $$;
+
+
+-- ── 15. A visitor reaches none of it ────────────────────────────────────────
+
+do $$
+declare
+  v_a      uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  read_err text;
+  enq_err  text;
+  claim_err text;
+begin
+  perform set_config('jb.owner_role', session_user, true);
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('role', 'anon', true);
+
+  begin
+    perform count(*) from jobs;
+    read_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then read_err := 'blocked';
+    when others then read_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives', '[{}]'::jsonb);
+    enq_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then enq_err := 'blocked';
+    when others then enq_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    perform public.claim_jobs('visitor', 1, interval '1 minute');
+    claim_err := 'allowed — NOT BLOCKED';
+  exception
+    when insufficient_privilege then claim_err := 'blocked';
+    when others then claim_err := 'blocked (' || sqlstate || ')';
+  end;
+
+  perform set_config('role', current_setting('jb.owner_role'), true);
+
+  insert into job_res (step, expected, actual, pass) values
+    ('a visitor cannot read the queue',    'blocked', read_err,  read_err like 'blocked%'),
+    ('a visitor cannot enqueue',           'blocked', enq_err,   enq_err like 'blocked%'),
+    ('a visitor cannot claim',             'blocked', claim_err, claim_err like 'blocked%');
+end $$;
+
+
+-- ── 16. Deleting a site takes its queue with it ─────────────────────────────
+--
+-- Which is why `jobs` is NOT in TENANT_TABLES in app/actions/sites.ts, and why
+-- service_role needs no DELETE on it.
+
+do $$
+declare
+  v_t uuid;
+  n   int;
+begin
+  insert into tenants (name, domain) values ('Queue cascade test', 'queue-cascade.invalid')
+  returning id into v_t;
+
+  insert into jobs (tenant_id, kind) values (v_t, 'photo.derivatives'), (v_t, 'photo.derivatives');
+  delete from tenants where id = v_t;
+  select count(*) into n from jobs where tenant_id = v_t;
+
+  insert into job_res (step, expected, actual, pass) values
+    ('deleting a site removes its queue', '0', n || '', n = 0);
 end $$;
 
 
@@ -454,13 +732,18 @@ declare
 begin
   select string_agg(
            format('%s  %-44s expected %-16s got %s',
-                  case when pass then '  ok  ' else ' FAIL ' end,
+                  -- COALESCE, because a comparison against a null is neither
+                  -- true nor false. `v_out.status = 'done'` where nothing came
+                  -- back is UNKNOWN, and an unknown result printed as FAIL but
+                  -- counted as neither is a report that disagrees with itself —
+                  -- which is how 4 failures were once summarised as 2.
+                  case when coalesce(pass, false) then '  ok  ' else ' FAIL ' end,
                   step, expected, actual),
            E'\n' order by ord)
     into report
     from job_res;
 
-  select count(*) into failed from job_res where not pass;
+  select count(*) into failed from job_res where not coalesce(pass, false);
 
   raise exception E'\n\n%\n\n%\n\nNothing was kept — this transaction always rolls back.\n',
     report,

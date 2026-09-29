@@ -31,7 +31,17 @@ export PGPORT="${PGPORT:-5433}"
 export PGDATABASE="${PGDATABASE:-wtp}"
 export PGUSER="${PGUSER:-postgres}"
 
+# Setup and inspection, as the owner.
 Q() { psql -X -q -t -A -v ON_ERROR_STOP=1 -c "$1"; }
+
+# A CLAIM, AS THE ROLE THAT ACTUALLY MAKES ONE.
+#
+# The drain runs as `service_role`, which has EXECUTE on the two queue
+# functions and no privilege at all on the table — the functions are SECURITY
+# DEFINER and that is the whole of the worker's reach. Running these as the
+# table's owner instead would be testing a role that exists nowhere, and would
+# have hidden the grant defect this file's sibling suite caught.
+W() { psql -X -q -t -A -v ON_ERROR_STOP=1 -c "set role service_role" -c "$1"; }
 
 pass=0
 fail=0
@@ -67,6 +77,7 @@ A_OUT=$(mktemp); B_OUT=$(mktemp)
 (
   psql -X -q -t -A -v ON_ERROR_STOP=1 <<SQL > "$A_OUT" 2>&1
 begin;
+set role service_role;
 select id from public.claim_jobs('A', 1, interval '5 minutes', '$TENANT');
 select pg_sleep(3);
 commit;
@@ -76,8 +87,7 @@ A_PID=$!
 
 sleep 1  # long enough that A is certainly inside its transaction
 
-psql -X -q -t -A -v ON_ERROR_STOP=1 \
-  -c "select id from public.claim_jobs('B', 1, interval '5 minutes', '$TENANT')" \
+W "select id from public.claim_jobs('B', 1, interval '5 minutes', '$TENANT')" \
   > "$B_OUT" 2>&1
 B_STATUS=$?
 B_DONE=$(date +%s)
@@ -111,6 +121,7 @@ C_OUT=$(mktemp); D_OUT=$(mktemp)
 (
   psql -X -q -t -A -v ON_ERROR_STOP=1 <<SQL > "$C_OUT" 2>&1
 begin;
+set role service_role;
 select id from public.claim_jobs('C', 1, interval '5 minutes', '$TENANT');
 select pg_sleep(3);
 commit;
@@ -120,8 +131,7 @@ C_PID=$!
 
 sleep 1
 D_START=$(date +%s)
-psql -X -q -t -A -v ON_ERROR_STOP=1 \
-  -c "select count(*) from public.claim_jobs('D', 1, interval '5 minutes', '$TENANT')" \
+W "select count(*) from public.claim_jobs('D', 1, interval '5 minutes', '$TENANT')" \
   > "$D_OUT" 2>&1
 D_ELAPSED=$(( $(date +%s) - D_START ))
 
@@ -151,8 +161,7 @@ Q "insert into jobs (tenant_id, kind)
 RACE=$(mktemp -d)
 for w in 1 2 3 4 5 6; do
   (
-    psql -X -q -t -A -v ON_ERROR_STOP=1 \
-      -c "select count(*) from public.claim_jobs('race-$w', 1, interval '5 minutes', '$TENANT')" \
+    W "select count(*) from public.claim_jobs('race-$w', 1, interval '5 minutes', '$TENANT')" \
       > "$RACE/$w" 2>&1
   ) &
 done

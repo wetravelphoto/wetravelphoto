@@ -741,8 +741,18 @@ export const SECTIONS: Record<string, SectionDef> = {
       eyebrow: null,
       heading: 'Recent trips',
       limit: 0,
-      // Across, on a wide screen; narrower screens step down on their own.
-      columns: 3,
+      /*
+       * Across, on a wide screen; narrower screens step down on their own.
+       *
+       * A STRING, because the field below is a `select` whose options are
+       * '2', '3' and '4'. It was the number 3 until 2026-09-29, which meant a
+       * section nobody had opened carried a number and a section saved once
+       * carried a string, for the same setting. Both drew correctly — every
+       * renderer reads it through `num(settings, …)` rather than comparing
+       * it — so nothing was visibly wrong, and nothing would have been until
+       * the first renderer compared it.
+       */
+      columns: '3',
     },
     fields: [
       {
@@ -834,7 +844,9 @@ export const SECTIONS: Record<string, SectionDef> = {
       // flowing after it), 'single' (one wide column, every story large) or
       // 'columns' (even columns, every story the same size).
       grid_style: 'feature',
-      grid_columns: 3,
+      // A STRING, for the same reason as `galleries.columns` above: the field
+      // is a `select` of '2' and '3'.
+      grid_columns: '3',
     },
     fields: [
       {

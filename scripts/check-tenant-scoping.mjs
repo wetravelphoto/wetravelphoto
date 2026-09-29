@@ -81,6 +81,11 @@ const SCOPED = [
   'tenant_domains',
   'orders',
   'order_items',
+  // Added 2026-09-29 with the table itself, before a single query existed, so
+  // the first unscoped read fails the build rather than being noticed later.
+  // The queue is the one place where work for every site passes through one
+  // piece of code, which is exactly the shape that leaks.
+  'jobs',
 ]
 
 /**

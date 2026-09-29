@@ -128,6 +128,29 @@ const firstOf = (kind: Field['kind']) => allFields.find((f) => f.field.kind === 
 
   // Case matters — these are compared with `===` by renderers, not folded.
   ok('select: a differently-cased option is refused', refused(HERO, { backdrop: 'IMAGE' }) !== null)
+
+  /*
+   * AND THE NUMBER FORM OF AN OPTION IS STILL REFUSED.
+   *
+   * `galleries.columns` and `journal.grid_columns` offer '2', '3' and '4'. The
+   * registry used to default them to the number 3; the fix was to correct the
+   * registry, NOT to teach the validator to take both. One canonical type per
+   * field, agreeing with its own options — a validator that accepts two types
+   * for one setting is not a validator, and the drift it permits is exactly
+   * what took eleven months to notice the first time.
+   */
+  for (const [type, key] of [
+    ['galleries', 'columns'],
+    ['journal', 'grid_columns'],
+  ] as const) {
+    const def = SECTIONS[type]
+    ok(`select: ${type}.${key} accepts the string '3'`, stored(def, { [key]: '3' })[key] === '3')
+    ok(
+      `select: ${type}.${key} still refuses the number 3`,
+      refused(def, { [key]: 3 }) !== null,
+      'the registry was corrected, not the validator broadened'
+    )
+  }
   // The legacy hero escape hatch the editor itself writes.
   ok(
     'select: hide_on "none" is accepted',
@@ -412,28 +435,16 @@ const firstOf = (kind: Field['kind']) => allFields.find((f) => f.field.kind === 
    * the one every new section starts with; a validator that refuses one would
    * refuse a section nobody has touched.
    *
-   * TWO DEFAULTS DO NOT MATCH THEIR OWN FIELD, and are listed here rather than
-   * quietly accommodated. Both are a `select` whose options are the STRINGS
-   * '2', '3', '4' and whose default is the NUMBER 3:
-   *
-   *   · galleries.columns
-   *   · journal.grid_columns
-   *
-   * So a section nobody has opened carries the number and a section saved once
-   * carries the string. Both render, because the three renderers read it
-   * through `num(settings, 'columns', 3)` (GalleriesSection, JournalSection,
-   * ShopSection) rather than comparing it — `shop.columns` is declared a
-   * `number` field and is not affected.
-   *
-   * Nothing sends either of these through this action: a `select` is drawn by
-   * the generic panel, which saves through the FormData path, and that path has
-   * always written the string. They are left refused, and reported, because the
-   * field declaration is the thing that says what the value is and a validator
-   * that accepts two types for one setting is not a validator. Making the
-   * defaults '3' is a one-line registry change and a separate decision.
+   * THERE ARE NO EXCEPTIONS TO THIS, and there was one for about an hour on
+   * 2026-09-29: `galleries.columns` and `journal.grid_columns` were `select`
+   * fields whose options are the strings '2', '3', '4' and whose defaults were
+   * the NUMBER 3, so a section nobody had opened carried a number and a section
+   * saved once carried a string, for the same setting. Nothing was visibly
+   * wrong — all three renderers read it through `num(settings, …)` rather than
+   * comparing it — and nothing would have been until the first renderer
+   * compared it. The registry now carries '3' in both places. The list of
+   * exceptions is gone rather than shortened, which is the point.
    */
-  const MISMATCHED_DEFAULTS = new Set(['galleries.columns', 'journal.grid_columns'])
-
   for (const [type, def] of Object.entries(SECTIONS)) {
     const full = resolveSettings(type, {}) as SectionSettings
     for (const [key, value] of Object.entries(full)) {
@@ -445,24 +456,61 @@ const firstOf = (kind: Field['kind']) => allFields.find((f) => f.field.kind === 
         why = e instanceof Error ? e.message : String(e)
       }
 
-      if (MISMATCHED_DEFAULTS.has(`${type}.${key}`)) {
-        const field = fieldForKey(def, key)?.field
-        ok(
-          `default (known): ${type}.${key} is a number under a select of strings`,
-          why !== '' &&
-            field?.kind === 'select' &&
-            typeof value === 'number' &&
-            field.options.some((o) => o.value === String(value)),
-          'listed above. If this assertion fails the registry was changed and the list should shrink'
-        )
-        continue
-      }
-
       ok(
         `default: ${type}.${key} survives its own validator`,
         got === value || (got === null && value === null),
         why || `stored ${JSON.stringify(got)} instead of ${JSON.stringify(value)}`
       )
+    }
+  }
+
+  /*
+   * 8a′. THE SAME THING SAID DIRECTLY, so the failure names the cause.
+   *
+   * 8a would catch a default that disagrees with its field, but it would report
+   * it as "survives its own validator", which describes the symptom and not the
+   * fault. This says what is actually wrong, per kind — and it is the check
+   * that would have caught the two `columns` defaults the day they were
+   * written, rather than eleven months later from the other end.
+   */
+  for (const [type, def] of Object.entries(SECTIONS)) {
+    const full = resolveSettings(type, {}) as SectionSettings
+    for (const field of def.fields) {
+      const value = full[field.key]
+      if (value === null || value === undefined || field.kind === 'custom') continue
+
+      switch (field.kind) {
+        case 'select':
+          ok(
+            `declared type: ${type}.${field.key} defaults to one of its own options`,
+            typeof value === 'string' && field.options.some((o) => o.value === value),
+            `default is ${JSON.stringify(value)}; the options are ${field.options
+              .map((o) => JSON.stringify(o.value))
+              .join(', ')}`
+          )
+          break
+        case 'toggle':
+          ok(`declared type: ${type}.${field.key} defaults to a boolean`, typeof value === 'boolean')
+          break
+        case 'number':
+          ok(
+            `declared type: ${type}.${field.key} defaults to a number in range`,
+            typeof value === 'number' &&
+              Number.isFinite(value) &&
+              value >= (field.min ?? -Infinity) &&
+              value <= (field.max ?? Infinity),
+            `default is ${JSON.stringify(value)}; the range is ${field.min ?? '−∞'}..${field.max ?? '∞'}`
+          )
+          break
+        case 'color':
+          ok(
+            `declared type: ${type}.${field.key} defaults to a #rrggbb hex`,
+            typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+          )
+          break
+        default:
+          ok(`declared type: ${type}.${field.key} defaults to a string`, typeof value === 'string')
+      }
     }
   }
 
@@ -549,10 +597,6 @@ const firstOf = (kind: Field['kind']) => allFields.find((f) => f.field.kind === 
   // saves of one value would store two different things.
   for (const [type, def] of Object.entries(SECTIONS)) {
     const full = resolveSettings(type, {}) as SectionSettings
-    // Minus the two the registry declares inconsistently — see 8a.
-    for (const key of Object.keys(full)) {
-      if (MISMATCHED_DEFAULTS.has(`${type}.${key}`)) delete full[key]
-    }
     const once = stored(def, full as Record<string, unknown>)
     const twice = stored(def, once as Record<string, unknown>)
     ok(

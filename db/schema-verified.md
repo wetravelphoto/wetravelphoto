@@ -260,3 +260,58 @@ The old assertion was not vacuous in the single-site case — the account is
 parked in a throwaway tenant owning no settings row, so without the flag it
 reaches 0, not 1. It caught a broken flag; it just could not survive a second
 site.
+
+---
+
+## 2026-09-29 — `jobs`, written but NOT YET IN PRODUCTION
+
+`db/migrations/2026-09-29_jobs.sql` creates the `jobs` table, two functions
+(`claim_jobs`, `finish_job`), four indexes and the usual tenant policy. It has
+been **rehearsed against this fixture and nothing else**.
+
+**`db/test-fixture.sql` deliberately does not contain it.** The fixture's whole
+value is that it is a faithful copy of production, and production does not have
+this table yet. A fixture that runs ahead of production is the same defect as
+one that lags it, pointed the other way: a rehearsal would then prove something
+about a database that does not exist. The rehearsal order is therefore
+
+```
+db/test-fixture.sql          ← production as it is
+db/migrations/2026-09-29_jobs.sql   ← the change being proposed
+db/verify-jobs.sql           ← what it must do
+scripts/jobs-concurrency.sh  ← and what two of them must not do
+```
+
+**When the migration is applied to production, the fixture and
+`db/schema-2026-09.sql` must be updated in the same sitting**, or the next
+rehearsal is against a database that is missing a table the application reads.
+
+### Verified locally, 2026-09-29
+
+Against PostgreSQL 16.13 carrying `db/test-fixture.sql` (production is 17.6 —
+not version parity; see the note at the top of this file).
+
+| | |
+|---|---|
+| the migration runs twice with no error | yes |
+| `db/verify-jobs.sql` | 48 of 48 |
+| `scripts/jobs-concurrency.sh` | 14 of 14 |
+| `.mk/jobs.ts` (the worker, against this database) | 41 of 41 |
+
+### One thing the rehearsal caught that reading did not
+
+The first version of `enqueue()` sent
+`on conflict (tenant_id, kind, dedupe_key) do nothing`. The deduplication index
+is **partial** (`where dedupe_key is not null and status in ('queued',
+'running')`), and Postgres refuses a targeted conflict clause against a partial
+index unless the statement repeats the index's own predicate — which PostgREST
+gives no way to send. Measured rather than assumed:
+
+```
+ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
+```
+
+An untargeted `on conflict do nothing` accepts any arbiter index, inserts every
+row that is not a duplicate and skips the ones that are. That is what the code
+sends now. Pressing "Process photographs" a second time would have failed the
+whole insert, in production, on the first day.

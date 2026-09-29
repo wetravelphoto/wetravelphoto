@@ -14,7 +14,7 @@ import { readConnection } from '@/lib/newsletter/connection'
 import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
 import BackfillPanel from '@/components/admin/BackfillPanel'
-import { countUnprocessed } from '@/app/actions/backfill'
+import { countUnprocessed, derivativeQueue } from '@/app/actions/backfill'
 import { currentEditor, requireEditor } from '@/lib/auth'
 import { hasInstagramToken } from '@/lib/instagram'
 import { currentSite } from '@/lib/tenant'
@@ -25,6 +25,17 @@ import SettingsRail from '@/components/admin/SettingsRail'
 import { sectionFor } from '@/lib/admin/settings-sections'
 
 export const dynamic = 'force-dynamic'
+
+/*
+ * A SERVER ACTION INHERITS THIS PAGE'S LIMIT, not one of its own — `maxDuration`
+ * cannot be exported from a 'use server' file at all. The expensive things
+ * reached from this screen are the photograph backfill (which now spends a
+ * bounded 30 seconds inside the queue) and the newsletter sync (up to 300
+ * serial HTTP calls). Both used to run at whatever the platform happened to
+ * default to; this says what they may have. 300 seconds is the maximum on
+ * every plan, so it is also a declaration that these are the long ones.
+ */
+export const maxDuration = 300
 
 /**
  * SETTINGS
@@ -132,6 +143,16 @@ export default async function SettingsPage({
       : null
 
   const unprocessed = section.id === 'advanced' ? await countUnprocessed() : 0
+  /*
+   * What the queue looks like, so the panel can say what FAILED as well as
+   * what is left. A photograph that cannot be processed used to be
+   * indistinguishable from one not yet reached; it now stops after five tries,
+   * and this is what puts that on the screen.
+   */
+  const derivatives =
+    section.id === 'advanced'
+      ? await derivativeQueue()
+      : { queued: 0, running: 0, failed: 0 }
 
   const host = site?.primaryHost ?? null
 
@@ -500,8 +521,8 @@ export default async function SettingsPage({
           {section.id === 'advanced' && (
             <div className="admin-panel st-panel">
               <h3 className="admin-h2">Photograph sizes</h3>
-              {unprocessed > 0 ? (
-                <BackfillPanel initialRemaining={unprocessed} />
+              {unprocessed > 0 || derivatives.failed > 0 ? (
+                <BackfillPanel initialRemaining={unprocessed} initialQueue={derivatives} />
               ) : (
                 <p className="admin-meta st-note" style={{ margin: 0 }}>
                   Every photograph in this site has its display sizes. Nothing to rebuild. This tool

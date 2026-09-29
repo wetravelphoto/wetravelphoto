@@ -21,6 +21,15 @@ import DeleteSite from '@/components/admin/DeleteSite'
 
 export const dynamic = 'force-dynamic'
 
+/*
+ * `deleteSite` is reached from this screen and walks every tenant-owned table
+ * in turn, leaves first. A server action inherits the limit of the page it is
+ * invoked from — `maxDuration` cannot be exported from a 'use server' file —
+ * so this is where it gets one instead of running at whatever the platform
+ * happens to default to. Five minutes is the maximum on every plan.
+ */
+export const maxDuration = 300
+
 export const metadata = {
   title: `Sites · ${PLATFORM.name}`,
   robots: { index: false, follow: false },

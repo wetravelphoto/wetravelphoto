@@ -38,7 +38,13 @@
   flex-wrap: wrap;
 }
 
-.save-toast { font-size: 0.78rem; color: #2f6b45; }
+.save-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.78rem;
+  color: #2f6b45;
+}
 .save-toast[data-tone='working'] { color: var(--admin-accent); }
 
 /* Heading / body tabs inside the typography block */

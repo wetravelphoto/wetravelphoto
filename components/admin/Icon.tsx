@@ -53,6 +53,14 @@ export type IconName =
   | 'menu'
   | 'close'
   | 'check'
+  // Settings sections
+  | 'share'
+  | 'bell'
+  | 'link'
+  | 'send'
+  | 'language'
+  | 'shield'
+  | 'sliders'
   // Page kinds, for the card footers
   | 'home'
   | 'file'
@@ -193,6 +201,55 @@ const PATHS: Record<IconName, React.ReactNode> = {
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
   check: <path d="M4.5 12.5l5 5L19.5 7" />,
+  share: (
+    <>
+      <circle cx="18" cy="5.5" r="2.5" />
+      <circle cx="6" cy="12" r="2.5" />
+      <circle cx="18" cy="18.5" r="2.5" />
+      <path d="M8.3 10.8l7.4-4M8.3 13.2l7.4 4" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M18 9.5a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16s-2-1.5-2-6.5" />
+      <path d="M10.3 19.5a2 2 0 0 0 3.4 0" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.3 1.3" />
+      <path d="M13.5 10.5a4.5 4.5 0 0 0-6.4 0L4.5 13.1a4.5 4.5 0 0 0 6.4 6.4l1.3-1.3" />
+    </>
+  ),
+  send: (
+    <>
+      <path d="M21 3L10.5 13.5" />
+      <path d="M21 3l-6.8 18-3.7-7.5L3 9.8z" />
+    </>
+  ),
+  language: (
+    <>
+      <path d="M3 5.5h9" />
+      <path d="M7.5 3.5v2" />
+      <path d="M10.5 5.5c0 4.5-3 8-6.5 9.5" />
+      <path d="M5 10c1 2 3 3.8 5.5 4.5" />
+      <path d="M12 20.5l4-10 4 10" />
+      <path d="M13.3 17.5h5.4" />
+    </>
+  ),
+  shield: <path d="M12 3l7.5 3v5.5c0 4.5-3 7.8-7.5 9.5-4.5-1.7-7.5-5-7.5-9.5V6z" />,
+  /* Gaps in the tracks where the handles sit, so the handle is not a ring with
+     a line drawn through it. */
+  sliders: (
+    <>
+      <path d="M6 4v5M6 13v7" />
+      <path d="M12 4v9M12 17v3" />
+      <path d="M18 4v3M18 11v9" />
+      <circle cx="6" cy="11" r="2" />
+      <circle cx="12" cy="15" r="2" />
+      <circle cx="18" cy="9" r="2" />
+    </>
+  ),
   home: (
     <>
       <path d="M4 10.5L12 4l8 6.5" />

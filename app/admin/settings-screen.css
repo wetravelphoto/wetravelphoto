@@ -1,0 +1,431 @@
+/*
+ * SETTINGS
+ * ════════
+ *
+ * Three columns: the sections, the open section, and what it adds up to.
+ *
+ *   ┌──────────┬───────────────────────┬──────────────┐
+ *   │ sections │ panels                │ preview      │
+ *   │ (sticky) │                       │ (sticky)     │
+ *   └──────────┴───────────────────────┴──────────────┘
+ *
+ * ── What gives way, and in what order ───────────────────────────────────────
+ *
+ * Below 1280px the preview drops under the panels, keeping its column; the
+ * section list is the one thing that must stay beside them, because it is how
+ * you get anywhere. Below 900px the list becomes a row of chips above the
+ * panels and everything is one column.
+ *
+ * Everything draws with the tokens in workspace.css.
+ */
+
+.st {
+  max-width: 1440px;
+
+  /* Wide enough for the longest label AND its Soon chip on one line —
+     "Language & region" was clipped to "Language & reg…" at 216px, which reads
+     as a bug in the list rather than as a long word. Same width as the
+     workspace rail, so the two navigations line up as one idea. */
+  --st-nav: 236px;
+}
+
+.st-head { margin-bottom: var(--lg-6); }
+
+.st-grid {
+  display: grid;
+  grid-template-columns: var(--st-nav) minmax(0, 1fr) 280px;
+  grid-template-areas: 'nav body rail';
+  gap: var(--lg-6);
+  align-items: start;
+}
+
+.st-nav { grid-area: nav; }
+.st-body { grid-area: body; min-width: 0; }
+.st-rail { grid-area: rail; }
+
+@media (max-width: 1280px) {
+  /* The preview keeps the right-hand column and moves under the panels. The
+     section list spans both rows, which is what lets it stay sticky against
+     the whole screen rather than against the panels alone. */
+  .st-grid {
+    grid-template-columns: var(--st-nav) minmax(0, 1fr);
+    grid-template-areas:
+      'nav body'
+      'nav rail';
+    row-gap: var(--lg-5);
+  }
+}
+
+@media (max-width: 900px) {
+  .st-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'nav' 'body' 'rail';
+  }
+}
+
+/* ── The section list ───────────────────────────────────────────────────────── */
+
+/*
+ * Sticky under the top bar, which is itself sticky and declares its own height
+ * as a token — so this offset cannot drift out of step with it.
+ */
+.st-nav {
+  position: sticky;
+  top: calc(var(--lg-top-h) + var(--lg-8));
+  display: flex;
+  flex-direction: column;
+  gap: var(--lg-3);
+}
+
+.st-find {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--lg-2);
+  height: var(--lg-control);
+  padding: 0 var(--lg-2) 0 10px;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--lg-radius-sm);
+  background: var(--admin-panel);
+}
+
+.st-find:focus-within { border-color: var(--admin-ink); }
+.st-find > svg { flex-shrink: 0; color: var(--admin-mute); }
+
+.st-find-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: var(--admin-font);
+  font-size: 13px;
+  color: var(--admin-ink);
+}
+
+.st-find-input:focus { outline: none; }
+.st-find-input::placeholder { color: var(--admin-mute); }
+
+/* The browser's own clear affordance, removed: it is a different shape in every
+   browser and we draw our own beside it. */
+.st-find-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+.st-find-clear {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--lg-radius-sm);
+  background: none;
+  color: var(--admin-mute);
+  cursor: pointer;
+}
+
+.st-find-clear:hover { background: var(--admin-hover); color: var(--admin-ink); }
+
+.st-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Taller than a rail item, because these have two lines when the search has
+   matched a setting rather than a section name. */
+.st-nav-item {
+  width: 100%;
+  align-items: flex-start;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.st-nav-item svg { margin-top: 1px; }
+
+/* Which setting matched, under the section it is in. */
+.st-nav-hit {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--admin-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-nav-item[aria-current='page'] .st-nav-hit { color: var(--admin-soft); }
+
+.st-nav-none {
+  margin: 0;
+  padding: var(--lg-3);
+  border: 1px dashed var(--admin-line-strong);
+  border-radius: var(--lg-radius);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--admin-mute);
+}
+
+@media (max-width: 900px) {
+  .st-nav { position: static; }
+
+  /* A row that scrolls sideways. The two-line form does not survive this, so
+     the matched-setting line is dropped rather than wrapped into the chips. */
+  .st-nav-list {
+    flex-direction: row;
+    gap: var(--lg-2);
+    overflow-x: auto;
+    padding-bottom: var(--lg-2);
+    scrollbar-width: thin;
+  }
+
+  .st-nav-list li { flex-shrink: 0; }
+  .st-nav-item { white-space: nowrap; }
+  .st-nav-hit { display: none; }
+}
+
+/* ── The panels ─────────────────────────────────────────────────────────────── */
+
+.st-body-head { margin-bottom: var(--lg-4); }
+
+.st-h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  color: var(--admin-ink);
+}
+
+.st-body-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--admin-soft);
+}
+
+.st-panel {
+  margin-bottom: var(--lg-4);
+  background: var(--admin-panel);
+}
+
+.st-panel:last-child { margin-bottom: 0; }
+
+/* A panel that only points somewhere. No border weight, because there is
+   nothing in it to fill in. */
+.st-panel-quiet { background: transparent; box-shadow: none; }
+
+.st-note { margin: 0 0 var(--lg-4); line-height: 1.6; }
+
+/* A note under one field, not under the panel. */
+.st-hint { display: block; margin-top: 5px; line-height: 1.5; }
+
+.st-panel-split {
+  margin-top: var(--lg-4);
+  padding-top: var(--lg-4);
+  border-top: 1px solid var(--admin-line);
+}
+
+/* Fields that belong together, without a paragraph of explanation each. */
+.st-fields {
+  display: grid;
+  gap: var(--lg-3);
+  margin-bottom: var(--lg-4);
+}
+
+.st-fields-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+.st-field-flat { margin: 0; }
+
+/* ── The team list ──────────────────────────────────────────────────────────── */
+
+.st-team {
+  list-style: none;
+  margin: 0 0 var(--lg-4);
+  padding: 0;
+}
+
+.st-team li {
+  display: flex;
+  align-items: center;
+  gap: var(--lg-3);
+  padding: 10px 0;
+}
+
+.st-team li + li { border-top: 1px solid var(--admin-line); }
+
+.st-team-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+
+.st-team-name {
+  font-size: 13.5px;
+  color: var(--admin-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-team-mail {
+  font-size: 12px;
+  color: var(--admin-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── The preview rail ───────────────────────────────────────────────────────── */
+
+.st-rail {
+  position: sticky;
+  top: calc(var(--lg-top-h) + var(--lg-8));
+  display: flex;
+  flex-direction: column;
+  gap: var(--lg-4);
+}
+
+@media (max-width: 1280px) {
+  /*
+   * Under the panels it has nothing to stay level with, and a sticky element in
+   * a spanned grid row fights the row above it.
+   *
+   * And the two cards go side by side, because a column card given the full
+   * width of the screen is not a bigger card — it is a browser frame eight
+   * hundred pixels tall showing a homepage nobody asked to see at that size.
+   */
+  .st-rail {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .st-rail { grid-template-columns: minmax(0, 1fr); }
+}
+
+.st-card {
+  padding: var(--lg-4);
+  border: 1px solid var(--admin-line);
+  border-radius: var(--lg-radius-lg);
+  background: var(--admin-panel);
+  box-shadow: var(--lg-shadow);
+}
+
+.st-card-h {
+  margin: 0 0 2px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.008em;
+  color: var(--admin-ink);
+}
+
+.st-card-note {
+  margin: 0 0 var(--lg-3);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--admin-mute);
+}
+
+.st-card-btn { width: 100%; }
+
+.st-card-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--lg-3);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--admin-soft);
+}
+
+.st-card-go:hover { color: var(--admin-ink); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── The browser frame ──────────────────────────────────────────────────────── */
+
+.st-chrome {
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--lg-radius);
+  background: #f1f1f3;
+  overflow: hidden;
+}
+
+.st-chrome-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--lg-2);
+  padding: 7px 8px 0;
+}
+
+.st-chrome-dots { display: flex; gap: 4px; padding-bottom: 7px; flex-shrink: 0; }
+
+.st-chrome-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--admin-line-strong);
+}
+
+.st-chrome-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 6px 6px 0 0;
+  background: #fff;
+}
+
+.st-chrome-fav {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.st-chrome-fav img { width: 100%; height: 100%; object-fit: cover; }
+
+/* No icon saved: the blank mark, drawn the size a tab draws it. */
+.st-chrome-fav-none {
+  width: 11px;
+  height: 11px;
+  border: 1.2px solid var(--admin-line-strong);
+  border-radius: 2px;
+}
+
+.st-chrome-name {
+  font-size: 11px;
+  color: var(--admin-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-chrome-url {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 8px 8px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11px;
+  color: var(--admin-soft);
+}
+
+.st-chrome-url svg { flex-shrink: 0; color: var(--admin-mute); }
+
+.st-chrome-url span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The homepage itself, flush to the bottom of the frame. */
+.st-chrome-shot { border-radius: 0; border-top: 1px solid var(--admin-line); }

@@ -32,6 +32,7 @@ import './scenes.css'
 import './workspace.css'
 import './pages-board.css'
 import './overview.css'
+import './settings-screen.css'
 
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

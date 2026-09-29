@@ -2,6 +2,7 @@
 
 import { useFormStatus } from 'react-dom'
 import { useEffect, useState } from 'react'
+import Icon from '@/components/admin/Icon'
 
 /**
  * Sticky action bar with real feedback. Must be rendered inside the <form>
@@ -38,7 +39,14 @@ export default function SaveBar({
 
       <div className="save-bar-actions">
         {pending && <span className="save-toast" data-tone="working">Saving…</span>}
-        {saved && <span className="save-toast">✓ Saved</span>}
+        {/* Drawn, not `✓`: that character is whatever shape the machine's
+            fallback font has for it, at whatever weight. */}
+        {saved && (
+          <span className="save-toast" data-tone="done">
+            <Icon name="check" size={13} strokeWidth={2.4} />
+            Saved
+          </span>
+        )}
         {secondary}
         <button type="submit" disabled={pending} className="admin-btn">
           {pending ? 'Saving…' : label}

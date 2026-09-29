@@ -85,6 +85,11 @@
   --lg-control-lg: 40px;
   --lg-rail: 236px;
 
+  /* The top bar's height, declared once. Anything else on a screen that wants
+     to be sticky has to clear it, and `top: 62px` written by hand in a second
+     stylesheet is a number that goes wrong the first time this bar changes. */
+  --lg-top-h: 62px;
+
   /*
    * ── A ROW, NOT A TWO-COLUMN GRID ──────────────────────────────────────────
    *
@@ -144,7 +149,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--lg-4);
-  min-height: 62px;
+  min-height: var(--lg-top-h);
   padding: 0 var(--lg-8);
   background: var(--admin-bg);
   border-bottom: 1px solid var(--admin-line);

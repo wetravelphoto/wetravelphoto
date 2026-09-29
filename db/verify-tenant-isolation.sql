@@ -141,11 +141,40 @@ end $$;
 do $$
 declare
   n_update int;
+  n_sites  int;
+  n_others int;
 begin
   update profiles
      set is_platform_admin = true
    where id = current_setting('iso.me')::uuid;
   -- still parked in tenant B, so this can only pass via the admin flag
+
+  /*
+   * HOW MANY SITES THERE ARE, counted before the admin touches anything.
+   *
+   * This check used to assert `n_update = 1`. That was correct only while the
+   * database held exactly one site — the update below names no site, so it
+   * touches every row the caller can reach. Production has had several sites
+   * for a while, so the check reported a FALSE FAILURE, under a summary line
+   * that reads "do not open beta logins". A test that cries wolf about
+   * isolation is worse than one that is merely absent.
+   *
+   * (It was not vacuous in the single-site case: this account is parked in a
+   * throwaway tenant that owns no settings row, so without the admin flag it
+   * reaches 0, not 1. The old assertion caught a broken flag. It just could
+   * not survive a second site.)
+   *
+   * Counted as the table owner, who bypasses row-level security, so this is
+   * the true total rather than what some role can see.
+   */
+  select count(*) into n_sites from site_settings;
+
+  -- And how many of those belong to a site this account is NOT parked in.
+  -- Reaching every row only means something if at least one of them is
+  -- somebody else's.
+  select count(*) into n_others
+    from site_settings
+   where tenant_id <> current_setting('iso.tenant_b')::uuid;
 
   perform set_config('role', 'authenticated', true);
 
@@ -155,7 +184,10 @@ begin
   perform set_config('role', current_setting('iso.owner_role'), true);
 
   insert into iso_res (step, expected, actual, pass) values
-    ('platform admin reaches every site', '1 row', n_update || ' rows', n_update = 1);
+    ('platform admin reaches every site',
+     'all ' || n_sites || ' sites',
+     n_update || ' of ' || n_sites || ', ' || n_others || ' beyond its own',
+     n_update = n_sites and n_others >= 1);
 end $$;
 
 

@@ -20,6 +20,7 @@ import {
 import { getSiteSettings } from '@/lib/site'
 import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
+import { validateValues } from '@/lib/sections/values'
 import { sanitizeOwnStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
 import { sanitizeTextStyles } from '@/lib/sections/text-style'
 import { sanitizeShown } from '@/lib/sections/shown'
@@ -293,6 +294,15 @@ async function saveTokens(changes: Partial<StyleTokens>) {
  *
  * Every key must exist in the section type's defaults, so an action reached
  * directly cannot invent settings.
+ *
+ * AND EVERY VALUE IS CHECKED AGAINST ITS FIELD, by the same rules the panel's
+ * own form read uses — `lib/sections/values.ts` holds them once and both
+ * writers share them. This action used to check only that the key existed and
+ * then store whatever came with it, which meant a request built by hand (or by
+ * something automated, which is the direction this is going) could put a
+ * string where a renderer does arithmetic, a value outside a `select`'s own
+ * options, or `#nope` in a colour the page turns straight into CSS. The form
+ * path has always refused all three.
  */
 export async function updateDraftSectionValues(
   page: string,
@@ -310,11 +320,17 @@ export async function updateDraftSectionValues(
   const def = sectionDef(row.type)
   if (!def) throw new Error(`Unknown section type: ${row.type}`)
 
-  for (const key of Object.keys(values)) {
-    if (!(key in def.defaults)) {
-      throw new Error(`${def.label} has no setting called "${key}".`)
-    }
-  }
+  /*
+   * Refuses a key the section does not have, refuses a value its field does
+   * not allow, and returns what to store — normalised exactly as the form path
+   * normalises it, so a number lands clamped into its range and a colour in
+   * lower case whichever writer sent it.
+   *
+   * The keys with no field behind them — the typography bags, the visibility
+   * bag, each placement's phone value — come back untouched, which is what the
+   * four sanitizers below are for.
+   */
+  values = validateValues(def, values)
 
   // Values arrive from the browser, so anything with a shape is validated
   // before it is stored. Typography is the one structured value written here

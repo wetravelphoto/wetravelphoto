@@ -230,22 +230,33 @@ the same security and volatility markers.
    for a named-argument call, so this was a genuine defect in the fixture, not a
    cosmetic one. Production matches its migration; our file was the outlier.
 
-## A test that is now wrong about production
+## A test that was wrong about production — fixed 2026-09-29
 
-`db/verify-tenant-isolation.sql`, phase 3, runs an unqualified
+`db/verify-tenant-isolation.sql`, phase 3, ran an unqualified
 `update site_settings set site_title = site_title` as a platform admin and
-asserts the row count is **exactly 1**:
+asserted the row count was **exactly 1**. That held only while the database had
+one site. Production has several, so the check reported a **false failure**
+under a summary line reading *"Isolation is NOT holding — do not open beta
+logins"*.
+
+It now counts the sites first, as the table owner (who bypasses RLS, so the
+count is the true total), and asserts the admin's unqualified update reached
+**every one of them** — and that at least one of them belongs to a site the
+account is not parked in, so "reached everything" means something.
 
 ```sql
-('platform admin reaches every site', '1 row', n_update || ' rows', n_update = 1)
+select count(*) into n_sites  from site_settings;
+select count(*) into n_others from site_settings
+ where tenant_id <> current_setting('iso.tenant_b')::uuid;
+...
+pass := n_update = n_sites and n_others >= 1;
 ```
 
-That is only true when the database holds exactly one site. Production holds
-about four. The check would therefore report a **false failure** against
-production today — and the file's summary line reads *"Isolation is NOT holding
-— do not open beta logins"*, which would be alarming and wrong.
+Verified both ways against the local fixture: it passes with the platform-admin
+flag set (`2 of 2, 2 beyond its own`) and **fails with the flag disabled**
+(`0 of 2`). 14 of 14 checks pass.
 
-It is left alone. The right fix is not obvious: `n_update >= 1` is weaker than
-the check deserves, and `n_update = (select count(*) from site_settings)` is
-stronger but asserts something about the whole database rather than about reach.
-Worth deciding deliberately rather than in passing.
+The old assertion was not vacuous in the single-site case — the account is
+parked in a throwaway tenant owning no settings row, so without the flag it
+reaches 0, not 1. It caught a broken flag; it just could not survive a second
+site.

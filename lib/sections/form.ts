@@ -1,6 +1,12 @@
 import { deviceView, type Field, type SectionDef, type SectionSettings } from '@/lib/sections/registry'
 import { BASE_DEVICE, DEVICES, deviceKey, type Device } from '@/lib/sections/devices'
 import { overrideValue } from '@/lib/sections/backdrop'
+import {
+  clampNumber,
+  normalizeColor,
+  normalizeSelect,
+  normalizeText,
+} from '@/lib/sections/values'
 
 /**
  * FORM → SETTINGS
@@ -23,6 +29,13 @@ import { overrideValue } from '@/lib/sections/backdrop'
  * `__present_<key>` input, because an unchecked checkbox is indistinguishable
  * from a field that was never on the page, and without the marker every save
  * would wipe whatever was conditionally hidden at the time.
+ *
+ * THE RULES LIVE IN lib/sections/values.ts, shared with the programmatic
+ * writer. What is this function's own is the FORM half: pulling a string out of
+ * FormData, the `'on'` that is how a checkbox says true, and the failure
+ * policy — anything that does not pass leaves the setting exactly as it was,
+ * because the panel is on screen and the control snapping back is the message.
+ * The other writer throws instead. See the note at the top of values.ts.
  */
 export function readField(field: Field, formData: FormData, current: SectionSettings): unknown {
   if (!formData.has(`__present_${field.key}`)) return current[field.key]
@@ -34,9 +47,7 @@ export function readField(field: Field, formData: FormData, current: SectionSett
     case 'number': {
       const raw = Number((formData.get(field.key) as string) ?? '')
       if (!Number.isFinite(raw)) return current[field.key]
-      const min = field.min ?? -Infinity
-      const max = field.max ?? Infinity
-      return Math.min(max, Math.max(min, raw))
+      return clampNumber(field, raw)
     }
 
     case 'custom':
@@ -45,22 +56,18 @@ export function readField(field: Field, formData: FormData, current: SectionSett
     case 'color': {
       // A #rrggbb hex, which the page writes straight into CSS — anything else
       // leaves the setting as it was.
-      const raw = ((formData.get(field.key) as string) ?? '').trim()
-      return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : current[field.key]
+      return normalizeColor((formData.get(field.key) as string) ?? '') ?? current[field.key]
     }
 
     case 'select': {
       // Only one of the offered options. Anything else — a crafted request —
       // leaves the setting as it was rather than storing a value no renderer
       // was written to expect.
-      const raw = ((formData.get(field.key) as string) ?? '').trim()
-      return field.options.some((o) => o.value === raw) ? raw : current[field.key]
+      return normalizeSelect(field, (formData.get(field.key) as string) ?? '') ?? current[field.key]
     }
 
-    default: {
-      const raw = ((formData.get(field.key) as string) ?? '').trim()
-      return raw === '' ? null : raw
-    }
+    default:
+      return normalizeText((formData.get(field.key) as string) ?? '')
   }
 }
 

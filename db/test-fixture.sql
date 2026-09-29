@@ -23,6 +23,20 @@
 -- production cascades. A rehearsal against it proved the opposite of the truth
 -- — deleting an album FAILED locally and succeeds in production.
 --
+--
+-- ── UPDATED 2026-09-29 (evening): the queue ─────────────────────────────────
+--
+-- `jobs` and its three functions were deployed to production by
+-- db/migrations/2026-09-29_jobs.sql, recorded by Supabase as migration version
+-- **20260929212635** (`jobs_infrastructure_2026_09_29`), and verified against
+-- the live database afterwards. They are in this file for the same reason
+-- everything else is: so that "what does the database look like" stays a file
+-- rather than a belief.
+--
+-- Production is therefore now **35 tables, 488 columns, 12 functions**, RLS on
+-- all 35, and 54 policies. The survey figures quoted below are the state before
+-- that deployment.
+--
 -- ── What is stubbed, and what that costs ────────────────────────────────────
 --
 -- Bare PostgreSQL has no Supabase. These stand-ins exist only here:
@@ -82,6 +96,8 @@ create sequence if not exists site_draft_steps_id_seq;
 -- ── Functions ───────────────────────────────────────────────────────────────
 --
 -- Production's function inventory was surveyed on 2026-09-29. Nine functions
+-- then; twelve now, the three added by the queue migration being at the end of
+-- this file rather than here (their return types need the jobs table first).
 -- exist in `public`, and every one of their VOLATILITY and SECURITY attributes
 -- matches the migration that created it — no drift. The attribute on each
 -- function below is production truth, confirmed:
@@ -233,6 +249,9 @@ begin
         limit p_keep
      );
 end $$;
+
+
+
 
 create table album_clients (
   album_id    uuid not null,
@@ -389,6 +408,24 @@ create table instagram_media (
   sort_order     integer not null default 0,
   fetched_at     timestamptz not null default now(),
   tenant_id      uuid not null default tenant_for_insert()
+);
+
+create table jobs (
+  id            uuid not null default gen_random_uuid(),
+  tenant_id     uuid not null,
+  kind          text not null,
+  payload       jsonb not null default '{}'::jsonb,
+  dedupe_key    text,
+  status        text not null default 'queued'::text,
+  attempts      integer not null default 0,
+  max_attempts  integer not null default 5,
+  run_after     timestamptz not null default now(),
+  locked_at     timestamptz,
+  locked_by     text,
+  lease_until   timestamptz,
+  last_error    text,
+  created_at    timestamptz not null default now(),
+  finished_at   timestamptz
 );
 
 create table newsletter_signups (
@@ -809,6 +846,429 @@ create table tenants (
   created_at  timestamptz not null default now()
 );
 
+-- ── The queue's three functions ─────────────────────────────────────────────
+--
+-- AFTER the tables, not up with the other functions, and that is a property of
+-- this FILE rather than of production: `claim_jobs` returns `setof public.jobs`
+-- and `finish_job` returns `public.jobs`, so the table's composite type has to
+-- exist before either can be created. `set check_function_bodies = off` at the
+-- top excuses a body that mentions a missing table; it does not excuse a
+-- missing RETURN TYPE.
+--
+-- Deployed 2026-09-29 by db/migrations/2026-09-29_jobs.sql (Supabase migration
+-- version 20260929212635). Kept in their own sub-section rather than folded
+-- into the alphabetical list above, because they belong to one migration and
+-- read as one thing.
+--
+-- COPIED VERBATIM from that migration, which is the only reason this file can
+-- be trusted about them: the long explanations of WHY each is shaped the way it
+-- is live there, and `db/verify-jobs.sql` is what checks the behaviour. Verified
+-- against production after deployment — all three SECURITY DEFINER, VOLATILE,
+-- `search_path = ''`, and `claim_jobs` carrying the materialised CTE rather
+-- than the `where id in (…)` form that could claim more than p_limit.
+
+create or replace function public.enqueue_jobs(
+  p_tenant uuid,
+  p_kind   text,
+  p_items  jsonb
+)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  -- Deliberately small. A photographer's library is a few hundred
+  -- photographs, and the trusted caller (lib/jobs/queue.ts) splits anything
+  -- longer into runs of this size. The bound is here rather than only there
+  -- because `enqueue_jobs` is reachable from a browser: without it, one
+  -- request could hand PostgREST a JSON array of any length and make the
+  -- database walk all of it.
+  c_max_items constant int := 200;
+
+  v_ids       uuid[];
+  v_requested int;
+  v_owned     int;
+  v_bad_item  int;
+  v_bad_keys  int;
+  v_bad_id    int;
+  n           int;
+begin
+  if p_tenant is null then
+    raise exception 'A job has to say which site it is for.' using errcode = '23502';
+  end if;
+
+  /*
+   * THE SAME RULE THE TABLE'S OWN POLICY STATES, RESTATED.
+   *
+   * Not a belt-and-braces duplicate: a SECURITY DEFINER function runs with the
+   * table owner's rights and row-level security does not apply to it at all.
+   * Without this line the function would be a way for any signed-in account to
+   * queue work onto any site on the platform — a bigger hole than the direct
+   * INSERT grant it replaces.
+   *
+   * `is_platform_admin()` is here because an admin working on somebody else's
+   * address legitimately acts as that site (lib/auth.ts: "you edit the site you
+   * are on"), and for them `current_tenant_id()` is their OWN profile's tenant,
+   * not the one on screen. Deriving the tenant here instead of accepting it
+   * would therefore file an admin's work under the wrong site.
+   */
+  if not (p_tenant = public.current_tenant_id() or public.is_platform_admin()) then
+    raise exception 'That is not your site.' using errcode = '42501';
+  end if;
+
+  /*
+   * AN ALLOW-LIST, IN SQL, ON PURPOSE.
+   *
+   * lib/jobs/types.ts has the same list, and .mk/jobs.ts asserts the two agree
+   * — but the TypeScript one is a convenience for the caller and this one is
+   * the boundary. Allowing a new kind of work to be queued by a browser is
+   * exactly the sort of change that should cost a migration somebody reads,
+   * rather than a line in a file that ships with the front end.
+   */
+  if p_kind is null or p_kind not in ('photo.derivatives') then
+    raise exception 'There is no job kind called "%".', coalesce(p_kind, 'null')
+      using errcode = '22023';
+  end if;
+
+  if p_items is null or jsonb_typeof(p_items) <> 'array' then
+    raise exception 'The work has to arrive as a list.' using errcode = '22023';
+  end if;
+
+  if jsonb_array_length(p_items) > c_max_items then
+    raise exception 'A queue request carries at most % jobs; that one had %.',
+      c_max_items, jsonb_array_length(p_items) using errcode = '22023';
+  end if;
+
+  if jsonb_array_length(p_items) = 0 then
+    return 0;
+  end if;
+
+  /*
+   * ── THE RESOURCE, NOT ONLY THE SITE ───────────────────────────────────────
+   *
+   * Checking the tenant and the kind leaves the interesting half open: a
+   * photographer calling this function by hand could queue a thousand jobs on
+   * their own site pointing at photographs that are not theirs, or at ids that
+   * are not photographs at all. The handler would refuse them one by one —
+   * lib/jobs/derive.ts reads the photograph WITH its tenant and treats a miss
+   * as permanent — but "the worker declines it later" is a different thing
+   * from "it never entered the queue", and only one of them is a boundary.
+   *
+   * So for this kind the payload is CONSTRUCTED here rather than copied:
+   * everything the caller sends is reduced to a list of photograph ids, each
+   * checked for shape and for ownership, and the row that lands carries
+   * `{"photoId": "<that id>"}` and nothing else. A payload built by the
+   * database cannot carry anything the database did not put in it.
+   *
+   * ── The shape a caller may send ───────────────────────────────────────────
+   *
+   *   [ { "payload": { "photoId": "<uuid>" } }, … ]
+   *
+   * Exactly one key inside `payload`. An extra key is refused rather than
+   * dropped: a hint somebody adds and never sees stored is worse than an error
+   * on the line that added it.
+   *
+   * ── And the dedupe key is NOT the caller's to choose ──────────────────────
+   *
+   * It is the photograph's id, derived from the id that was just validated.
+   * A caller-supplied key could disagree with the resource — two jobs on one
+   * photograph under different keys, or one key blocking a different
+   * photograph's work — which makes "the same work is not queued twice" a
+   * promise about a string the caller picked rather than about the work.
+   */
+  if p_kind <> 'photo.derivatives' then
+    -- Unreachable while the allow-list above holds one member. Here so that
+    -- widening that list without also writing a validation rule fails loudly
+    -- at the boundary rather than queueing an unchecked payload.
+    raise exception 'No validation rule for job kind "%".', p_kind using errcode = '22023';
+  end if;
+
+  -- Shape, in one pass. Counted rather than short-circuited so the message can
+  -- say WHICH thing was wrong across the whole batch; the two later filters
+  -- both guard on the payload being an object, so a malformed item is reported
+  -- once rather than three times.
+  select
+    count(*) filter (
+      where jsonb_typeof(item) <> 'object'
+         or jsonb_typeof(item -> 'payload') <> 'object'
+         -- `payload` and nothing beside it. An item carrying its own
+         -- `dedupe_key`, `status` or `run_after` is refused rather than
+         -- ignored: a caller who thinks they set one should find out here.
+         or (select count(*) from jsonb_object_keys(item)) <> 1),
+    count(*) filter (
+      where jsonb_typeof(item -> 'payload') = 'object'
+        and (select count(*) from jsonb_object_keys(item -> 'payload')) <> 1),
+    count(*) filter (
+      where jsonb_typeof(item -> 'payload') = 'object'
+        and coalesce(item -> 'payload' ->> 'photoId', '') !~
+            '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+    into v_bad_item, v_bad_keys, v_bad_id
+    from jsonb_array_elements(p_items) as item;
+
+  if v_bad_item > 0 then
+    raise exception
+      'Each piece of work is an object holding a payload and nothing else (% was not).',
+      v_bad_item
+      using errcode = '22023';
+  end if;
+
+  if v_bad_keys > 0 then
+    -- Refused rather than dropped: a key somebody adds and never sees stored
+    -- is worse than an error on the line that added it.
+    raise exception
+      'A photo.derivatives payload holds photoId and nothing else (% did not).', v_bad_keys
+      using errcode = '22023';
+  end if;
+
+  if v_bad_id > 0 then
+    raise exception 'That is not a photograph id (% of them were not).', v_bad_id
+      using errcode = '22023';
+  end if;
+
+  select array_agg(distinct (item -> 'payload' ->> 'photoId')::uuid)
+    into v_ids
+    from jsonb_array_elements(p_items) as item;
+
+  v_requested := coalesce(array_length(v_ids, 1), 0);
+
+  /*
+   * OWNERSHIP, ASKED OF THE DATABASE.
+   *
+   * Read as the function's owner, so row-level security is not what decides
+   * it — the comparison is explicit. One count out, no rows: a caller learns
+   * only that at least one id in their list is not a photograph of theirs, and
+   * "does not exist" and "belongs to somebody else" give the same answer, so
+   * this cannot be used to ask whether a given id exists on another site.
+   */
+  select count(*)
+    into v_owned
+    from public.photos p
+   where p.id = any(v_ids)
+     and p.tenant_id = p_tenant;
+
+  if v_owned <> v_requested then
+    raise exception
+      'One or more of those photographs is not in this site''s library.'
+      using errcode = '42501';
+  end if;
+
+  /*
+   * FOUR COLUMNS NAMED, ELEVEN LEFT TO THEIR DEFAULTS.
+   *
+   * This is where the integrity lives, and it lives in what is ABSENT from the
+   * column list. `status` is 'queued', `attempts` is 0, `max_attempts` is 5,
+   * `run_after` is now(), and `locked_at`, `locked_by`, `lease_until`,
+   * `last_error` and `finished_at` are null — none of them reachable by the
+   * caller, because none of them is written here at all.
+   */
+  insert into public.jobs (tenant_id, kind, payload, dedupe_key)
+  select p_tenant, p_kind, jsonb_build_object('photoId', id::text), id::text
+    from unnest(v_ids) as id
+  on conflict do nothing;
+
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+comment on function public.enqueue_jobs(uuid, text, jsonb) is
+  'The only way work is added. Validates the site, the kind AND the resource '
+  'the payload names, then BUILDS the payload and the dedupe key from what it '
+  'validated rather than copying what it was sent. Names four columns and '
+  'leaves the machinery — status, attempts, the lock and the lease — to its '
+  'defaults, so a caller cannot enqueue a job that is already running, already '
+  'out of attempts, or due in a decade.';
+
+
+create or replace function public.claim_jobs(
+  p_worker text,
+  p_limit  int      default 1,
+  p_lease  interval default interval '10 minutes',
+  p_tenant uuid     default null
+)
+returns setof public.jobs
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+begin
+  if p_worker is null or length(p_worker) = 0 then
+    raise exception 'A worker has to say who it is.' using errcode = '22023';
+  end if;
+  if p_limit is null or p_limit < 1 or p_limit > 100 then
+    raise exception 'Between one and a hundred jobs at a time.' using errcode = '22023';
+  end if;
+
+  /*
+   * FIRST, RETIRE THE CRASH LOOPS.
+   *
+   * A job whose lease has run out is claimable again — but if it has already
+   * used every attempt, claiming it again would start the loop over. This is
+   * where "the worker never came back" becomes a visible terminal failure
+   * instead of an endless one, and it runs before the claim so that a job in
+   * this state can never be picked up.
+   */
+  update public.jobs
+     set status      = 'failed',
+         finished_at = now(),
+         lease_until = null,
+         last_error  = coalesce(last_error || ' / ', '')
+                       || 'the worker did not report back'
+   where status = 'running'
+     and lease_until < now()
+     and attempts >= max_attempts
+     and (p_tenant is null or tenant_id = p_tenant);
+
+  /*
+   * A CTE, NOT A SUBQUERY IN `where id in (…)`, AND THIS IS NOT A STYLE
+   * CHOICE — it is a correctness fix for a bug that shipped in the first draft
+   * of this file and was caught by an intermittent test failure.
+   *
+   * The first version was:
+   *
+   *     update jobs j set … where j.id in (
+   *       select c.id from jobs c where … order by … limit p_limit
+   *       for update skip locked)
+   *
+   * which reads as "take at most p_limit rows" and is not what it does. The
+   * planner turns it into a Nested Loop Semi Join with the LIMIT/LockRows
+   * subquery on the INNER side, so the subquery is RE-EXECUTED once per
+   * candidate row of the outer scan — and because `skip locked` locks whatever
+   * it returns, each re-execution hands back a DIFFERENT row. Measured against
+   * five queued rows:
+   *
+   *     select count(*) from claim_jobs('w', 1, …)   →  5
+   *
+   * One call, `p_limit => 1`, five rows claimed and five attempts burned. In
+   * production that is a drain claiming a batch, running only the first, and
+   * abandoning the rest `running` under a ten-minute lease with an attempt
+   * spent — and after five such rounds each would be failed as "the worker did
+   * not report back" having never been run once.
+   *
+   * A CTE containing FOR UPDATE is never inlined and is materialised exactly
+   * once, so `limit p_limit` means what it says. `db/verify-jobs.sql` asserts
+   * it does, and that assertion fails against the form above.
+   *
+   * `for update skip locked` is still the whole concurrency story: two workers
+   * running this at the same instant each lock a different set of rows and
+   * neither waits for the other; a row already locked is passed over rather
+   * than queued behind. Without `skip locked` the second worker would block and
+   * then claim the SAME rows the first had just taken.
+   */
+  return query
+  with picked as (
+    select c.id
+      from public.jobs c
+     where (p_tenant is null or c.tenant_id = p_tenant)
+       and (
+             (c.status = 'queued'  and c.run_after <= now())
+          or (c.status = 'running' and c.lease_until < now())
+       )
+     order by c.run_after, c.created_at
+     limit p_limit
+     for update skip locked
+  )
+  update public.jobs j
+     set status      = 'running',
+         attempts    = j.attempts + 1,
+         locked_at   = now(),
+         locked_by   = p_worker,
+         lease_until = now() + p_lease
+    from picked
+   where j.id = picked.id
+  returning j.*;
+end $$;
+
+comment on function public.claim_jobs(text, int, interval, uuid) is
+  'Takes up to p_limit jobs for p_worker, counting the attempt as it goes. '
+  'Also reclaims jobs whose lease ran out, and fails the ones that have no '
+  'attempts left. The only way a worker reaches the jobs table.';
+
+
+create or replace function public.finish_job(
+  p_id        uuid,
+  p_worker    text,
+  p_error     text    default null,
+  p_permanent boolean default false
+)
+returns public.jobs
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_job   public.jobs;
+  v_delay interval;
+begin
+  -- Still holding the lease? See note 4 at the top. A worker that lost its job
+  -- to a reclaim gets nothing back and must not pretend otherwise.
+  select * into v_job from public.jobs
+   where id = p_id and locked_by = p_worker and status = 'running'
+   for update;
+
+  if not found then
+    return null;
+  end if;
+
+  if p_error is null then
+    update public.jobs
+       set status = 'done', finished_at = now(),
+           lease_until = null, locked_by = null
+     where id = p_id
+     returning * into v_job;
+    return v_job;
+  end if;
+
+  /*
+   * OUT OF ATTEMPTS — OR NOT WORTH ANY.
+   *
+   * `p_permanent` is for a failure repeating cannot fix: a job kind with no
+   * handler, a payload that names a photograph that no longer exists. Five
+   * attempts at a spelling mistake is five times the noise and none of the
+   * information.
+   */
+  if p_permanent or v_job.attempts >= v_job.max_attempts then
+    update public.jobs
+       set status = 'failed', finished_at = now(),
+           lease_until = null, locked_by = null, last_error = p_error
+     where id = p_id
+     returning * into v_job;
+    return v_job;
+  end if;
+
+  /*
+   * EXPONENTIAL BACKOFF, FACTOR OF 4, WITH JITTER.
+   *
+   * 10s, 40s, 160s, 640s, then capped at an hour — each wait four times the
+   * one before it rather than twice, because the failures this is for (a rate
+   * limit, a service having a bad minute) are not fixed by trying again in
+   * eleven seconds. The ±25% jitter matters once there is more than one job: a
+   * hundred jobs that all failed against the same outage would otherwise all
+   * come back at the same instant and reproduce it.
+   */
+  v_delay := least(
+    interval '1 hour',
+    interval '10 seconds' * power(4, greatest(v_job.attempts - 1, 0)) * (0.75 + random() * 0.5)
+  );
+
+  update public.jobs
+     set status = 'queued', run_after = now() + v_delay,
+         lease_until = null, locked_by = null, last_error = p_error
+   where id = p_id
+   returning * into v_job;
+
+  return v_job;
+end $$;
+
+comment on function public.finish_job(uuid, text, text, boolean) is
+  'Marks a job done, or re-queues it with exponential backoff, or fails it '
+  'when the attempts are spent. Returns null if the caller no longer holds '
+  'the lease.';
+
+
 -- ── Primary keys ────────────────────────────────────────────────────────────
 alter table album_clients          add constraint album_clients_pkey primary key (album_id, client_id);
 alter table albums                 add constraint albums_pkey primary key (id);
@@ -820,6 +1280,7 @@ alter table downloads              add constraint downloads_pkey primary key (id
 alter table draft_shares           add constraint draft_shares_pkey primary key (id);
 alter table favorites              add constraint favorites_pkey primary key (id);
 alter table instagram_media        add constraint instagram_media_pkey primary key (id);
+alter table jobs                   add constraint jobs_pkey primary key (id);
 alter table newsletter_signups     add constraint newsletter_signups_pkey primary key (id);
 alter table order_items            add constraint order_items_pkey primary key (id);
 alter table orders                 add constraint orders_pkey primary key (id);
@@ -852,6 +1313,9 @@ alter table catalog_items      add constraint catalog_items_photo_id_key unique 
 alter table draft_shares       add constraint draft_shares_token_key unique (token);
 -- NOTE: production truth. This is unique on email ALONE, not (tenant_id, email).
 -- See db/schema-verified.md — flagged, not changed.
+alter table jobs add constraint jobs_tenant_id_fkey
+  foreign key (tenant_id) references tenants(id) on delete cascade;
+
 alter table newsletter_signups add constraint newsletter_signups_email_key unique (email);
 alter table template_versions  add constraint template_versions_template_id_version_key unique (template_id, version);
 alter table templates          add constraint templates_slug_key unique (slug);
@@ -997,6 +1461,10 @@ alter table blog_posts add constraint blog_posts_status_check      check (status
 
 -- NOTE: orders.status DEFAULT is 'pending_payment', which is NOT in this list.
 -- Production truth, reproduced verbatim. Flagged in db/schema-verified.md.
+alter table jobs add constraint jobs_payload_object               check (jsonb_typeof(payload) = 'object');
+alter table jobs add constraint jobs_dedupe_key_check            check (dedupe_key is null or length(dedupe_key) <= 200);
+alter table jobs add constraint jobs_status_check                check (status in ('queued','running','done','failed'));
+alter table jobs add constraint jobs_max_attempts_check          check (max_attempts between 1 and 20);
 alter table orders add constraint orders_status_check              check (status in ('pending','paid','fulfilled','cancelled'));
 
 alter table products add constraint products_type_check            check (type in ('print','digital_download'));
@@ -1065,6 +1533,16 @@ create index        templates_offered_idx           on templates (status, sort_o
 create unique index tenant_domains_host_key         on tenant_domains (lower(host));
 create unique index tenant_domains_primary_key      on tenant_domains (tenant_id) where is_primary;
 create index        tenant_domains_tenant           on tenant_domains (tenant_id);
+
+-- The queue's four, from db/migrations/2026-09-29_jobs.sql. Three are partial:
+-- `done` and `failed` rows accumulate and are never candidates for a claim.
+-- `jobs_pending_dedupe` is what makes "the same work is not queued twice" true,
+-- and it is partial over a nullable column on purpose — see that migration.
+create index        jobs_ready          on jobs (run_after) where status = 'queued';
+create index        jobs_stale          on jobs (lease_until) where status = 'running';
+create index        jobs_tenant_status  on jobs (tenant_id, status, created_at desc);
+create unique index jobs_pending_dedupe on jobs (tenant_id, kind, dedupe_key)
+  where dedupe_key is not null and status in ('queued', 'running');
 
 -- Row level security, exactly as production has it. The distinctions below are
 -- deliberate and must not be homogenised:
@@ -1137,6 +1615,7 @@ select public.apply_tenant_policy('clients');
 select public.apply_tenant_policy('contact_messages');
 select public.apply_tenant_policy('draft_shares');
 select public.apply_tenant_policy('instagram_media');
+select public.apply_tenant_policy('jobs');
 select public.apply_tenant_policy('newsletter_signups');
 select public.apply_tenant_policy('order_items');
 select public.apply_tenant_policy('orders');
@@ -1225,6 +1704,14 @@ grant delete, insert, references, select, trigger, truncate, update
   on draft_shares, site_draft_steps, site_images, site_secrets, site_versions
   to authenticated, service_role;
 
+-- THE QUEUE IS THE ONE TABLE NOBODY MAY WRITE TO DIRECTLY, and its grants are
+-- the mechanism. A photographer may read their own queue and nothing more;
+-- `anon` and `service_role` hold NOTHING on the table at all, by design rather
+-- than by omission — the worker reaches it only through claim_jobs/finish_job
+-- and a photographer only through enqueue_jobs, all three SECURITY DEFINER.
+-- Verified against production 2026-09-29.
+grant select on jobs to authenticated;
+
 -- A visitor resolves a site by its address and may do nothing else here.
 grant select on tenant_domains to anon;
 grant delete, insert, references, select, trigger, truncate, update
@@ -1244,6 +1731,16 @@ revoke all on function public.push_draft_step(uuid, jsonb, text, interval, int)
   from public, anon;
 grant execute on function public.push_draft_step(uuid, jsonb, text, interval, int)
   to authenticated;
+
+-- The queue's three, from db/migrations/2026-09-29_jobs.sql. Verified against
+-- production 2026-09-29: enqueue_jobs is the photographer's only door, and the
+-- worker's two are the whole of what service_role can do.
+revoke all on function public.enqueue_jobs(uuid, text, jsonb)       from public, anon, authenticated, service_role;
+revoke all on function public.claim_jobs(text, int, interval, uuid) from public, anon, authenticated, service_role;
+revoke all on function public.finish_job(uuid, text, text, boolean) from public, anon, authenticated, service_role;
+grant execute on function public.enqueue_jobs(uuid, text, jsonb)       to authenticated;
+grant execute on function public.claim_jobs(text, int, interval, uuid) to service_role;
+grant execute on function public.finish_job(uuid, text, text, boolean) to service_role;
 
 -- ── The only trigger in the public schema ───────────────────────────────────
 -- Verified 2026-09-29: this is the ONLY non-internal trigger production has.

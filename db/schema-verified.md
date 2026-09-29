@@ -19,9 +19,14 @@ The full picture is in **`db/schema-2026-09.sql`**, transcribed from
 `pg_stat_statements`, `uuid-ossp`, `pgcrypto`, `supabase_vault`. Available but
 **not installed**: `vector` 0.8.2, `pg_cron` 1.6.4, `pg_trgm` 1.6.
 
-**Shape.** 34 tables in `public`, 473 columns, RLS enabled on all 34, 53
-policies, **9 functions**, one trigger (`site_draft_touch` on `site_draft`), and
-no trigger anywhere else.
+**Shape.** 34 tables in `public`, 473 columns, RLS enabled on all 34, **54
+policies**, **9 functions**, one trigger (`site_draft_touch` on `site_draft`),
+and no trigger anywhere else.
+
+*The policy figure was first written here as 53, which was a counting error in
+the transcription rather than anything about the database. Corrected 2026-09-29
+against a direct count of production: 55 policies now, of which `jobs` has
+exactly one, so 54 before the queue. See the note at the end of this file.*
 
 **Size.** Small: `photos` ~83 rows, `page_views` ~63, `page_sections` ~28,
 `site_settings` 4, everything else at or near zero. This is a good moment to do
@@ -263,15 +268,74 @@ site.
 
 ---
 
-## 2026-09-29 — `jobs`, written but NOT YET IN PRODUCTION
+## 2026-09-29 — `jobs`, DEPLOYED TO PRODUCTION
+
+**Supabase migration version `20260929212635`, `jobs_infrastructure_2026_09_29`.**
+The file's SHA256 was checked against the committed copy before it was applied:
+
+```
+9048133d6ff9431150ab07e1e48188718edf33b83eb6cfb139bb937e0ea7797f
+```
+
+Verified against the live database afterwards, not assumed:
+
+| | |
+|---|---|
+| `public.jobs` | exists, 0 rows, RLS enabled, all 15 columns |
+| `tenant_id` | `uuid NOT NULL`, **no default**, FK to `tenants(id)` ON DELETE CASCADE |
+| indexes | `jobs_pkey`, `jobs_ready`, `jobs_stale`, `jobs_tenant_status`, `jobs_pending_dedupe` |
+| constraints | PK on id; tenant FK cascade; payload is an object; `dedupe_key` ≤ 200; status in the four; `max_attempts` 1–20 |
+| policy | `Tenant members manage`, ALL, `tenant_id = current_tenant_id() or is_platform_admin()` both USING and WITH CHECK |
+| table grants | `authenticated`: SELECT only. `anon`: none. `service_role`: **none**. `postgres`: owner. |
+| `enqueue_jobs` | DEFINER, VOLATILE, `search_path = ''`, EXECUTE to `authenticated` only |
+| `claim_jobs` | DEFINER, VOLATILE, `search_path = ''`, EXECUTE to `service_role` only |
+| `finish_job` | DEFINER, VOLATILE, `search_path = ''`, EXECUTE to `service_role` only |
+| `claim_jobs` body | carries the **materialised CTE**. The `where id in (…)` form that could claim more than `p_limit` is NOT in production. |
+
+Production is now **35 tables, 488 columns, 12 functions, 55 policies**, RLS
+on all 35. The policy count was checked directly against production, and `jobs`
+holds exactly one of the 55.
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` were updated in the same
+sitting, which was the condition recorded below before deployment. The three
+function definitions in both were **copied verbatim from the migration**, and
+`scripts/fixture-matches-migration.sh` is what stops that copy drifting: it
+builds the fixture, records 402 facts about `jobs`, drops the lot, lets the
+migration build it instead, and diffs. Shown to catch a single changed column
+default.
+
+### The bug the deployment does not contain
+
+`claim_jobs` shipped in review as
+`update … where j.id in (select … limit p_limit for update skip locked)`, which
+reads as "take at most p_limit" and is not what it does. The planner puts that
+subquery on the **inner** side of a Nested Loop Semi Join, so it is re-executed
+once per candidate row, and `skip locked` returns a different row each time:
+
+```
+5 queued rows, one call, p_limit => 1  →  5 rows claimed, 5 attempts burned
+```
+
+The drain runs only the first and abandons the rest `running` under a ten-minute
+lease with an attempt spent; five such rounds and each is failed as "the worker
+did not report back" having never run. **Plan-dependent, hence intermittent** —
+`stats say the table is empty → claimed 5`, `stats say 500 rows → claimed 1` —
+which is why it surfaced as a flaky test rather than a failure. A CTE containing
+`FOR UPDATE` is never inlined and is materialised once, so `limit p_limit` means
+what it says. `db/verify-jobs.sql` block 1b asserts it, with `analyze jobs` in
+the suite's clean slate to force the vulnerable plan; without that line the
+assertion passed against the bug about half the time.
+
+---
+
+## Superseded: the pre-deployment note
 
 `db/migrations/2026-09-29_jobs.sql` creates the `jobs` table, two functions
 (`claim_jobs`, `finish_job`), four indexes and the usual tenant policy. It has
 been **rehearsed against this fixture and nothing else**.
 
-**`db/test-fixture.sql` deliberately does not contain it.** The fixture's whole
-value is that it is a faithful copy of production, and production does not have
-this table yet. A fixture that runs ahead of production is the same defect as
+**Kept for the record.** At the time this was written the fixture deliberately
+did not contain `jobs`, because production did not: A fixture that runs ahead of production is the same defect as
 one that lags it, pointed the other way: a rehearsal would then prove something
 about a database that does not exist. The rehearsal order is therefore
 
@@ -414,3 +478,58 @@ An untargeted `on conflict do nothing` accepts any arbiter index, inserts every
 row that is not a duplicate and skips the ones that are. That is what the code
 sends now. Pressing "Process photographs" a second time would have failed the
 whole insert, in production, on the first day.
+
+
+---
+
+## 2026-09-29 — two things found while updating these files
+
+Recorded rather than corrected, per the standing rule: show the discrepancy and
+establish which represents production before changing anything. One of the two
+has since been established and is closed; the other stands.
+
+### ~~The policy count does not add up, by one~~ — SETTLED, the prose was wrong
+
+Raised because the two schema files build **55** policies while the shape table
+above said 53 before the queue, so 54 after. Three possibilities were open: a
+mis-transcribed survey total, a reconstruction that added a policy production
+does not have, or a policy production gained since.
+
+**Counted directly against production, 2026-09-29:**
+
+```
+55 public RLS policies in total, of which `jobs` has exactly 1
+```
+
+So production held **54 before S3 and 55 after**, and the earlier 53 was a
+counting error in the transcription. `db/test-fixture.sql` and
+`db/schema-2026-09.sql` were right all along — **there is no schema
+discrepancy**, and nothing in either file needed changing. The shape table above
+has been corrected to 54.
+
+Worth keeping rather than deleting, for the same reason the rest of this file
+exists: the fixture and the snapshot were doubted on the strength of a number
+somebody had typed, and they turned out to be the reliable ones. A prose figure
+is not evidence; the two possibilities were "the files are wrong" and "the note
+is wrong", and it was the note.
+
+### `db/verify-draft.sql` has been broken since the fixture was regenerated
+
+It fails on a clean build, and has done since the S1 regeneration earlier the
+same day — it was simply never in the loop:
+
+```
+psql:db/verify-draft.sql:90: ERROR:  duplicate key value violates unique
+constraint "site_draft_pkey"
+```
+
+Block 1 inserts a `site_draft` row for tenant A **unguarded** (line 72), and the
+regenerated fixture already seeds one (`db/test-fixture.sql`, the `insert into
+site_draft` near the end). `site_draft`'s primary key is `tenant_id`, so that
+first insert raises outside any handler and aborts the transaction — taking the
+rest of the file with it. Nothing to do with the queue; `jobs` does not touch
+`site_draft`.
+
+The fix is one line either way — the suite should delete or upsert rather than
+insert blind, or use its own throwaway tenant as the isolation suite does — and
+it is a separate change, not part of the queue's bookkeeping.

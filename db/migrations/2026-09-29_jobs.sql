@@ -224,7 +224,26 @@ grant select on table jobs to authenticated;
 -- and that is the whole point rather than an omission.
 
 
+
 -- ── Enqueueing: the only way a photographer adds work ───────────────────────
+--
+-- ── WHY `search_path = ''` AND NOT `= public` ───────────────────────────────
+--
+-- All three functions here are SECURITY DEFINER, so they run with the table
+-- owner's rights. `set search_path = public` pins the schema and stops a
+-- caller pointing `jobs` at a table of their own — but it leaves `public`
+-- itself as an unqualified namespace the function trusts, and anyone able to
+-- create an object there could shadow a name these bodies use. An empty search
+-- path removes the question: nothing resolves unqualified, so every relation
+-- and every application function below is written out in full.
+--
+-- `pg_catalog` is the one exception, and it is PostgreSQL's rather than ours:
+-- it is always searched implicitly, ahead of anything in `search_path`, unless
+-- it is named explicitly somewhere in it. So `now()`, `count()`, `coalesce`,
+-- `least`, `power`, `random`, `jsonb_typeof`, `jsonb_array_elements`, the
+-- regex and jsonb operators, and every built-in type name still resolve.
+-- Nothing of ours does, which is the point — including the COMPOSITE TYPE of
+-- our own table, hence `public.jobs` in the return types and the declarations.
 
 create or replace function public.enqueue_jobs(
   p_tenant uuid,
@@ -235,10 +254,24 @@ returns integer
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
-  n int;
+  -- Deliberately small. A photographer's library is a few hundred
+  -- photographs, and the trusted caller (lib/jobs/queue.ts) splits anything
+  -- longer into runs of this size. The bound is here rather than only there
+  -- because `enqueue_jobs` is reachable from a browser: without it, one
+  -- request could hand PostgREST a JSON array of any length and make the
+  -- database walk all of it.
+  c_max_items constant int := 200;
+
+  v_ids       uuid[];
+  v_requested int;
+  v_owned     int;
+  v_bad_item  int;
+  v_bad_keys  int;
+  v_bad_id    int;
+  n           int;
 begin
   if p_tenant is null then
     raise exception 'A job has to say which site it is for.' using errcode = '23502';
@@ -281,35 +314,136 @@ begin
     raise exception 'The work has to arrive as a list.' using errcode = '22023';
   end if;
 
-  if jsonb_array_length(p_items) > 1000 then
-    raise exception 'That is more than a thousand jobs in one go.' using errcode = '22023';
+  if jsonb_array_length(p_items) > c_max_items then
+    raise exception 'A queue request carries at most % jobs; that one had %.',
+      c_max_items, jsonb_array_length(p_items) using errcode = '22023';
+  end if;
+
+  if jsonb_array_length(p_items) = 0 then
+    return 0;
+  end if;
+
+  /*
+   * ── THE RESOURCE, NOT ONLY THE SITE ───────────────────────────────────────
+   *
+   * Checking the tenant and the kind leaves the interesting half open: a
+   * photographer calling this function by hand could queue a thousand jobs on
+   * their own site pointing at photographs that are not theirs, or at ids that
+   * are not photographs at all. The handler would refuse them one by one —
+   * lib/jobs/derive.ts reads the photograph WITH its tenant and treats a miss
+   * as permanent — but "the worker declines it later" is a different thing
+   * from "it never entered the queue", and only one of them is a boundary.
+   *
+   * So for this kind the payload is CONSTRUCTED here rather than copied:
+   * everything the caller sends is reduced to a list of photograph ids, each
+   * checked for shape and for ownership, and the row that lands carries
+   * `{"photoId": "<that id>"}` and nothing else. A payload built by the
+   * database cannot carry anything the database did not put in it.
+   *
+   * ── The shape a caller may send ───────────────────────────────────────────
+   *
+   *   [ { "payload": { "photoId": "<uuid>" } }, … ]
+   *
+   * Exactly one key inside `payload`. An extra key is refused rather than
+   * dropped: a hint somebody adds and never sees stored is worse than an error
+   * on the line that added it.
+   *
+   * ── And the dedupe key is NOT the caller's to choose ──────────────────────
+   *
+   * It is the photograph's id, derived from the id that was just validated.
+   * A caller-supplied key could disagree with the resource — two jobs on one
+   * photograph under different keys, or one key blocking a different
+   * photograph's work — which makes "the same work is not queued twice" a
+   * promise about a string the caller picked rather than about the work.
+   */
+  if p_kind <> 'photo.derivatives' then
+    -- Unreachable while the allow-list above holds one member. Here so that
+    -- widening that list without also writing a validation rule fails loudly
+    -- at the boundary rather than queueing an unchecked payload.
+    raise exception 'No validation rule for job kind "%".', p_kind using errcode = '22023';
+  end if;
+
+  -- Shape, in one pass. Counted rather than short-circuited so the message can
+  -- say WHICH thing was wrong across the whole batch; the two later filters
+  -- both guard on the payload being an object, so a malformed item is reported
+  -- once rather than three times.
+  select
+    count(*) filter (
+      where jsonb_typeof(item) <> 'object'
+         or jsonb_typeof(item -> 'payload') <> 'object'
+         -- `payload` and nothing beside it. An item carrying its own
+         -- `dedupe_key`, `status` or `run_after` is refused rather than
+         -- ignored: a caller who thinks they set one should find out here.
+         or (select count(*) from jsonb_object_keys(item)) <> 1),
+    count(*) filter (
+      where jsonb_typeof(item -> 'payload') = 'object'
+        and (select count(*) from jsonb_object_keys(item -> 'payload')) <> 1),
+    count(*) filter (
+      where jsonb_typeof(item -> 'payload') = 'object'
+        and coalesce(item -> 'payload' ->> 'photoId', '') !~
+            '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+    into v_bad_item, v_bad_keys, v_bad_id
+    from jsonb_array_elements(p_items) as item;
+
+  if v_bad_item > 0 then
+    raise exception
+      'Each piece of work is an object holding a payload and nothing else (% was not).',
+      v_bad_item
+      using errcode = '22023';
+  end if;
+
+  if v_bad_keys > 0 then
+    -- Refused rather than dropped: a key somebody adds and never sees stored
+    -- is worse than an error on the line that added it.
+    raise exception
+      'A photo.derivatives payload holds photoId and nothing else (% did not).', v_bad_keys
+      using errcode = '22023';
+  end if;
+
+  if v_bad_id > 0 then
+    raise exception 'That is not a photograph id (% of them were not).', v_bad_id
+      using errcode = '22023';
+  end if;
+
+  select array_agg(distinct (item -> 'payload' ->> 'photoId')::uuid)
+    into v_ids
+    from jsonb_array_elements(p_items) as item;
+
+  v_requested := coalesce(array_length(v_ids, 1), 0);
+
+  /*
+   * OWNERSHIP, ASKED OF THE DATABASE.
+   *
+   * Read as the function's owner, so row-level security is not what decides
+   * it — the comparison is explicit. One count out, no rows: a caller learns
+   * only that at least one id in their list is not a photograph of theirs, and
+   * "does not exist" and "belongs to somebody else" give the same answer, so
+   * this cannot be used to ask whether a given id exists on another site.
+   */
+  select count(*)
+    into v_owned
+    from public.photos p
+   where p.id = any(v_ids)
+     and p.tenant_id = p_tenant;
+
+  if v_owned <> v_requested then
+    raise exception
+      'One or more of those photographs is not in this site''s library.'
+      using errcode = '42501';
   end if;
 
   /*
    * FOUR COLUMNS NAMED, ELEVEN LEFT TO THEIR DEFAULTS.
    *
-   * This is where the integrity actually lives, and it lives in what is ABSENT
-   * from the column list. `status` is 'queued', `attempts` is 0,
-   * `max_attempts` is 5, `run_after` is now(), and `locked_at`, `locked_by`,
-   * `lease_until`, `last_error` and `finished_at` are null — none of them
-   * reachable by the caller, because none of them is written here at all.
-   *
-   * The payload is checked for shape rather than content: what is IN it is the
-   * handler's business, and the handler reads it against its own tenant (see
-   * lib/jobs/derive.ts, which will not touch a photograph belonging to
-   * somebody else whatever the payload says).
+   * This is where the integrity lives, and it lives in what is ABSENT from the
+   * column list. `status` is 'queued', `attempts` is 0, `max_attempts` is 5,
+   * `run_after` is now(), and `locked_at`, `locked_by`, `lease_until`,
+   * `last_error` and `finished_at` are null — none of them reachable by the
+   * caller, because none of them is written here at all.
    */
-  insert into jobs (tenant_id, kind, payload, dedupe_key)
-  select
-    p_tenant,
-    p_kind,
-    case
-      when jsonb_typeof(item->'payload') = 'object' then item->'payload'
-      when item ? 'payload' then null   -- refused by the column's own check
-      else '{}'::jsonb
-    end,
-    nullif(item->>'dedupe_key', '')
-  from jsonb_array_elements(p_items) as item
+  insert into public.jobs (tenant_id, kind, payload, dedupe_key)
+  select p_tenant, p_kind, jsonb_build_object('photoId', id::text), id::text
+    from unnest(v_ids) as id
   on conflict do nothing;
 
   get diagnostics n = row_count;
@@ -317,11 +451,12 @@ begin
 end $$;
 
 comment on function public.enqueue_jobs(uuid, text, jsonb) is
-  'The only way work is added. Names four columns and leaves the machinery — '
-  'status, attempts, the lock and the lease — to its defaults, so a caller '
-  'cannot enqueue a job that is already running, already out of attempts, or '
-  'due in a decade. Checks the site the same way the table policy would, '
-  'because a definer function is not subject to it.';
+  'The only way work is added. Validates the site, the kind AND the resource '
+  'the payload names, then BUILDS the payload and the dedupe key from what it '
+  'validated rather than copying what it was sent. Names four columns and '
+  'leaves the machinery — status, attempts, the lock and the lease — to its '
+  'defaults, so a caller cannot enqueue a job that is already running, already '
+  'out of attempts, or due in a decade.';
 
 
 -- ── Claiming ────────────────────────────────────────────────────────────────
@@ -336,11 +471,11 @@ create or replace function public.claim_jobs(
   p_lease  interval default interval '10 minutes',
   p_tenant uuid     default null
 )
-returns setof jobs
+returns setof public.jobs
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   if p_worker is null or length(p_worker) = 0 then
@@ -359,7 +494,7 @@ begin
    * instead of an endless one, and it runs before the claim so that a job in
    * this state can never be picked up.
    */
-  update jobs
+  update public.jobs
      set status      = 'failed',
          finished_at = now(),
          lease_until = null,
@@ -371,7 +506,7 @@ begin
      and (p_tenant is null or tenant_id = p_tenant);
 
   return query
-  update jobs j
+  update public.jobs j
      set status      = 'running',
          attempts    = j.attempts + 1,
          locked_at   = now(),
@@ -386,7 +521,7 @@ begin
       * and then claim the SAME rows the first had just taken.
       */
      select c.id
-       from jobs c
+       from public.jobs c
       where (p_tenant is null or c.tenant_id = p_tenant)
         and (
               (c.status = 'queued'  and c.run_after <= now())
@@ -413,19 +548,19 @@ create or replace function public.finish_job(
   p_error     text    default null,
   p_permanent boolean default false
 )
-returns jobs
+returns public.jobs
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
-  v_job   jobs;
+  v_job   public.jobs;
   v_delay interval;
 begin
   -- Still holding the lease? See note 4 at the top. A worker that lost its job
   -- to a reclaim gets nothing back and must not pretend otherwise.
-  select * into v_job from jobs
+  select * into v_job from public.jobs
    where id = p_id and locked_by = p_worker and status = 'running'
    for update;
 
@@ -434,7 +569,7 @@ begin
   end if;
 
   if p_error is null then
-    update jobs
+    update public.jobs
        set status = 'done', finished_at = now(),
            lease_until = null, locked_by = null
      where id = p_id
@@ -451,7 +586,7 @@ begin
    * information.
    */
   if p_permanent or v_job.attempts >= v_job.max_attempts then
-    update jobs
+    update public.jobs
        set status = 'failed', finished_at = now(),
            lease_until = null, locked_by = null, last_error = p_error
      where id = p_id
@@ -474,7 +609,7 @@ begin
     interval '10 seconds' * power(4, greatest(v_job.attempts - 1, 0)) * (0.75 + random() * 0.5)
   );
 
-  update jobs
+  update public.jobs
      set status = 'queued', run_after = now() + v_delay,
          lease_until = null, locked_by = null, last_error = p_error
    where id = p_id

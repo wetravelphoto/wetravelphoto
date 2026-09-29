@@ -18,24 +18,51 @@ import type { JobKind } from '@/lib/jobs/types'
  * in a decade. The long version is at the top of
  * `db/migrations/2026-09-29_jobs.sql`.
  *
- * The first draft of this file did a plain `.from('jobs').upsert(…)` with
+ * The first draft of this file upserted into the table directly, with
  * `grant insert to authenticated` behind it. Row-level security would have
  * kept those rows on the right SITE, and that is all it would have kept: a
  * policy decides which rows a caller may touch, not what they may put in them.
  * A signed-in account could have posted straight to PostgREST and written a
  * job on its own site with `max_attempts` at a million.
+ *
+ * (Written out in prose rather than as the call it was, because
+ * scripts/check-tenant-scoping.mjs reads the text around every mention of a
+ * scoped table and cannot tell a comment from code. It flagged this paragraph,
+ * which is the checker being right in the only way a text scan can be — and
+ * rewording is the answer, not an exemption. An exemption is how the last
+ * hole got in; that file's own header says so.)
  */
 
 export type EnqueueItem = {
   kind: JobKind
-  payload?: Record<string, unknown>
   /**
-   * The same key twice, while the first is still queued or running, is ONE
-   * job. Leave it out for work that genuinely should happen once per request.
-   * See the note on `dedupe_key` in the migration.
+   * What to do it to. VALIDATED AND THEN REBUILT by `enqueue_jobs` — for
+   * `photo.derivatives` the function checks that `photoId` is a real
+   * photograph of this site's and writes `{"photoId": "<that id>"}` itself, so
+   * what lands in the queue is the database's object rather than this one.
+   * Anything else in here is refused rather than dropped.
    */
-  dedupeKey?: string | null
+  payload?: Record<string, unknown>
 }
+
+/**
+ * THERE IS NO `dedupeKey` HERE, AND THAT IS DELIBERATE.
+ *
+ * It used to be a caller's choice, which made "the same work is not queued
+ * twice" a promise about a string somebody picked rather than about the work:
+ * two jobs on one photograph under different keys would both be queued, and
+ * one key could block a different photograph's job. `enqueue_jobs` derives it
+ * from the resource it has just validated — for this kind, the photograph's
+ * own id — so the key and the work cannot disagree.
+ */
+
+/**
+ * How many jobs one call to `enqueue_jobs` may carry. The same number the
+ * function enforces; stated here so the splitting below is obviously the
+ * reason rather than a magic constant, and asserted against the migration in
+ * `.mk/jobs.ts` so the two cannot drift.
+ */
+export const ENQUEUE_BATCH = 200
 
 /**
  * ADDS WORK FOR ONE SITE.
@@ -73,18 +100,36 @@ export async function enqueue(
     return { queued: 0, duplicates: 0, error: 'One call, one kind of job.' }
   }
 
-  const { data, error } = await db.rpc('enqueue_jobs', {
-    p_tenant: tenantId,
-    p_kind: kind,
-    p_items: items.map((item) => ({
-      payload: item.payload ?? {},
-      dedupe_key: item.dedupeKey ?? null,
-    })),
-  })
+  /*
+   * SPLIT INTO RUNS THE FUNCTION WILL ACCEPT.
+   *
+   * `enqueue_jobs` refuses more than ENQUEUE_BATCH at a time, because it is
+   * reachable from a browser and an unbounded JSON array is work the database
+   * would do on request. A library of two thousand photographs is a legitimate
+   * thing for THIS caller to want, though, and it is the trusted one — so the
+   * bound stays where it is and the splitting happens here.
+   *
+   * Sequential rather than parallel: each run is a write, the point is to be
+   * bounded, and firing ten of them at once would put back the load the bound
+   * exists to keep out.
+   */
+  let queued = 0
+  for (let at = 0; at < items.length; at += ENQUEUE_BATCH) {
+    const run = items.slice(at, at + ENQUEUE_BATCH)
 
-  if (error) return { queued: 0, duplicates: 0, error: error.message }
+    const { data, error } = await db.rpc('enqueue_jobs', {
+      p_tenant: tenantId,
+      p_kind: kind,
+      p_items: run.map((item) => ({ payload: item.payload ?? {} })),
+    })
 
-  const queued = typeof data === 'number' ? data : 0
+    // Stop at the first refusal rather than carrying on: every run after a
+    // rejected one would fail the same way, and the count returned has to mean
+    // what it says.
+    if (error) return { queued, duplicates: 0, error: error.message }
+    queued += typeof data === 'number' ? data : 0
+  }
+
   return { queued, duplicates: items.length - queued, error: null }
 }
 

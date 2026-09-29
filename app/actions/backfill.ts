@@ -85,11 +85,17 @@ export async function backfillDerivatives(): Promise<BackfillResult> {
     const { error: queueError } = await enqueue(
       db,
       tenantId,
+      /*
+       * Just the photographs. `enqueue_jobs` checks each id is really one of
+       * this site's, builds the payload from what it validated, and derives
+       * the dedupe key from the same id — so there is one waiting job per
+       * photograph however many times this is pressed, and the key cannot
+       * disagree with the work. Longer lists are split by `enqueue` into runs
+       * the function will accept.
+       */
       photos.map((photo) => ({
         kind: 'photo.derivatives' as const,
         payload: { photoId: photo.id as string },
-        // One waiting job per photograph, however many times this is pressed.
-        dedupeKey: photo.id as string,
       }))
     )
     if (queueError) {

@@ -2,7 +2,7 @@ import { Client } from 'pg'
 import { drain } from '@/lib/jobs/run'
 import { HANDLERS } from '@/lib/jobs/handlers'
 import { JOB_KINDS, PermanentJobError, type JobHandler, type JobKind } from '@/lib/jobs/types'
-import { enqueue } from '@/lib/jobs/queue'
+import { enqueue, ENQUEUE_BATCH } from '@/lib/jobs/queue'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 
@@ -189,14 +189,17 @@ async function main() {
   }
 
   const db = adapter(client)
-  // Test rows only. `photo.derivatives` appears because block 9b uses the real
-  // kind — it has to, since the allow-list in `enqueue_jobs` is the thing being
-  // exercised — so the payloads it uses name photographs that do not exist and
-  // are cleaned up by id rather than by kind.
+  /*
+   * Test rows only — and `photo.derivatives` counts as one here, because
+   * blocks 9b and 9c use the real kind. They have to: the allow-list and the
+   * resource check inside `enqueue_jobs` are among the things being tested,
+   * and a made-up kind would go nowhere near either. Nothing else in this
+   * database ever holds a job, so clearing the kind is safe; the photographs
+   * 9c invents are cleaned up by their storage path in that block's own
+   * `finally`.
+   */
   const wipe = () =>
-    client.query(
-      "delete from jobs where kind like 'test.%' or (kind = 'photo.derivatives' and payload->>'photoId' in ('a','b','x'))"
-    )
+    client.query("delete from jobs where kind like 'test.%' or kind = 'photo.derivatives'")
   const one = async (sql: string, params: unknown[] = []) =>
     (await client.query(sql, params)).rows[0]
 
@@ -401,43 +404,65 @@ async function main() {
   // enqueue() as a photographer → claim → run → finish as the worker. Every
   // block above starts by inserting rows as the table's owner, which is a
   // route that exists nowhere in the application; this is the one that uses
-  // the doors the application actually has.
+  // the doors the application actually has — including the resource check,
+  // which means the ids below have to be photographs that really exist.
   {
     await wipe()
     const me = (await one('select id from profiles where tenant_id = $1 limit 1', [TENANT_A]))
       .id as string
     const asPhotographer = photographerAdapter(client, me)
 
-    const first = await enqueue(asPhotographer, TENANT_A, [
-      { kind: 'photo.derivatives' as JobKind, payload: { photoId: 'a' }, dedupeKey: 'a' },
-      { kind: 'photo.derivatives' as JobKind, payload: { photoId: 'b' }, dedupeKey: 'b' },
-    ])
+    const mine = (
+      await client.query('select id from photos where tenant_id = $1 order by id limit 2', [
+        TENANT_A,
+      ])
+    ).rows.map((r) => r.id as string)
+    ok('the fixture has photographs to point at', mine.length === 2, `${mine.length} found`)
+
+    const first = await enqueue(
+      asPhotographer,
+      TENANT_A,
+      mine.map((id) => ({ kind: 'photo.derivatives' as JobKind, payload: { photoId: id } }))
+    )
 
     ok('a photographer can enqueue through enqueue()', first.queued === 2 && first.error === null,
        `queued ${first.queued}, error ${first.error}`)
 
-    // Pressing the button again queues nothing new.
+    // Pressing the button again queues nothing new — and the key that makes
+    // that true was derived by the database, not sent by this code.
     const second = await enqueue(asPhotographer, TENANT_A, [
-      { kind: 'photo.derivatives' as JobKind, payload: { photoId: 'a' }, dedupeKey: 'a' },
+      { kind: 'photo.derivatives' as JobKind, payload: { photoId: mine[0]! } },
     ])
     ok('and the same work twice is a no-op', second.queued === 0 && second.duplicates === 1,
        `queued ${second.queued}, duplicates ${second.duplicates}`)
 
     // The machinery is the database's, not the caller's.
-    const row = await one("select * from jobs where dedupe_key = 'a'")
+    const row = await one('select * from jobs where dedupe_key = $1', [mine[0]!])
     ok('the row it made carries no caller-chosen state',
        row.status === 'queued' && row.attempts === 0 && row.max_attempts === 5 &&
        row.locked_by === null && row.lease_until === null && row.finished_at === null,
        JSON.stringify({ status: row.status, attempts: row.attempts, max: row.max_attempts,
                         locked_by: row.locked_by, finished_at: row.finished_at }))
-    ok('and the payload it was given', row.payload?.photoId === 'a', JSON.stringify(row.payload))
+    ok('the payload is the one the database built',
+       JSON.stringify(row.payload) === JSON.stringify({ photoId: mine[0]! }),
+       JSON.stringify(row.payload))
+    ok('and the dedupe key is the photograph', row.dedupe_key === mine[0]!, String(row.dedupe_key))
 
     // Onto somebody else's site: refused by the function, not by this code.
     const cross = await enqueue(asPhotographer, TENANT_B, [
-      { kind: 'photo.derivatives' as JobKind, payload: { photoId: 'x' } },
+      { kind: 'photo.derivatives' as JobKind, payload: { photoId: mine[0]! } },
     ])
     ok('a photographer cannot enqueue onto another site',
        cross.error !== null && cross.queued === 0, `error ${cross.error}`)
+
+    // A photograph that is not theirs, onto their OWN site. The tenant on the
+    // job would be right; the photograph would not be.
+    const notMine = await enqueue(asPhotographer, TENANT_A, [
+      { kind: 'photo.derivatives' as JobKind,
+        payload: { photoId: '00000000-0000-0000-0000-000000000000' } },
+    ])
+    ok('nor a photograph that is not theirs',
+       notMine.error !== null && notMine.queued === 0, `error ${notMine.error}`)
 
     // And the worker finishes what the photographer queued.
     const h = testHandlers()
@@ -450,9 +475,67 @@ async function main() {
     })
 
     ok('the worker runs what the photographer queued', report.done === 2, `done ${report.done}`)
-    ok('exactly once each', map.a === 1 && map.b === 1, JSON.stringify(map))
+    ok('exactly once each', map[mine[0]!] === 1 && map[mine[1]!] === 1, JSON.stringify(map))
     ok('and both are marked done',
        Number((await one("select count(*)::int as n from jobs where kind='photo.derivatives' and status='done'")).n) === 2)
+  }
+
+  // ── 9c. A LIBRARY LONGER THAN ONE RPC WILL CARRY ──────────────────────────
+  //
+  // `enqueue_jobs` refuses more than ENQUEUE_BATCH items, because it is
+  // reachable from a browser. A real library can be longer than that, so
+  // `enqueue()` splits — and splitting is the kind of thing that works for 200
+  // and quietly drops the tail at 201. This queues 250 photographs and counts.
+  {
+    await wipe()
+    const me = (await one('select id from profiles where tenant_id = $1 limit 1', [TENANT_A]))
+      .id as string
+    const asPhotographer = photographerAdapter(client, me)
+    const album = (await one('select id from albums where tenant_id = $1 limit 1', [TENANT_A]))
+      .id as string
+
+    // The bound in SQL and the one in TypeScript are the same number, or the
+    // split is either wasteful or wrong.
+    const migration = readFileSync(
+      '/home/claude/build/db/migrations/2026-09-29_jobs.sql',
+      'utf8'
+    )
+    const declared = /c_max_items\s+constant\s+int\s*:=\s*(\d+)/.exec(migration)
+    ok('the migration states a batch bound', declared !== null)
+    ok('and ENQUEUE_BATCH is that same number',
+       declared !== null && Number(declared[1]) === ENQUEUE_BATCH,
+       `SQL ${declared?.[1]}, TypeScript ${ENQUEUE_BATCH}`)
+
+    const many = (
+      await client.query(
+        `insert into photos (tenant_id, album_id, storage_path)
+         select $1, $2, 'mk/batch/' || g || '/2400.webp' from generate_series(1, 250) g
+         returning id`,
+        [TENANT_A, album]
+      )
+    ).rows.map((r) => r.id as string)
+
+    try {
+      const out = await enqueue(
+        asPhotographer,
+        TENANT_A,
+        many.map((id) => ({ kind: 'photo.derivatives' as JobKind, payload: { photoId: id } }))
+      )
+
+      const queued = Number(
+        (await one(
+          "select count(*)::int as n from jobs where kind='photo.derivatives' and status='queued'"
+        )).n
+      )
+
+      ok('250 photographs all reach the queue', out.queued === 250 && out.error === null,
+         `queued ${out.queued}, error ${out.error}`)
+      ok('and there are 250 rows to show for it', queued === 250, `${queued} rows`)
+      ok('none of them lost its tail', queued === many.length, `${queued} of ${many.length}`)
+    } finally {
+      await client.query("delete from jobs where kind = 'photo.derivatives'")
+      await client.query("delete from photos where storage_path like 'mk/batch/%'")
+    }
   }
 
   // ── 10. Every declared kind has a handler ─────────────────────────────────

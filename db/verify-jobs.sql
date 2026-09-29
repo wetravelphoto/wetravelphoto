@@ -419,6 +419,39 @@ begin
 end $$;
 
 
+-- ── 12b. Two real photographs to point jobs at ─────────────────────────────
+--
+-- `enqueue_jobs` no longer takes a payload on trust: for photo.derivatives it
+-- checks that the id names a photograph OF THIS SITE before anything is
+-- queued. So the blocks below need one photograph on each site rather than an
+-- invented string.
+
+do $$
+declare
+  v_a uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  v_b uuid := 'aaaaaaaa-0000-0000-0000-000000000002';
+  v_p uuid;
+  v_q uuid;
+begin
+  select id into v_p from photos where tenant_id = v_a order by id limit 1;
+
+  -- Site two has an album in the fixture but no photographs, so this one is
+  -- made here. It goes with the rest of the transaction.
+  insert into photos (tenant_id, album_id, storage_path)
+  select v_b, a.id, 't/two/photos/x/1/2400.webp'
+    from albums a where a.tenant_id = v_b order by a.id limit 1
+  returning id into v_q;
+
+  perform set_config('jb.photo',   v_p::text, true);
+  perform set_config('jb.photo_b', v_q::text, true);
+
+  insert into job_res (step, expected, actual, pass) values
+    ('the fixture has a photograph on each site', 'two ids',
+     coalesce(v_p::text, 'none') || ' / ' || coalesce(v_q::text, 'none'),
+     v_p is not null and v_q is not null);
+end $$;
+
+
 -- ── 13. THE PRIVILEGE BOUNDARY, exercised as the real roles ─────────────────
 --
 -- Everything above this point runs as the table's OWNER, which is nobody in
@@ -508,29 +541,36 @@ begin
     when others then finish_err := 'blocked (' || sqlstate || ')';
   end;
 
-  -- MAY enqueue, through the one door.
+  -- MAY enqueue, through the one door. `v_photo` is a real photograph of this
+  -- site's, set up by the caller of this block.
   select public.enqueue_jobs(v_a, 'photo.derivatives',
            jsonb_build_array(jsonb_build_object(
-             'payload', jsonb_build_object('photoId', 'p1'),
-             'dedupe_key', 'p1'))) into n;
+             'payload', jsonb_build_object('photoId', current_setting('jb.photo'))))) into n;
 
   -- ...but not onto another site...
   begin
-    perform public.enqueue_jobs(v_b, 'photo.derivatives', '[{}]'::jsonb);
+    -- A WELL-FORMED request for another site: the payload names a real
+    -- photograph, so the only thing that can refuse this is the site check.
+    perform public.enqueue_jobs(v_b, 'photo.derivatives',
+      jsonb_build_array(jsonb_build_object(
+        'payload', jsonb_build_object('photoId', current_setting('jb.photo_b')))));
     cross_err := 'allowed — NOT BLOCKED';
   exception when others then cross_err := 'blocked (' || sqlstate || ')';
   end;
 
   -- ...and not a kind the database has not been told about.
   begin
-    perform public.enqueue_jobs(v_a, 'shell.exec', '[{}]'::jsonb);
+    perform public.enqueue_jobs(v_a, 'shell.exec',
+      jsonb_build_array(jsonb_build_object(
+        'payload', jsonb_build_object('photoId', current_setting('jb.photo')))));
     kind_err := 'allowed — NOT BLOCKED';
   exception when others then kind_err := 'blocked (' || sqlstate || ')';
   end;
 
   perform set_config('role', current_setting('jb.owner_role'), true);
 
-  select * into v_job from jobs where tenant_id = v_a and dedupe_key = 'p1';
+  select * into v_job from jobs
+   where tenant_id = v_a and dedupe_key = current_setting('jb.photo');
 
   insert into job_res (step, expected, actual, pass) values
     ('photographer may read their own queue',  'allowed', read_err,  read_err = 'allowed'),
@@ -556,8 +596,12 @@ begin
        v_job.locked_by is null and v_job.lease_until is null and v_job.locked_at is null),
     ('and not already finished',            'null', coalesce(v_job.finished_at::text, 'null'),
        v_job.finished_at is null),
-    ('the payload arrived intact',          '{"photoId": "p1"}', v_job.payload::text,
-       v_job.payload = '{"photoId":"p1"}'::jsonb);
+    ('the payload is the one the database built', 'the photograph''s id',
+       v_job.payload::text,
+       v_job.payload = jsonb_build_object('photoId', current_setting('jb.photo'))),
+    ('and the dedupe key is that same id, not a caller''s choice',
+       'the photograph''s id', coalesce(v_job.dedupe_key, 'null'),
+       v_job.dedupe_key = current_setting('jb.photo'));
 end $$;
 
 
@@ -720,6 +764,334 @@ begin
 
   insert into job_res (step, expected, actual, pass) values
     ('deleting a site removes its queue', '0', n || '', n = 0);
+end $$;
+
+
+-- ── 17. THE RESOURCE, NOT ONLY THE SITE ────────────────────────────────────
+--
+-- Blocks 13 to 15 prove that a signed-in account cannot write to the queue by
+-- any route but `enqueue_jobs`, and cannot use that function on another site.
+-- This is the half that leaves open: what the payload may NAME.
+--
+-- Without it, a photographer calling the function by hand could queue a
+-- thousand jobs on their own site pointing at photographs belonging to
+-- somebody else, or at ids that are not photographs at all. The handler would
+-- decline them one by one — lib/jobs/derive.ts reads the photograph WITH its
+-- tenant and treats a miss as permanent — but "the worker declines it later"
+-- is not the same thing as "it never entered the queue", and only one of the
+-- two is a boundary.
+--
+-- Run as the photographer, because that is who would be doing it.
+
+do $$
+declare
+  v_a       uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  v_me      uuid;
+  v_mine    text := current_setting('jb.photo');
+  v_theirs  text := current_setting('jb.photo_b');
+  n_ok      int;
+  n_same    int;
+  n_big     int;
+  v_job     jobs;
+
+  e_theirs  text := 'allowed — NOT BLOCKED';
+  e_ghost   text := 'allowed — NOT BLOCKED';
+  e_junkid  text := 'allowed — NOT BLOCKED';
+  e_noid    text := 'allowed — NOT BLOCKED';
+  e_nulled  text := 'allowed — NOT BLOCKED';
+  e_number  text := 'allowed — NOT BLOCKED';
+  e_nopay   text := 'allowed — NOT BLOCKED';
+  e_notobj  text := 'allowed — NOT BLOCKED';
+  e_extra   text := 'allowed — NOT BLOCKED';
+  e_dedupe  text := 'allowed — NOT BLOCKED';
+  e_mixed   text := 'allowed — NOT BLOCKED';
+  e_over    text := 'allowed — NOT BLOCKED';
+  e_over_msg text := '';
+begin
+  perform set_config('jb.owner_role', session_user, true);
+  select id into v_me from profiles where tenant_id = v_a limit 1;
+
+  -- A clean queue for this photograph. Block 13 already put one there, and a
+  -- second enqueue of the same work is correctly a no-op — which would make
+  -- every count below zero and say nothing about validation.
+  delete from jobs where tenant_id = v_a and kind = 'photo.derivatives';
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_me)::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- ── It works for a photograph that really is theirs ──────────────────────
+  select public.enqueue_jobs(v_a, 'photo.derivatives',
+    jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('photoId', v_mine))))
+    into n_ok;
+
+  -- ── Somebody else's photograph, queued onto their OWN site ───────────────
+  -- The tenant on the job would be right. The photograph would not be.
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('photoId', v_theirs))));
+  exception when others then e_theirs := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- ── A well-formed id that is not a photograph at all ─────────────────────
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      jsonb_build_array(jsonb_build_object('payload',
+        jsonb_build_object('photoId', '00000000-0000-0000-0000-000000000000'))));
+  exception when others then e_ghost := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- ── Malformed identifiers ────────────────────────────────────────────────
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('photoId', 'not-a-uuid'))));
+  exception when others then e_junkid := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('nope', v_mine))));
+  exception when others then e_noid := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      '[{"payload":{"photoId":null}}]'::jsonb);
+  exception when others then e_nulled := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      '[{"payload":{"photoId":42}}]'::jsonb);
+  exception when others then e_number := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- ── Malformed items ──────────────────────────────────────────────────────
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives', '[{}]'::jsonb);
+  exception when others then e_nopay := 'blocked (' || sqlstate || ')';
+  end;
+
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives', '["just a string"]'::jsonb);
+  exception when others then e_notobj := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- ── An extra key is REFUSED, not dropped ─────────────────────────────────
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      jsonb_build_array(jsonb_build_object('payload',
+        jsonb_build_object('photoId', v_mine, 'quality', 'huge'))));
+  exception when others then e_extra := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- ── AND THE DEDUPE IDENTITY IS NOT THE CALLER'S TO CHOOSE ────────────────
+  -- Sending one at item level used to be how it was set. It is now refused,
+  -- so nobody can believe they set one and find the queue disagreeing.
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      jsonb_build_array(jsonb_build_object(
+        'payload', jsonb_build_object('photoId', v_mine),
+        'dedupe_key', 'something-else')));
+  exception when others then e_dedupe := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- ── One bad apple refuses the whole batch ────────────────────────────────
+  -- Not "queue the good ones and drop the rest": a partial success that
+  -- reports a number is how a caller comes to believe work is waiting when it
+  -- is not.
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      jsonb_build_array(
+        jsonb_build_object('payload', jsonb_build_object('photoId', v_mine)),
+        jsonb_build_object('payload', jsonb_build_object('photoId', v_theirs))));
+  exception when others then e_mixed := 'blocked (' || sqlstate || ')';
+  end;
+
+  -- ── The batch bound ──────────────────────────────────────────────────────
+  --
+  -- 200 of the same photograph: past the bound, through the shape check, and
+  -- collapsed to one job by the derived dedupe key. The queue is cleared first
+  -- for the same reason as above — the one queued a moment ago would make this
+  -- return zero for a reason that has nothing to do with the bound.
+  perform set_config('role', current_setting('jb.owner_role'), true);
+  delete from jobs where tenant_id = v_a and kind = 'photo.derivatives';
+  perform set_config('role', 'authenticated', true);
+
+  select public.enqueue_jobs(v_a, 'photo.derivatives',
+    (select jsonb_agg(jsonb_build_object('payload', jsonb_build_object('photoId', v_mine)))
+       from generate_series(1, 200)))
+    into n_same;
+
+  -- 201 is refused, and refused BEFORE any of the resource work is done.
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives',
+      (select jsonb_agg(jsonb_build_object('payload', jsonb_build_object('photoId', v_mine)))
+         from generate_series(1, 201)));
+  exception when others then
+    e_over := 'blocked (' || sqlstate || ')';
+    e_over_msg := sqlerrm;
+  end;
+
+  perform set_config('role', current_setting('jb.owner_role'), true);
+
+  select count(*) into n_big from jobs
+   where tenant_id = v_a and kind = 'photo.derivatives' and dedupe_key = v_mine;
+
+  select * into v_job from jobs
+   where tenant_id = v_a and kind = 'photo.derivatives' and dedupe_key = v_mine;
+
+  insert into job_res (step, expected, actual, pass) values
+    ('a photograph of their own is queued',        '1',       n_ok || '',   n_ok = 1),
+    ('another site''s photograph is refused',      'blocked', e_theirs,  e_theirs like 'blocked%'),
+    ('an id that is no photograph is refused',     'blocked', e_ghost,   e_ghost like 'blocked%'),
+    ('"not-a-uuid" is refused',                    'blocked', e_junkid,  e_junkid like 'blocked%'),
+    ('a payload with no photoId is refused',       'blocked', e_noid,    e_noid like 'blocked%'),
+    ('a null photoId is refused',                  'blocked', e_nulled,  e_nulled like 'blocked%'),
+    ('a numeric photoId is refused',               'blocked', e_number,  e_number like 'blocked%'),
+    ('an item with no payload is refused',         'blocked', e_nopay,   e_nopay like 'blocked%'),
+    ('an item that is not an object is refused',   'blocked', e_notobj,  e_notobj like 'blocked%'),
+    ('an extra payload key is refused, not dropped','blocked', e_extra,  e_extra like 'blocked%'),
+    ('a caller-chosen dedupe key is refused',      'blocked', e_dedupe,  e_dedupe like 'blocked%'),
+    ('one bad item refuses the whole batch',       'blocked', e_mixed,   e_mixed like 'blocked%'),
+    ('200 items are accepted',                     '1 job',   n_same || ' job(s)', n_same = 1),
+    ('and collapse to one job per photograph',     '1',       n_big || '',  n_big = 1),
+    ('201 items are refused',                      'blocked', e_over,    e_over like 'blocked%'),
+    ('and the refusal names the bound',            'says 200',
+       left(e_over_msg, 60), e_over_msg like '%200%'),
+    ('the stored payload is the database''s own',  'photoId only',
+       coalesce(v_job.payload::text, 'no row'),
+       v_job.payload = jsonb_build_object('photoId', v_mine)),
+    ('and the dedupe key is the photograph',       'the id',
+       coalesce(v_job.dedupe_key, 'null'), v_job.dedupe_key = v_mine);
+end $$;
+
+
+-- ── 18. And the worker still runs what came through that door ──────────────
+
+do $$
+declare
+  v_a    uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  v_job  jobs;
+  v_out  jobs;
+  v_mine text := current_setting('jb.photo');
+begin
+  perform set_config('jb.owner_role', session_user, true);
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('role', 'service_role', true);
+
+  select * into v_job from public.claim_jobs('after-hardening', 5, interval '10 minutes', v_a);
+  if v_job.id is not null then
+    select * into v_out from public.finish_job(v_job.id, 'after-hardening');
+  end if;
+
+  perform set_config('role', current_setting('jb.owner_role'), true);
+
+  insert into job_res (step, expected, actual, pass) values
+    ('the worker claims a job enqueued through the door', 'a job',
+       coalesce(v_job.id::text, 'nothing'), v_job.id is not null),
+    ('and the payload reaches it intact', 'photoId',
+       coalesce(v_job.payload ->> 'photoId', 'null'), v_job.payload ->> 'photoId' = v_mine),
+    ('and it can finish it', 'done',
+       coalesce(v_out.status, 'nothing'), v_out.status = 'done');
+end $$;
+
+
+-- ── 19. THE FUNCTIONS DO NOT READ THE CALLER'S search_path ─────────────────
+--
+-- All three are SECURITY DEFINER with `set search_path = ''`, and every
+-- relation and application function in them is written out in full. This is
+-- the assertion that says so rather than trusting that it was done everywhere:
+-- a decoy schema is put in front of the caller's path holding a `jobs` table
+-- and a `current_tenant_id()` of its own, and the functions must reach neither.
+--
+-- `pg_catalog` is the deliberate exception — PostgreSQL always searches it
+-- first unless it is named elsewhere in the path — which is what lets `now()`,
+-- `coalesce`, `jsonb_typeof` and the built-in types still resolve inside a
+-- function whose search_path is empty.
+
+do $$
+declare
+  v_a      uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  v_me     uuid;
+  v_mine   text := current_setting('jb.photo');
+  n_ok     int;
+  n_decoy  int;
+  n_public int;
+  v_job    jobs;
+  v_out    jobs;
+  v_why    text := '';
+begin
+  perform set_config('jb.owner_role', session_user, true);
+  select id into v_me from profiles where tenant_id = v_a limit 1;
+
+  delete from jobs where tenant_id = v_a and kind = 'photo.derivatives';
+
+  create schema decoy;
+  create table decoy.jobs (like public.jobs including defaults);
+  -- A tenant nobody owns. If enqueue_jobs resolved this one, its site check
+  -- would compare against the wrong answer and refuse a legitimate request.
+  create function decoy.current_tenant_id() returns uuid
+    language sql immutable as $d$ select '99999999-9999-9999-9999-999999999999'::uuid $d$;
+  grant usage on schema decoy to authenticated, service_role;
+  grant all on decoy.jobs to authenticated, service_role;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_me)::text, true);
+  perform set_config('role', 'authenticated', true);
+  perform set_config('search_path', 'decoy, pg_temp', true);
+
+  /*
+   * Caught rather than allowed to abort. Unqualify one name in
+   * `enqueue_jobs` — `current_tenant_id()` instead of
+   * `public.current_tenant_id()` — and the decoy answers with a tenant nobody
+   * owns, so this legitimate request is refused with "That is not your site."
+   * A suite that dies at that point reports nothing about the rest.
+   */
+  begin
+    select public.enqueue_jobs(v_a, 'photo.derivatives',
+      jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('photoId', v_mine))))
+      into n_ok;
+  exception when others then
+    n_ok := -1;
+    v_why := sqlerrm;
+  end;
+
+  perform set_config('search_path', 'public', true);
+  perform set_config('role', current_setting('jb.owner_role'), true);
+
+  select count(*) into n_decoy  from decoy.jobs;
+  select count(*) into n_public from public.jobs
+   where tenant_id = v_a and kind = 'photo.derivatives';
+
+  -- And the worker's two, from the same poisoned path.
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('role', 'service_role', true);
+  perform set_config('search_path', 'decoy, pg_temp', true);
+
+  begin
+    select * into v_job from public.claim_jobs('path-test', 1, interval '5 minutes', v_a);
+    if v_job.id is not null then
+      select * into v_out from public.finish_job(v_job.id, 'path-test');
+    end if;
+  exception when others then
+    v_why := sqlerrm;
+  end;
+
+  perform set_config('search_path', 'public', true);
+  perform set_config('role', current_setting('jb.owner_role'), true);
+
+  insert into job_res (step, expected, actual, pass) values
+    ('enqueue works with a decoy schema in front', '1',
+       case when n_ok = -1 then v_why else n_ok || '' end, n_ok = 1),
+    ('and it wrote to public.jobs',                '1', n_public || '', n_public = 1),
+    ('not to the decoy table',                     '0', n_decoy || '',  n_decoy = 0),
+    ('so it used public.current_tenant_id()',      'yes',
+       case when n_ok = 1 then 'yes' else 'no — the decoy answered' end, n_ok = 1),
+    ('claim works from the same poisoned path',    'a job',
+       coalesce(v_job.id::text, nullif(v_why, ''), 'nothing'), v_job.id is not null),
+    ('and finish does too',                        'done',
+       coalesce(v_out.status, 'nothing'), v_out.status = 'done');
+
+  drop schema decoy cascade;
 end $$;
 
 

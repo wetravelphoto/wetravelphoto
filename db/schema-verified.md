@@ -294,9 +294,9 @@ not version parity; see the note at the top of this file).
 | | |
 |---|---|
 | the migration runs twice with no error | yes |
-| `db/verify-jobs.sql` | 72 of 72 |
+| `db/verify-jobs.sql` | 101 of 101 |
 | `scripts/jobs-concurrency.sh` | 14 of 14 |
-| `.mk/jobs.ts` (the worker, against this database) | 53 of 53 |
+| `.mk/jobs.ts` (the worker, against this database) | 61 of 61 |
 
 ### The privilege model, checked rather than assumed
 
@@ -343,11 +343,49 @@ none. The resulting set, read back from the catalogue:
 finishing are the whole of what the worker can do, and it cannot read the
 queue, empty it, or finish a job it does not hold.
 
+All three are `set search_path = ''` rather than `= public`, with every
+relation and application function written out in full. An empty path removes
+the question of what an unqualified name resolves to; `pg_catalog` is still
+searched implicitly, ahead of anything in `search_path`, which is what lets
+`now()`, `coalesce`, `jsonb_typeof` and the built-in type names still work
+inside a function whose path is empty. Proved by putting a decoy schema
+holding its own `jobs` and `current_tenant_id()` in front of the caller's
+path: all three functions still reach `public`, and unqualifying a single name
+makes the suite report five failures.
+
 One fixture/production difference worth recording: Supabase creates
 `service_role` with `BYPASSRLS`; `db/test-fixture.sql` creates a plain role.
 The DEFINER design makes that irrelevant for `jobs` — the functions run with
 the table owner's rights either way — which is a second reason to prefer it
 over INVOKER plus a table grant.
+
+### The enqueue boundary validates the resource, not only the site
+
+`enqueue_jobs` checked the tenant, the kind and the queue-control columns. That
+left the interesting half open: a photographer calling it by hand could queue
+work on their own site pointing at photographs belonging to somebody else, or
+at ids that are not photographs at all. `lib/jobs/derive.ts` would have
+declined each one — it reads the photograph WITH its tenant and treats a miss
+as permanent — but "the worker declines it later" is not the same thing as "it
+never entered the queue", and only one of the two is a boundary.
+
+For `photo.derivatives` the function now **builds** what it stores instead of
+copying it. Each item is reduced to a photograph id, checked for shape and for
+ownership against `public.photos`, and the row that lands carries
+`{"photoId": "<that id>"}` with `dedupe_key` set to the same id. A caller
+cannot choose the dedupe identity at all, which is what makes "the same work is
+not queued twice" a promise about the work rather than about a string somebody
+picked. One bad item refuses the whole batch; a partial success that reports a
+number is how a caller comes to believe work is waiting when it is not. "Does
+not exist" and "belongs to another site" give the same message, so the function
+cannot be used to ask whether an id exists elsewhere.
+
+A batch is capped at **200 items**, enforced in SQL because the function is
+reachable from a browser and an unbounded JSON array is work the database would
+do on request. `lib/jobs/queue.ts` splits longer lists into runs of that size —
+the trusted caller works around the bound, a direct PostgREST call does not.
+`.mk/jobs.ts` asserts the two numbers are the same one, and queues 250 real
+photographs to prove the split does not drop its tail.
 
 ### A reporting bug in our own harness, found the same way
 

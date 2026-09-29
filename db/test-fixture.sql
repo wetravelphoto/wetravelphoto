@@ -75,9 +75,24 @@ create table albums (
   created_at   timestamptz not null default now()
 );
 
+-- VERIFIED AGAINST PRODUCTION 2026-09-29. See db/schema-verified.md.
+--
+-- `album_id` is NOT NULL and carries `on delete cascade` (constraint
+-- `photos_album_id_fkey`, `confdeltype = 'c'`). This file used to declare a
+-- plain `references albums(id)`, which meant a local rehearsal of a migration
+-- saw NO ACTION where production cascades — the two behave completely
+-- differently on `delete from albums`, and only one of them is what
+-- `app/actions/galleries.ts` relies on. That function deletes the album row and
+-- nothing else; every `photos` row under it goes by cascade.
+--
+-- This matters beyond tidiness: the photo-usage projection
+-- (claude/photo-assets-design.md) parents a gallery usage on `photos.id` with
+-- its own cascade, so deleting an album removes membership rows AND their
+-- projected usages with no application code at all. That guarantee is only
+-- true because this cascade is real.
 create table photos (
   id         uuid primary key default gen_random_uuid(),
-  album_id   uuid references albums(id),
+  album_id   uuid not null references albums(id) on delete cascade,
   is_for_sale boolean not null default false,
   caption    text,
   tenant_id  uuid not null default default_tenant_id() references tenants(id),

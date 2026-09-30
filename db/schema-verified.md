@@ -23,6 +23,10 @@ The full picture is in **`db/schema-2026-09.sql`**, transcribed from
 policies**, **9 functions**, one trigger (`site_draft_touch` on `site_draft`),
 and no trigger anywhere else.
 
+*That was the survey. After S3, S4 and P1, production is **37 tables, 549
+columns, 13 functions, 56 policies**, RLS on all 37 — see the deployment
+sections below, the latest of which is P1 (2026-09-30).*
+
 *The policy figure was first written here as 53, which was a counting error in
 the transcription rather than anything about the database. Corrected 2026-09-29
 against a direct count of production: 55 policies now, of which `jobs` has
@@ -595,6 +599,92 @@ No S4-specific security finding. `page_views_tenant_time` and
 `page_views_post_idx` report as unused, which is expected immediately after
 creation and worth re-checking once there is real traffic — the same follow-up
 already recorded for the queue's three indexes.
+
+---
+
+## 2026-09-30 — photo assets (P1), DEPLOYED TO PRODUCTION
+
+**Supabase migration version `20260930123113`, `photo_assets_p1_2026_09_29`**,
+from `db/migrations/2026-09-29_photo_assets.sql`. Reviewed and applied by
+ChatGPT, which verified the file's SHA256 independently before applying it:
+
+```
+fedb6e7f457f9a7e7568efefcb2116ca7ca1b38db113dd3b1d1bf47bdc887eef
+```
+
+(That is the file with LF line endings, which is what git stores. With
+`core.autocrlf=true` and no `.gitattributes`, a Windows checkout is CRLF and
+hashes differently — hash the committed blob.)
+
+### Verified against the live database afterwards, not assumed
+
+| | |
+|---|---|
+| totals | **37 tables, 549 columns, 13 public functions, 56 public RLS policies** |
+| `photo_assets` | exists, **38 columns, 0 rows**, RLS enabled |
+| `photo_usages` | exists, **15 columns, 0 rows**, RLS enabled |
+| `tenant_id` on both | `uuid NOT NULL`, **NO DEFAULT** |
+| policy on both | `Tenant members manage` is the **only** policy |
+| grants on both | `anon`: none. `authenticated`: SELECT. `service_role`: none. `postgres`: owner. |
+| parent targets | `photos_id_tenant`, `albums_id_tenant`, `blog_posts_id_tenant`, `catalog_items_id_tenant`, each `UNIQUE (id, tenant_id)` |
+| `photo_assets` constraints | `photo_assets_pkey`, `photo_assets_id_tenant`, `photo_assets_tenant_fk` ON DELETE CASCADE, `photo_assets_created_by_fk` ON DELETE SET NULL, `_state_known`, `_alt_source_known`, `_alt_source_present` |
+| `photo_usages` constraints | `photo_usages_pkey`, `_tenant_fk` ON DELETE CASCADE; `_asset_fk` **(asset_id, tenant_id) → photo_assets(id, tenant_id) ON DELETE RESTRICT**; `_photo_fk`, `_album_fk`, `_post_fk`, `_product_fk`, each composite on `(parent, tenant_id)` ON DELETE CASCADE; `_kind_known`, `_scope_known`, `_scope_by_kind`, `_page_key_shape`, `_one_parent` |
+| slot indexes | all seven partial unique indexes live: `photo_usages_slot_gallery`, `_cover`, `_section`, `_legacy`, `_story_cover`, `_story_block`, `_shop` |
+| supporting indexes | live |
+| `photos.asset_id` | nullable `uuid`, **no foreign key** (P4 adds it) |
+| `site_images.asset_id` | nullable `uuid`, **no foreign key** (P4 adds it) |
+
+The pre-P1 totals were 35 / 494 / 13 / 54. The difference is exactly the
+migration: +2 tables, +55 columns (38 + 15 + two `asset_id`), no function, +2
+policies.
+
+### Live smoke tests, run in production and cleaned up
+
+1. **Cross-tenant asset protection.** A usage on site A pointing at site B's
+   asset was refused by PostgreSQL with SQLSTATE `23503`.
+2. **The tenant-deletion graph.** A temporary tenant with an asset and usages
+   was deleted; afterwards tenant = 0, asset = 0, usages = 0. The tenant
+   CASCADE and the asset RESTRICT therefore compose in production exactly as
+   they did in the local rehearsal — the question P1 was told to measure rather
+   than reason about.
+3. **RLS.** Temporary assets on two sites. As an ordinary signed-in
+   photographer: own assets 1, foreign assets 0, unfiltered visible 1. The same
+   account as platform admin: 2.
+
+All smoke-test rows were removed: production holds **0** rows in both tables.
+
+### Advisors, after deployment
+
+**Security:** no P1-specific finding. **Performance:** informational only —
+the new indexes show as unused (expected at zero rows); several of
+`photo_usages`' composite foreign keys, and `photo_assets.created_by`, are
+reported as lacking a covering index. **Deliberately not acted on**: recorded
+in `claude/open-items.md` for a measured review once P2/P3 put rows in the
+tables. Some existing leading-column and partial indexes may already serve the
+real query and delete shapes; that is a question for query plans, not for the
+advisor.
+
+### The reconciliation
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` were updated in the same
+sitting, with every P1 statement **copied from the migration** — including the
+CHECK predicates, verbatim, unlike the survey-era ones this file lists as
+reconstructed. The rebuilt fixture was counted: 37 / 549 / 13 / 56, RLS on all
+37, 0 rows in both tables — production's figures.
+
+`scripts/fixture-matches-migration.sh` now guards P1 as it guards the queue and
+analytics: it builds the fixture, records every fact about **both new tables
+and all five parents P1 altered** (compared whole, so it also proves the
+migration changed nothing else on a parent), strips exactly what P1 added,
+lets the migration rebuild it, and diffs — 435 P1 facts. Shown to bite before
+it was trusted, on a slot index missing `position`, a guessing tenant default,
+an extra INSERT grant, a changed `aspect_ratio` rounding, a missing
+`albums_id_tenant`, and a parent target with its columns reversed.
+
+`db/verify-tenant-isolation.sql` gained the photo tables — own site reads its
+rows, a foreign site reads 0 and still reads its own, anon and service_role are
+refused by privilege, a platform admin reaches across — now 25 checks. It was
+deliberately NOT touched before deployment, when the fixture had no such tables.
 
 ---
 

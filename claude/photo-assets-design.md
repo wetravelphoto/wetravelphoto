@@ -1,9 +1,12 @@
 # Photo assets and photo usages — technical design
 
-**Status: APPROVED IN PRINCIPLE, 2026-09-29.** Not implemented. The build order
-is in `claude/photo-migration-plan.md`.
+**Status: APPROVED IN PRINCIPLE, 2026-09-29.** The tables of §1–§3 are
+**deployed** (P1, Supabase migration `20260930123113`, 2026-09-30) exactly as
+revision 6 states them, and nothing reads or writes them yet; the rest —
+ingestion, `syncUsages`, backfill, resolver, deletion — is P2–P6. The build
+order is in `claude/photo-migration-plan.md`.
 
-Revision 5. Not to be redesigned again unless implementation reveals a concrete
+Revision 6. Not to be redesigned again unless implementation reveals a concrete
 contradiction in the real codebase.
 
 ---
@@ -16,7 +19,8 @@ contradiction in the real codebase.
 | 2 | usages become a projection; typed FKs; furniture excluded; analysis versioned separately | `replaceSections` is delete-then-insert and five other writers rewrite whole documents |
 | 3 | usages read-only; `library` removed; `gallery` parents on `photos.id`; `content_sha256`; state drops `analyzed`; `photo_analysis` deferred; videos out; accessibility role on the field | Gonzalo's review |
 | 4 | per-kind partial unique indexes; `alt_effective` removed; composite tenant-aware foreign keys; `sort_order` mirror removed; video fields removed from projection and backfill | Gonzalo's review |
-| **5** | **cascade question closed against production**; status raised to approved | Gonzalo ran the constraint inspection, 2026-09-29 |
+| 5 | cascade question closed against production; status raised to approved | Gonzalo ran the constraint inspection, 2026-09-29 |
+| **6** | **reconciliation before P1**: no tenant default on either new table (§3.6); §3.2 corrected about the parents' defaults; the P1 privilege set stated (§3.7); a `page_key` CHECK matching `isPageKey()` (§2.2, §3.4); a tenant-deletion proof required (§3.5) | the P1 orientation compared this document with the repository, 2026-09-29; decisions by Gonzalo |
 
 ---
 
@@ -25,8 +29,8 @@ contradiction in the real codebase.
 ```sql
 create table photo_assets (
   id              uuid primary key default gen_random_uuid(),
-  tenant_id       uuid not null references tenants(id) on delete cascade
-                  default public.tenant_for_insert(),
+  -- NO DEFAULT, deliberately (rev 6): every writer names the tenant. §3.6.
+  tenant_id       uuid not null references tenants(id) on delete cascade,
 
   -- ══ Identity and storage ═══════════════════════════════════════════════
   -- key_base identifies one UPLOAD and all its derivatives. It does not
@@ -110,6 +114,7 @@ create index photo_assets_no_alt     on photo_assets (tenant_id)
   where alt_text is null and deleted_at is null;
 
 select public.apply_tenant_policy('photo_assets');
+-- Privileges are stated whole: §3.7.
 ```
 
 ---
@@ -131,8 +136,8 @@ column may be mirrored at all — see §2.4.
 ```sql
 create table photo_usages (
   id            uuid primary key default gen_random_uuid(),
-  tenant_id     uuid not null references tenants(id) on delete cascade
-                default public.tenant_for_insert(),
+  -- NO DEFAULT, deliberately (rev 6): every writer names the tenant. §3.6.
+  tenant_id     uuid not null references tenants(id) on delete cascade,
   asset_id      uuid not null,
 
   scope         text not null default 'live',    -- 'live' | 'draft'
@@ -172,6 +177,18 @@ create table photo_usages (
     'story_cover','story_block','shop_listing'
   )),
   constraint photo_usages_scope_known check (scope in ('live','draft')),
+
+  -- The SQL twin of isPageKey() in lib/sections/pages.ts (rev 6, §3.4):
+  -- a key of PAGES — `notfound` INCLUDED, because isPageKey() includes it and
+  -- the 404 page has sections that can hold a photograph — or a photographer's
+  -- page, CUSTOM_KEY = /^p_[a-z0-9]{8}$/. This is deliberately NOT the S4
+  -- analytics set: record_page_view tracks visitable pages and excludes
+  -- `notfound`. A placement is not a visit.
+  constraint photo_usages_page_key_shape check (
+    page_key is null
+    or page_key in ('home','about','contact','journal','galleries','shop','notfound')
+    or page_key ~ '^p_[a-z0-9]{8}$'
+  ),
 
   -- Only pages have a draft layer. Albums, posts and the catalog do not, so
   -- a draft-scoped usage of those kinds would be meaningless.
@@ -327,9 +344,18 @@ the backfill, the jobs drain and any future admin tool all run under it.
 ## 3.2 What the parents look like
 
 All four already have what is needed: `id uuid primary key` and `tenant_id uuid
-not null` (`2026-09-24_no_guessing_tenant.sql` dropped the defaults and kept
-`NOT NULL`, precisely so *"a forgotten tenant is a hard error rather than a
-silent write into the oldest tenant"*).
+not null`.
+
+*Corrected in rev 6.* Earlier revisions said here that
+`2026-09-24_no_guessing_tenant.sql` had dropped these four tables' defaults.
+**It did not.** That migration drops only a `tenant_id` default naming
+`default_tenant_id()`. Per `db/schema-2026-09.sql`, `photos`, `albums`,
+`blog_posts`, `catalog_items` (and `site_images`) all still carry
+`tenant_id uuid not null default tenant_for_insert()` in production; the five
+tables that migration did change are listed in `db/schema-verified.md`
+(*"NO DEFAULT on five tenant columns"*). Nothing in this design depends on the
+parents' defaults, and **P1 does not change them** — that would be its own
+decision. The new tables do not copy them: §3.6.
 
 ## 3.3 Tenant-aware composite foreign keys
 
@@ -368,7 +394,11 @@ closed:
 
 1. `syncUsages` derives `page_key` from a document already read under the
    caller's tenant; no path supplies a key from outside.
-2. A CHECK on the key's format (`isPageKey`), matching `sanitizeSeoMap`.
+2. A CHECK on the key's format, `photo_usages_page_key_shape` (§2.2), the SQL
+   twin of `isPageKey()` in `lib/sections/pages.ts`: a key of `PAGES`
+   including `notfound`, or `CUSTOM_KEY`. **Required in P1** (rev 6), with a
+   test that the two agree (§3.5). Consequence: a new built-in page now costs a
+   line in this CHECK, as it already costs one in `record_page_view`'s map.
 3. The nightly orphan sweep reports usages whose `page_key` is not in that
    tenant's `custom_pages` or built-in set.
 
@@ -377,13 +407,71 @@ change, and not one this migration should force.
 
 ## 3.5 Tests
 
-Run with the **service-role client**, so a pass proves the database is doing the
-work and not RLS: a usage with tenant A and a parent owned by B is rejected, for
-each of the five foreign keys; a tenant mismatch against its own asset is
-rejected; updating a usage's `tenant_id` is rejected; moving a parent row to
-another tenant while a usage points at it is rejected.
-`db/verify-tenant-isolation.sql` is extended: a foreign tenant reads 0 assets
-and 0 usages, `anon` reads 0 of both, a platform admin still reaches across.
+Run as a role that **bypasses RLS**, so a pass proves the database's
+constraints are doing the work and not a policy: a usage with tenant A and a
+parent owned by B is rejected, for each of the five foreign keys; a tenant
+mismatch against its own asset is rejected; updating a usage's `tenant_id` is
+rejected; moving a parent row to another tenant while a usage points at it is
+rejected. Each assertion names the constraint that refused, not merely that
+something did.
+
+*Rev 6, on which role.* Earlier revisions said "the service-role client". In P1
+`service_role` holds **no privilege** on either table (§3.7), so its insert
+would be refused by the grant layer before any foreign key was consulted —
+proving nothing about the key. Until a later phase grants a writer, these
+proofs run as the **table owner** (which also bypasses RLS), and the suite
+separately asserts that `service_role` is refused by privilege.
+
+Isolation, as the real roles: a photographer reads their own assets and usages,
+a foreign tenant reads 0 of each, `anon` reads nothing (refused by privilege),
+and a platform admin still reaches across.
+
+**Tenant deletion (rev 6).** Deleting a tenant cascades to `photo_assets` and to
+`photo_usages`, while `photo_usages.asset_id` is `on delete restrict`. Whether
+that deletion succeeds is to be **measured, not reasoned about**: a throwaway
+tenant, one asset, one valid usage of it; delete the tenant; assert the tenant,
+the asset and the usage are all gone. If PostgreSQL refuses, P1 **stops** and
+reports the exact behaviour — `restrict` is not changed and no P6 deletion code
+is pulled forward without a decision. If it succeeds, the proof is recorded and
+`deleteSite` / `TENANT_TABLES` stay at their approved phase boundary (P6).
+
+**Page keys (rev 6).** The SQL CHECK and `isPageKey()` must give the same
+answer for every key in `PAGES`, a well-formed custom key, and near-misses
+(upper case, wrong length, missing `p_`, non-ASCII letters, a trailing newline,
+the empty string, and an object-prototype name such as `constructor`).
+
+## 3.6 No tenant default on the new tables (rev 6)
+
+`photo_assets.tenant_id` and `photo_usages.tenant_id` are `uuid NOT NULL` with
+**no default**. `tenant_for_insert()` is `coalesce(current_tenant_id(),
+default_tenant_id())`, and under the service-role client there is no current
+tenant, so it falls back to the **oldest tenant on the platform**. Ingestion,
+the backfill and the job handlers all run under that client. A forgotten tenant
+must fail as a NOT NULL violation rather than land in somebody else's site —
+the same reasoning as `jobs`, `page_views` and
+`2026-09-24_no_guessing_tenant.sql`.
+
+## 3.7 Privileges in P1 (rev 6)
+
+For **both** tables, stated whole because a `grant` is additive:
+
+```sql
+revoke all on table public.photo_assets, public.photo_usages
+  from public, anon, authenticated, service_role;
+grant select on table public.photo_assets, public.photo_usages to authenticated;
+```
+
+| role | P1 |
+|---|---|
+| `public`, `anon` | nothing |
+| `authenticated` | SELECT, narrowed by `Tenant members manage` to their own site; a platform admin reaches across |
+| `service_role` | nothing |
+| owner | owner privileges |
+
+**No application role may INSERT, UPDATE or DELETE in P1**, because nothing
+writes these tables yet, and there is no SECURITY DEFINER write function
+either. Each later phase introduces the narrowest write capability it actually
+needs, deliberately and in its own migration — P2 (ingestion) is the first.
 
 ---
 
@@ -551,7 +639,11 @@ live/draft re-check · `site_images` retained but deprecated · no Phase D this
 quarter · embeddings deferred to Step 8 · `hero.image_path` is `content` today,
 with future Scenes declaring their own slot semantics · `photo_analysis`
 deferred until the first analyzer exists · usage-specific editable values owned
-by their source documents and relationships, never by `photo_usages`.
+by their source documents and relationships, never by `photo_usages` ·
+**(rev 6)** no tenant default on either new table · P1 grants SELECT to
+`authenticated` only · a `page_key` CHECK matching `isPageKey()` · tenant
+deletion proven by test, `restrict` unchanged unless that test fails and a
+decision is made.
 
 Not to be redesigned again unless implementation reveals a concrete
 contradiction in the real codebase.

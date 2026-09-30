@@ -47,6 +47,28 @@
 # `page_views_session_shape` to accept upper-case hex makes this report a
 # difference, and reverting it makes it agree again.
 #
+# ── P1: the photo tables, and the five tables P1 touched ────────────────────
+#
+# Added 2026-09-30, after db/migrations/2026-09-29_photo_assets.sql was deployed
+# (Supabase 20260930123113) and reconciled into the fixture. P1 is both kinds of
+# change at once, so it is checked both ways:
+#
+#   · `photo_assets` and `photo_usages` are NEW — dropped outright, like `jobs`.
+#   · `photos`, `albums`, `blog_posts`, `catalog_items` and `site_images` already
+#     existed. What P1 ADDED to them is stripped — `asset_id` on two, the
+#     `unique (id, tenant_id)` target on four — and the migration puts it back.
+#     Their WHOLE fact set is compared, not just the added parts, so the check
+#     also proves the migration changed nothing else on a parent table.
+#
+# P1 creates no function, so its function list is empty. The generated columns
+# (`orientation`, `aspect_ratio`) are compared through their generation
+# expression, which `pg_get_expr` reports as the column's default.
+#
+# Proved to bite before it was trusted: a fixture slot index missing `position`,
+# a guessing tenant default on `photo_assets`, an INSERT grant to authenticated,
+# a wrong `aspect_ratio` rounding, and a missing `albums_id_tenant` are each
+# reported as drift and each reverts to agreement.
+#
 # Wants psql on PATH and a server it may create a scratch database on:
 #
 #   PGHOST=/tmp PGPORT=5433 PGUSER=postgres
@@ -66,8 +88,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FIXTURE="$ROOT/db/test-fixture.sql"
 JOBS="$ROOT/db/migrations/2026-09-29_jobs.sql"
 ANALYTICS="$ROOT/db/migrations/2026-09-29_analytics.sql"
+PHOTOS="$ROOT/db/migrations/2026-09-29_photo_assets.sql"
 
-for f in "$FIXTURE" "$JOBS" "$ANALYTICS"; do
+# Every table P1 created or altered. Compared whole — see the note at the top.
+P1_TABLES="photo_assets photo_usages photos albums blog_posts catalog_items site_images"
+
+for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS"; do
   [ -r "$f" ] || { echo "cannot read $f" >&2; exit 1; }
 done
 
@@ -140,6 +166,8 @@ SQL
 
 JOBS_FACTS=$(facts_sql jobs "'enqueue_jobs','claim_jobs','finish_job'")
 PV_FACTS=$(facts_sql page_views "'record_page_view'")
+declare -A P1_FACTS P1_BEFORE P1_AFTER
+for t in $P1_TABLES; do P1_FACTS[$t]=$(facts_sql "$t" "''"); done
 
 cleanup
 createdb "$DB" >/dev/null || { echo "could not create $DB" >&2; exit 1; }
@@ -150,6 +178,7 @@ fi
 
 JOBS_BEFORE=$(psql -X -q -t -A -d "$DB" -c "$JOBS_FACTS")
 PV_BEFORE=$(psql -X -q -t -A -d "$DB" -c "$PV_FACTS")
+for t in $P1_TABLES; do P1_BEFORE[$t]=$(psql -X -q -t -A -d "$DB" -c "${P1_FACTS[$t]}"); done
 
 # ── Out of the way, so the migrations have to do the creating ───────────────
 #
@@ -188,6 +217,23 @@ then
   echo "FAIL  could not strip the fixture's S4 additions:"; tail -8 /tmp/fmm-drop.log; exit 1
 fi
 
+# P1's additions, written out one by one for the same reason as S4's. The two
+# new tables first: photo_usages' foreign keys depend on the four parent unique
+# constraints, which cannot be dropped while those keys exist.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-p1.log 2>&1 <<'SQL'
+drop table public.photo_usages;
+drop table public.photo_assets;
+alter table public.photos        drop column asset_id;
+alter table public.site_images   drop column asset_id;
+alter table public.photos        drop constraint photos_id_tenant;
+alter table public.albums        drop constraint albums_id_tenant;
+alter table public.blog_posts    drop constraint blog_posts_id_tenant;
+alter table public.catalog_items drop constraint catalog_items_id_tenant;
+SQL
+then
+  echo "FAIL  could not strip the fixture's P1 additions:"; tail -8 /tmp/fmm-drop-p1.log; exit 1
+fi
+
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$JOBS" >/tmp/fmm-jobs.log 2>&1; then
   echo "FAIL  the jobs migration does not build jobs from nothing:"; tail -5 /tmp/fmm-jobs.log; exit 1
 fi
@@ -196,8 +242,13 @@ if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$ANALYTICS" >/tmp/fmm-analytics.
   echo "FAIL  the analytics migration does not rebuild page_views:"; tail -8 /tmp/fmm-analytics.log; exit 1
 fi
 
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$PHOTOS" >/tmp/fmm-photos.log 2>&1; then
+  echo "FAIL  the P1 migration does not rebuild the photo tables:"; tail -8 /tmp/fmm-photos.log; exit 1
+fi
+
 JOBS_AFTER=$(psql -X -q -t -A -d "$DB" -c "$JOBS_FACTS")
 PV_AFTER=$(psql -X -q -t -A -d "$DB" -c "$PV_FACTS")
+for t in $P1_TABLES; do P1_AFTER[$t]=$(psql -X -q -t -A -d "$DB" -c "${P1_FACTS[$t]}"); done
 
 fail=0
 
@@ -217,6 +268,30 @@ for pair in "jobs:2026-09-29_jobs.sql" "page_views:2026-09-29_analytics.sql"; do
     echo "      ($(printf '%s' "$before" | grep -c '' | tr -d ' ') facts compared: columns in order,"
     echo "       constraints, indexes, policies, RLS, table grants, function bodies"
     echo "       and their EXECUTE grants)"
+  else
+    echo "FAIL  the fixture's $table has drifted from db/migrations/$file."
+    echo "      These facts differ — the fixture is the one that is wrong"
+    echo "      (< fixture, > migration):"
+    echo
+    diff <(printf '%s\n' "$before") <(printf '%s\n' "$after")
+    echo
+    fail=1
+  fi
+done
+
+for table in $P1_TABLES; do
+  before="${P1_BEFORE[$table]}"; after="${P1_AFTER[$table]}"
+  file=2026-09-29_photo_assets.sql
+
+  if [ -z "$before" ]; then
+    echo "FAIL  the fixture built no $table at all."
+    fail=1
+    continue
+  fi
+
+  if [ "$before" = "$after" ]; then
+    echo "ok    the fixture's $table reproduces db/migrations/$file exactly"
+    echo "      ($(printf '%s' "$before" | grep -c '' | tr -d ' ') facts compared)"
   else
     echo "FAIL  the fixture's $table has drifted from db/migrations/$file."
     echo "      These facts differ — the fixture is the one that is wrong"

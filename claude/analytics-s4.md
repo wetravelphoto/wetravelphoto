@@ -473,6 +473,12 @@ recording and keeps serving.
 | `db/verify-tenant-isolation.sql` | 14 |
 | `.mk/section-values.ts` · `settings` · `textvars` · `perdevice` · `blockable` · `preview-chrome` | 1557 · 408 · 94 · 75 · 749 · 31 |
 
+*Note added 2026-09-29:* of the last row, only `.mk/section-values.ts` and
+`.mk/settings.ts` exist in this repository. `textvars`, `perdevice`,
+`blockable` and `preview-chrome` have never been committed to it (whole git
+history checked), so their counts cannot be reproduced from here. The row is
+left as recorded; see `claude/open-items.md` §5.
+
 `tsc --noEmit` clean, eslint clean on every file S4 touches, `check:tenants`
 passes, `sandbox-build.sh` reports `BUILD EXIT: 0`. Three clean rounds of every
 suite against the reconciled fixture; both migrations still apply on top of it
@@ -645,7 +651,7 @@ queue, which was the transcription error already established and closed in
 `db/schema-verified.md` — the correct figures are 54 before the queue, 55 after
 it, and 54 again after analytics.
 
-**The application code is committed and pushed** (2026-09-30). The database went
+**The application code is committed and pushed** (2026-09-29, commit `2af178b`). The database went
 first and was verified; the code followed, so the app was never live against a
 schema without these columns.
 

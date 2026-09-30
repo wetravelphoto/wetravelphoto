@@ -6,7 +6,16 @@ Written 2026-09-22 from:
 - every to-do Gonzalo has given in conversation (the future list in
   `claude/lens-grid-platform.md` included).
 
-**This is the master list.** Where it disagrees with older docs, this one wins.
+**This is the broad feature inventory.** Where it disagrees with older, general
+docs on what exists to build, this one wins. It does **not** override a
+phase- or domain-specific canonical document in that document's own domain:
+`claude/photo-assets-design.md` and `claude/photo-migration-plan.md` for photo
+work, `claude/intelligence-architecture.md` for AI, `claude/analytics-s4.md`
+for analytics, and `db/schema-verified.md` for what the production database
+is. `claude/open-items.md` beats it on current priority. *(Precedence wording
+reconciled 2026-09-29. The body below was written 2026-09-22 and predates
+S1–S4 and the photo sequence; its tier status and "recommended next step" are
+superseded by `open-items.md`.)*
 
 How it is ordered: first what makes **Gonzalo's live site** work properly for
 visitors (messages reach him, sign-ups go somewhere), then editor polish, then

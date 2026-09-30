@@ -30,8 +30,9 @@ document to work against phase by phase.
 | prerequisite | **S1** schema truth | **done 2026-09-29** |
 | prerequisite | **S2** programmatic value validation | **done 2026-09-29** |
 | prerequisite | **S3** jobs infrastructure | **DEPLOYED TO PRODUCTION 2026-09-29** — migration `20260929212635` |
-| parallel | **S4** analytics instrumentation | **DEPLOYED TO PRODUCTION 2026-09-29** — migration `20260929231653`; application code pushed 2026-09-30 |
-| | **P1–P6** the photo migration | this document; **P1 is now unblocked** |
+| parallel | **S4** analytics instrumentation | **DEPLOYED TO PRODUCTION 2026-09-29** — migration `20260929231653`; application code committed 2026-09-29 (commit `2af178b`) |
+| | **P1** tables and constraints | **DEPLOYED TO PRODUCTION 2026-09-30** — migration `20260930123113`; reconciled |
+| | **P2–P6** the rest of the photo migration | this document; **P2 is next, not started** |
 | after | **S5** AI foundation + alt text | needs P5 |
 
 S4 did not block anything here and was not made to wait behind it: every day
@@ -308,25 +309,96 @@ runs changed.
 
 # P1 — Tables and constraints
 
+## DEPLOYED TO PRODUCTION 2026-09-30
+
+**Supabase migration version `20260930123113`, `photo_assets_p1_2026_09_29`**,
+from `db/migrations/2026-09-29_photo_assets.sql`. Reviewed independently and
+applied by ChatGPT, which verified the SHA256 before applying:
+
+```
+fedb6e7f457f9a7e7568efefcb2116ca7ca1b38db113dd3b1d1bf47bdc887eef
+```
+
+Verified in production afterwards: **37 tables, 549 columns, 13 functions, 56
+policies**; both tables present with 38 and 15 columns, 0 rows, RLS on,
+`tenant_id` NOT NULL with no default, the tenant policy as the only policy,
+`authenticated` SELECT only, `anon` and `service_role` nothing; the four parent
+targets, every constraint, all seven slot indexes; `asset_id` nullable with no
+foreign key on both parents. Three live smoke tests passed and were cleaned up:
+a cross-tenant asset refused (`23503`), a site deleted with its asset and usages
+(0 / 0 / 0), and RLS (own 1, foreign 0; platform admin 2). The full record is in
+`db/schema-verified.md`.
+
+**Reconciled the same sitting**, in the order below: the snapshot, the fixture,
+`db/schema-verified.md`, the drift guard (now 435 P1 facts across the two tables
+and the five parents they touched), and then `db/verify-tenant-isolation.sql`
+(now 25 checks).
+
+**Advisors:** no P1 security finding. The performance advisor's notes — new
+indexes unused, several composite foreign keys and `photo_assets.created_by`
+without a covering index — are **recorded, not acted on**: see
+`claude/open-items.md`, for a review measured with real query plans once P2/P3
+have written rows.
+
+What follows is the plan as it was carried out.
+
 **Purpose.** Create the schema. Nothing reads it. This phase is pure DDL so it
 can be deployed, observed and reverted with zero application risk.
 
-**Files.** `db/migrations/<date>_photo_assets.sql` (new),
-`db/test-fixture.sql`, `db/schema-2026-09.sql`, `db/schema-verified.md`,
-`db/verify-tenant-isolation.sql`, `scripts/check-tenant-scoping.mjs`,
-`lib/photos/usage-kinds.ts` (new, declaration only).
+**Files — before production (what Claude writes and rehearses).**
+- `db/migrations/<date>_photo_assets.sql` (new) — the migration, safe to run
+  twice.
+- `db/verify-photo-assets.sql` (new) — the dedicated P1 suite, named after the
+  existing `db/verify-<subject>.sql` files and built the same way (one
+  transaction that always ends by raising; privilege blocks `set role` to the
+  real role). It covers the constraints and CHECKs, per-kind partial
+  uniqueness, the tenant-aware foreign keys, grants and RLS, and tenant
+  deletion.
+- `.mk/photo-assets.ts` (new) — the TypeScript half, in the manner of
+  `.mk/analytics.ts` asserting its SQL page map against `PAGES`: proves the
+  `page_key` CHECK and `isPageKey()` agree (a **permanent invariant**), and
+  that `lib/photos/usage-kinds.ts` agrees with the SQL kind set.
+- `scripts/check-tenant-scoping.mjs` — the two table names added to `SCOPED`.
+- `lib/photos/usage-kinds.ts` (new, declaration only; nothing imports it).
+
+**All P1 isolation assertions live in `db/verify-photo-assets.sql` before
+deployment.** `db/verify-tenant-isolation.sql` is **not** touched before
+production: it runs against the production-truth fixture, which deliberately
+has no photo tables yet, so extending it now would make the global suite fail.
+
+Rehearsal order, as for S3: `db/test-fixture.sql` (production as it is) → the
+migration → the migration again → the suites. The fixture itself does not
+contain the new tables until after deployment.
+
+**Files — only AFTER ChatGPT has applied and verified the migration in
+production**, in this order: `db/schema-2026-09.sql`, `db/test-fixture.sql`,
+`db/schema-verified.md`, `scripts/fixture-matches-migration.sh` (the drift
+guard extended to both tables), and **then** `db/verify-tenant-isolation.sql`
+(extended for the two tables). Doing any of these earlier puts the fixture
+ahead of production, which is the S1 failure pointed the other way.
 
 **Database changes.**
 - `photo_assets` and `photo_usages` exactly as `claude/photo-assets-design.md`
-  §1 and §2, including the seven partial unique indexes.
+  §1 and §2 (revision 6), including the seven partial unique indexes and the
+  `photo_usages_page_key_shape` CHECK.
+- **`tenant_id` on both new tables is `uuid NOT NULL` with NO DEFAULT** (design
+  §3.6). Not `tenant_for_insert()`: under the service-role client that falls
+  back to the oldest tenant. The existing parents' `tenant_for_insert()`
+  defaults are **not** changed in P1.
+- **Privileges stated whole** (design §3.7): revoke all from `public`, `anon`,
+  `authenticated` and `service_role` on both tables, then grant SELECT to
+  `authenticated`. No INSERT, UPDATE or DELETE for any application role; no
+  SECURITY DEFINER write function. Later phases add the narrowest writer they
+  need.
 - `unique (id, tenant_id)` on `photos`, `albums`, `blog_posts`,
   `catalog_items`.
 - `photos.asset_id` and `site_images.asset_id`, both nullable, no FK yet —
   the FK is added in P4 once the backfill has populated them, so an empty column
   cannot fail a constraint.
 - `apply_tenant_policy` on both new tables.
-- The four new table names added to `SCOPED` **in this commit**, before a single
-  query exists, so the first unscoped read fails the build.
+- The **two** new table names (`photo_assets`, `photo_usages`) added to
+  `SCOPED` **in this change**, before a single query exists, so the first
+  unscoped read fails the build. *(Earlier text said "four"; P1 creates two.)*
 
 **Lessons from S3 that apply directly here.**
 - State the whole privilege set: **revoke from `public`, `anon`,
@@ -338,7 +410,8 @@ can be deployed, observed and reverted with zero application risk.
 - Never `update … where id in (select … limit N for update skip locked)`. Use a
   materialised CTE.
 - Extend `scripts/fixture-matches-migration.sh` to cover the new tables, so the
-  fixture cannot drift from the migration.
+  fixture cannot drift from the migration — **after deployment**, with the
+  fixture reconciliation, since before it the fixture has no such tables.
 
 **Tests.**
 - The migration runs twice against `db/test-fixture.sql` without error
@@ -347,20 +420,46 @@ can be deployed, observed and reverted with zero application risk.
   each of the seven shapes. Each must be shown to *succeed* against a
   single compound `UNIQUE` first — that is the defect this design corrects, and
   a test that never saw it fail proves nothing.
-- **Cross-tenant, under the service-role client** so a pass proves the database
-  and not RLS: a usage with tenant A and a parent owned by B is rejected for
-  each of the five foreign keys; a tenant mismatch against its own asset is
-  rejected; updating a usage's `tenant_id` is rejected; moving a parent row to
-  another tenant while a usage points at it is rejected.
+- **Referential integrity, as the TABLE OWNER** — two categories of test that
+  must not be conflated. This category proves PostgreSQL's constraints
+  independently of RLS and grants: the owner bypasses RLS and holds every
+  privilege, so if a write is refused, the foreign key or CHECK did it. A usage
+  with tenant A is rejected against an asset, photo, album, blog post and
+  catalog item owned by B (all five foreign keys); changing a usage's
+  `tenant_id` so it disagrees with a referenced parent is rejected; moving a
+  referenced parent to another tenant is rejected. Each asserts **which
+  constraint** refused. *(Earlier wording said "under the service-role
+  client"; in P1 `service_role` holds nothing on these tables, so its write
+  would be refused by the grant layer and prove nothing about a key.)*
 - **CHECK coverage:** a `gallery` usage with a `page_key`, a `page_section`
-  usage with an `album_id`, a `draft`-scoped `story_block`, and an unknown
-  `kind` are each rejected.
-- **As the real roles**, not as the table owner — the owner holds every
-  privilege and bypasses RLS, and a suite that only runs as the owner cannot see
-  a grant problem. That is how S3's `service_role` defect hid behind a green
-  suite.
-- `db/verify-tenant-isolation.sql` extended: a foreign tenant reads 0 assets and
-  0 usages; `anon` reads 0 of both; a platform admin still reaches across.
+  usage with an `album_id`, a `draft`-scoped `story_block`, an unknown `kind`,
+  a `NULL` tenant (no default to hide it), and a malformed `page_key` are each
+  rejected.
+- **The page-key contract:** `.mk/photo-assets.ts` shows that the SQL
+  `photo_usages_page_key_shape` and `isPageKey()` in `lib/sections/pages.ts`
+  agree — every key of `PAGES` (including `notfound`), a valid custom key, and
+  near-misses (upper case, wrong length, missing `p_`, non-ASCII, trailing
+  newline, empty string, `constructor`). It must also fail if a built-in is
+  added to `PAGES` without the CHECK following.
+- **Grants and RLS, as the real roles** (`anon`, `authenticated`,
+  `service_role`, and a platform admin through the same JWT-claim setup the
+  existing suites use), not as the table owner — the owner
+  holds every privilege and bypasses RLS, and a suite that only runs as the
+  owner cannot see a grant problem. That is how S3's `service_role` defect hid
+  behind a green suite. A photographer reads their own rows and 0 foreign rows;
+  `anon` and `service_role` are refused by privilege (asserted as a privilege
+  error, not as zero rows); no application role can INSERT, UPDATE or DELETE; a
+  platform admin reaches across tenants.
+- **Tenant deletion:** a throwaway tenant, one asset, one valid usage of it;
+  delete the tenant; assert the tenant, the asset and the usage are all gone.
+  This measures `photo_assets.tenant_id` cascade + `photo_usages.tenant_id`
+  cascade against `photo_usages.asset_id` **restrict**. **If the delete fails,
+  STOP** and report the exact PostgreSQL behaviour: do not change `restrict`,
+  and do not pull P6 deletion code forward. If it succeeds, record the proof;
+  `deleteSite` / `TENANT_TABLES` stay at P6.
+- Before deployment these isolation assertions are in
+  `db/verify-photo-assets.sql`; `db/verify-tenant-isolation.sql` gains them in
+  the post-deployment reconciliation, after the fixture has the tables.
 - `check:tenants` passes.
 
 **Rollback.**
@@ -376,8 +475,17 @@ alter table catalog_items drop constraint catalog_items_id_tenant;
 ```
 Safe at any moment: nothing reads any of it.
 
-**Must remain unchanged.** Everything. No application code is touched in this
-phase; the site and the admin are byte-identical before and after.
+**Must remain unchanged.** Everything a person can see. No application code is
+touched in this phase beyond the scoping list and the declaration-only
+`lib/photos/usage-kinds.ts`; no rendered page, admin screen or editor behaves or
+looks any different.
+
+*What "byte-identical" does and does not mean here.* Adding a nullable
+`asset_id` means a `select('*')` on `photos` — e.g.
+`app/admin/trips/[id]/page.tsx`, whose rows go to the client component
+`PhotoGrid` — now carries an extra `asset_id: null` in its server-component
+payload. That internal shape change is expected and accepted. Application
+queries are **not** changed in P1 merely to hide it.
 
 ---
 
@@ -391,8 +499,13 @@ the moment the backfill finishes there is no new stream of un-asseted files.
 (`registerSiteImage`), `app/actions/blog.ts` (`registerJournalImage`),
 `.mk/ingest.ts` (new).
 
-**Database changes.** None. Writes rows into tables created in P1, and sets
-`photos.asset_id` / `site_images.asset_id` on new uploads.
+**Database changes.** No photo schema-shape changes. This phase may introduce
+a separately reviewed narrow write interface/privilege required by its writer.
+P1 grants no application role any write on `photo_assets` or `photo_usages`
+(design §3.7), so P2 must deliberately introduce the narrowest write capability
+asset ingestion requires; its shape is decided when P2 starts, not before. P2
+writes rows into the P1 tables and sets `photos.asset_id` /
+`site_images.asset_id` on new uploads.
 
 **What `ingest()` does.** Fetch from R2 → `sharp` for dimensions and the
 derivative ladder → `exifr` for capture metadata → `upsert photo_assets on
@@ -415,8 +528,9 @@ Three consequences worth stating:
 - All three ingestion paths produce an asset; the `photos` row and its asset
   agree on `display_path`, `width`, `height`, `derivatives`.
 - A `.mk` scan finds **no** `processExistingOriginal(` call site that does not
-  also call `ingest(` — the same shape as `.mk/blockable.ts`, which scans class
-  names. Shown to fail by reinstating a bare call.
+  also call `ingest(` — a source scan. Shown to fail by reinstating a bare
+  call. *(Earlier text cited `.mk/blockable.ts` as the model; that file has
+  never existed in this repository — see `claude/open-items.md` §5.)*
 - `ownsKey()` is enforced on every mint, including inside `ingest`.
 - An upload of a photograph whose long edge is under 1600 produces the correct
   short derivative ladder in both the asset and the `photos` row.
@@ -448,7 +562,10 @@ edit goes unprojected.
 `app/actions/templates.ts` (`install`, `revertTo`), `app/actions/albums.ts`,
 `app/actions/blog.ts`, `app/actions/catalog.ts`, `.mk/usages.ts` (new).
 
-**Database changes.** None.
+**Database changes.** No photo schema-shape changes. This phase may introduce
+a separately reviewed narrow write interface/privilege required by its writer:
+the narrowest capability needed for `syncUsages` to rebuild usages, decided
+when P3 starts (design §3.7).
 
 **The shape.** `syncUsages(scope, kind, ref, found)` deletes every usage for
 that narrow scope and re-inserts the extracted set — delete-and-reinsert for one
@@ -605,13 +722,16 @@ do not contain reaches the photographer as a redacted React error.
 - A photograph whose long edge is under 1600 produces a correct srcset from the
   asset where `srcSetFromPath` produced a wrong one — the concrete win.
 - Every built-in page renders byte-identically when no asset key is stored.
-- `lib/photos/public.ts` never selects `*` — asserted by reading the source, the
-  way `.mk/preview-chrome.ts` asserts on CSS. GPS, camera serials, filenames and
-  original paths must not reach a visitor.
+- `lib/photos/public.ts` never selects `*` — asserted by reading the source.
+  GPS, camera serials, filenames and original paths must not reach a visitor.
+  *(Earlier text cited `.mk/preview-chrome.ts` as the model; that file has never
+  existed in this repository — see `claude/open-items.md` §5.)*
 - Alt resolution follows the stated order: `decorative` → `""`; override; asset
   canonical; otherwise empty with an editor warning.
 - A `bg_image` renders `alt=""` and a hero photograph does not.
-- `check:tenants` passes; `blockable` still passes for any new class names.
+- `check:tenants` passes. *(Earlier text also required "`blockable` still
+  passes for any new class names"; there is no such suite in the repository —
+  see `claude/open-items.md` §5. Whether P5 needs one is decided then.)*
 
 **Rollback.** P5b first: revert the resolver and every renderer falls back to
 the path, which was never removed; stray `<field>_asset` keys are inert because
@@ -711,7 +831,7 @@ at all** today, stops being able to break a homepage.
 | S1 schema truth | yes — **done** | none | yes |
 | S2 value validation | yes — **done** | none | yes |
 | S3 jobs | yes — **DEPLOYED** `20260929212635` | none | yes — drop cascade |
-| **P1** tables | yes | none | yes — drop |
+| **P1** tables | yes — **DEPLOYED** `20260930123113` | none | yes — drop |
 | **P2** ingestion | yes | none | yes |
 | **P3** projection | yes | none | yes |
 | **P4** backfill | yes | none | yes — idempotent |

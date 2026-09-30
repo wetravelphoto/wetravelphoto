@@ -105,31 +105,37 @@ bash scripts/sandbox-build.sh           # expect: BUILD EXIT: 0
 ```
 
 Database suites — need a local Postgres carrying the fixture, which already
-contains `jobs` and `page_views` in their deployed shape:
+contains `jobs`, `page_views` and the P1 photo tables in their deployed shape:
 
 ```bash
 createdb wtp && psql -d wtp -f db/test-fixture.sql
 
 psql -d wtp -f db/verify-analytics.sql         # 76 assertions
 psql -d wtp -f db/verify-jobs.sql              # 107
-psql -d wtp -f db/verify-tenant-isolation.sql  # 14
-bash scripts/fixture-matches-migration.sh      # 403 jobs + 175 page_views facts
+psql -d wtp -f db/verify-tenant-isolation.sql  # 25
+psql -d wtp -f db/verify-photo-assets.sql      # 137
+bash scripts/fixture-matches-migration.sh      # 403 jobs + 175 page_views + 435 P1 facts
 bash scripts/jobs-concurrency.sh               # 17, needs two connections
 ```
 
-TypeScript suites live in `.mk/` and are run directly (`.cjs` bundles with
-`node`):
+TypeScript suites live in `.mk/` and are run directly:
 
 ```bash
 npx tsx .mk/analytics.ts       # 295  (needs the database)
 npx tsx .mk/jobs.ts            #  64  (needs the database)
+npx tsx .mk/photo-assets.ts    #  55  (needs the database)
 npx tsx .mk/section-values.ts  # 1557
 npx tsx .mk/settings.ts        #  408
-npx tsx .mk/blockable.ts       #  749
-npx tsx .mk/textvars.ts        #   94
-npx tsx .mk/perdevice.ts       #   75
-npx tsx .mk/preview-chrome.ts  #   31
 ```
+
+On Windows, set `PGCLIENTENCODING=UTF8` first. Four of the `.mk` suites
+hard-code the old sandbox root `/home/claude/build`; see `open-items.md` §5.
+
+That is every suite in `.mk/`. Earlier versions of this list also named
+`blockable.ts`, `textvars.ts`, `perdevice.ts` and `preview-chrome.ts`, and
+`.cjs` bundles; **none of them has ever been committed to this repository**
+(checked against the whole git history, 2026-09-29). The coverage they
+describe is recorded as missing in `claude/open-items.md` §5.
 
 A SQL suite runs inside one transaction that **always ends by raising**, so the
 report is the exception message and nothing is kept. `db/verify-draft.sql` is
@@ -160,17 +166,20 @@ unrelated — do not put Scene code there.
 **S1** schema truth · **S2** programmatic value validation — complete.
 **S3** jobs infrastructure — **deployed**, migration `20260929212635`.
 **S4** analytics instrumentation — **deployed**, migration `20260929231653`.
+**P1** `photo_assets` / `photo_usages` tables and constraints — **deployed**
+2026-09-30, migration `20260930123113`, and reconciled. Nothing reads or writes
+the new tables yet.
 
-Production: 35 tables · 494 columns · 13 functions · 54 policies · RLS on all 35
+Production: 37 tables · 549 columns · 13 functions · 56 policies · RLS on all 37
 · PostgreSQL 17.6.
 
-**The next phase is P1 — `photo_assets` / `photo_usages` tables and
-constraints.** Additive infrastructure: nothing reads the new tables and there
-must be **no user-visible behaviour change**.
+**The next phase is P2 — unified ingestion** (`photo-migration-plan.md`). It
+must introduce the narrowest write capability asset ingestion needs, because P1
+granted no application role any write on the photo tables. **Not started.**
 
 ## Not without explicit approval
 
-- **Starting P1**, or any other phase, or more than one phase at a time.
+- **Starting P2**, or any other phase, or more than one phase at a time.
 - **Applying anything to the production database.**
 - **Committing or pushing.**
 - Dropping, renaming or repurposing a column — including **Phase D** (the
@@ -185,32 +194,37 @@ must be **no user-visible behaviour change**.
 
 ## Canonical documents
 
-Imported with this file, so they are already in context. Product, architecture,
-current state and settled decisions; then the verified production database
-facts; then the six primary canonical documents.
+### Imported — already in context
+
+Exactly two documents are pulled into every session by the `@` lines below:
+product, architecture, current state and settled decisions; then the verified
+production database facts.
 
 @claude/PROJECT-CONTEXT.md
 
 @db/schema-verified.md
 
-
-
-
-
-
-
 | imported document | owns |
 |---|---|
 | `claude/PROJECT-CONTEXT.md` | product identity, architecture, invariants, current state, decision log |
 | `db/schema-verified.md` | the verified production database — the authority on what the database IS |
-| `claude/roadmap.md` | the master future roadmap, in priority order, with sizes |
+
+### Primary canonical documents — on disk, NOT imported
+
+These are **not** in context until opened. Read the one that owns the area
+before changing anything in it; before any photo phase, read both photo
+documents.
+
+| document | owns |
+|---|---|
+| `claude/roadmap.md` | the broad feature inventory, with sizes |
 | `claude/open-items.md` | current blockers, issues, priorities, and the "what shipped" log |
 | `claude/photo-assets-design.md` | the approved photo data model — schema authority for P1 |
 | `claude/photo-migration-plan.md` | P1–P6 implementation order, tests, rollbacks |
 | `claude/analytics-s4.md` | analytics design, privacy stance, deployment record |
 | `claude/intelligence-architecture.md` | the AI architecture: inspection, decisions, build order |
 
-### Read as needed — on disk, deliberately not imported
+### Other documents — on disk, read as needed
 
 Importing everything would spend most of a session's context before the first
 question. These are real files in this repository; open the one the task needs.
@@ -240,7 +254,16 @@ There is also a stale `.project-docs/` folder in the repository from an earlier
 export. **It is not canonical — do not read it or copy from it.** Removing it is
 an open item.
 
-Where two documents disagree: `roadmap.md` beats older docs on *what to build*;
-`open-items.md` beats `roadmap.md` on *priority*; `db/schema-verified.md` beats
-everything on *what the database is*; and a canonical document beats
-`PROJECT-CONTEXT.md`, which should then be corrected.
+Where two documents disagree:
+
+1. **`db/schema-verified.md` beats everything on what the production database
+   IS.**
+2. **A phase- or domain-specific canonical document beats `roadmap.md` in its
+   own domain:** `photo-assets-design.md` and `photo-migration-plan.md` for
+   photo work; `intelligence-architecture.md` for AI; `analytics-s4.md` for
+   analytics.
+3. **`open-items.md` beats `roadmap.md` on current priority.**
+4. **`roadmap.md` is a broad feature inventory.** It beats *older, general*
+   documents on what exists to build, and never overrides a document in rule 2.
+5. **Any canonical document beats `PROJECT-CONTEXT.md`**, which should then be
+   corrected.

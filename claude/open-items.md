@@ -11,7 +11,8 @@ way*, plus everything found in testing.
 
 ## 1. Yours to do — nothing here needs code
 
-- [x] **The S4 application code is committed and pushed** (2026-09-30), after
+- [x] **The S4 application code is committed and pushed** (2026-09-29, commit
+      `2af178b`), after
       the migration was deployed and the repository reconciled to it. Database
       first, code second, as intended.
 - [ ] **Confirm `CRON_SECRET` is set in Vercel.** The jobs drain is deployed and
@@ -58,6 +59,22 @@ permanently.
       `page_views_tenant_time` and `page_views_post_idx` report as unused, which
       is expected immediately after creation and means something only once real
       views arrive.
+- [x] **After the P1 deployment (2026-09-30): no P1-specific security finding.**
+- [ ] **P1 performance findings — a measured index review once P2/P3 have
+      written rows.** All informational, and **deliberately not acted on**: do
+      not add an index merely to silence the advisor. Reported:
+      - the new indexes as **unused** — expected with 0 rows in both tables;
+      - several of `photo_usages`' **composite foreign keys lacking a covering
+        index**;
+      - `photo_assets.created_by`'s foreign key **lacking a covering index**.
+
+      Some existing leading-column and partial indexes may already serve the
+      real query and delete shapes — e.g. `photo_usages_slot_gallery (photo_id)`
+      leads with the photo column that a cascade from `photos` searches, and
+      `photo_usages_asset (asset_id)` leads with the asset column; whether a
+      partial index or a leading column is enough for a given cascade or join is
+      a question for `explain` against realistic rows, not for the advisor or
+      for reasoning. Decide each one with the plan in hand, after P2/P3.
 - [ ] **The advisors also flagged pre-existing items elsewhere in the schema.**
       Deliberately out of scope for S3 and S4 and not touched. **Worth its own
       read-only pass** — one sitting, list each finding, decide each on its
@@ -149,6 +166,52 @@ All three slices have shipped (see *What shipped*): **25 pieces of text across
       than insert blind, or use a throwaway tenant the way
       `db/verify-tenant-isolation.sql` does — and it should be **added to the
       standard run afterwards**, since a suite nobody runs is a suite that rots.
+- [ ] **Four test suites the documentation described do not exist.**
+      `CLAUDE.md` and `PROJECT-CONTEXT.md` listed `.mk/blockable.ts` (749),
+      `.mk/textvars.ts` (94), `.mk/perdevice.ts` (75) and
+      `.mk/preview-chrome.ts` (31) in the standard run, plus `.mk/*.cjs`
+      bundles. **None of these paths appears in any commit on any branch** (the
+      only commit containing the word `blockable` is the docs commit
+      `0761626`), and none is git-ignored — they were never in this
+      repository. The standard lists were corrected 2026-09-29 to name only the
+      suites that exist. **The coverage they describe is therefore missing**:
+      a scan of class names (`blockable`), the per-element text-variable
+      cascade (`textvars`), per-device values (`perdevice`), and source
+      assertions on the preview's CSS (`preview-chrome`). Still referenced as if
+      they existed in: `.mk/section-values.ts:615` and
+      `app/preview/preview.css:145` (comments — runtime/test code, deliberately
+      not edited in a documentation pass), and `claude/analytics-s4.md`'s test
+      table, which records them with counts as part of S4's verification. They
+      may exist outside this repository (e.g. the claude.ai project or another
+      machine); ask before recreating them.
+- [ ] **The `.mk` suites that exist hard-code the old Linux sandbox root.**
+      `.mk/analytics.ts`, `.mk/jobs.ts`, `.mk/section-values.ts` and
+      `.mk/settings.ts` read repository files from `/home/claude/build/…`, so
+      on any other machine they cannot find them. P1 ran them unmodified
+      through a scratchpad `--require` shim that maps the path; the fix is to
+      resolve the root from the file (`.mk/photo-assets.ts` does
+      `resolve(__dirname, '..')`). Test-code cleanup, deliberately not done in
+      P1.
+- [ ] **The rehearsal tools assume a Linux sandbox.** Found running P1 on
+      Windows against portable PostgreSQL 17.6: `psql` can take the console's
+      WIN1252 as its client encoding, and the migrations carry UTF-8 in their
+      comments — `═` is refused outright, `—` is silently mis-transcoded (set
+      `PGCLIENTENCODING=UTF8`); `scripts/fixture-matches-migration.sh` passes
+      SQL with a `·` through `psql -c`, which Windows converts to the ANSI code
+      page (worked around with a stdin shim, script unmodified);
+      `scripts/sandbox-build.sh` needs `python3` for its font stub (absent; the
+      real build ran with network fonts and passed); and `tsx` is not a
+      devDependency, so `npx` fetches it.
+- [ ] **Line endings and migration hashes.** `core.autocrlf=true` and no
+      `.gitattributes`: a migration hashed in a Windows working copy can differ
+      from the committed blob. P1's recorded SHA is of the LF file, as git
+      stores it. A `.gitattributes` pinning `*.sql` to LF would make the hash
+      the same everywhere — a repository-wide decision, not made here.
+- [ ] **A misplaced line in the schema files.** In `db/schema-2026-09.sql` and
+      `db/test-fixture.sql`, `jobs_tenant_id_fkey` sits inside the *unique
+      constraints* section, between `newsletter_signups`' explanatory NOTE and
+      the line it explains. Harmless to what the files build; confusing to
+      read. Left as found.
 
 ## 6. Found in testing — still open
 
@@ -289,14 +352,16 @@ maintain separately.
 
 ## Where to pick up
 
-**Gonzalo:** the four Sentry variables in Vercel, and confirm `CRON_SECRET` is
-set so the nightly drain actually runs. S4 is deployed, reconciled and pushed,
-so nothing is waiting on a deploy.
+**Gonzalo:** commit P1 (the migration, its suites and this reconciliation) —
+production already has it, so the repository is what lags. Then the four
+Sentry variables in Vercel, and confirm `CRON_SECRET` is set so the nightly
+drain actually runs.
 
-**Next build:** **P1 — the photo-asset tables**, in
-`claude/photo-migration-plan.md`. Pure DDL, nothing reads it, deployable and
-revertible with no application risk. S3 unblocked it and S4 is done, so there is
-nothing in front of it.
+**Next build:** **P2 — unified ingestion**, in `claude/photo-migration-plan.md`.
+**Not started.** P1 is deployed and reconciled, so nothing is in front of it —
+but P1 granted no application role any write on the photo tables, so P2 must
+begin by deciding, and putting through its own reviewed migration, the
+narrowest write capability asset ingestion needs.
 
 **The alternative**, if testers get restless: 12a, the carousel arrows. Small,
 asked for, and visible. Or **21 — visitor stats**, which after S4 is a screen
@@ -305,6 +370,42 @@ over data rather than a build.
 ---
 
 ## What shipped, most recent first
+
+### 2026-09-30 — P1, the photo-asset tables, DEPLOYED
+
+Migration `20260930123113`, `photo_assets_p1_2026_09_29`, sha256 `fedb6e7f…`,
+reviewed and applied by ChatGPT. Full record: `db/schema-verified.md`.
+
+`photo_assets` (the photograph, one row per upload) and `photo_usages` (where
+it is placed — a projection that only `syncUsages()` will ever write) now exist
+in production, **empty, and read or written by nothing** — no photographer can
+see any difference. Production is 37 tables, 549 columns, 13 functions, 56
+policies.
+
+What it settled, each proved against a real database before it went near
+production and again in it:
+
+- **A forgotten site is an error, not a guess.** Neither table has a tenant
+  default, so a service-role writer that forgets the site fails instead of
+  filing a photograph under the oldest site on the platform.
+- **A placement cannot point across sites** — five tenant-aware composite
+  foreign keys, shown to refuse what a plain foreign key admits. Live smoke
+  test: refused with `23503`.
+- **One slot, one photograph, for every kind** — seven partial unique indexes,
+  shown to refuse a duplicate of every kind that the obvious single wide UNIQUE
+  admits.
+- **Deleting a site still works** with a used photograph on it: the tenant
+  cascade and the asset's RESTRICT compose. Asked to be measured rather than
+  reasoned about; measured locally and in production (0 / 0 / 0).
+- **Nobody writes these tables yet.** `authenticated` reads its own site's rows;
+  `anon` and `service_role` hold nothing. Live: own 1, foreign 0, admin 2.
+- **Page keys have one definition in two languages**, `isPageKey()` and a
+  CHECK, held to parity by `.mk/photo-assets.ts` — a new built-in page now
+  fails that suite until the CHECK has it.
+
+137 SQL assertions, 55 TypeScript, 25 isolation checks; eight broken copies of
+the migration each caught; the drift guard extended to 435 P1 facts and shown to
+catch six kinds of fixture drift.
 
 ### 2026-09-29 (late) — S4 analytics instrumentation, DEPLOYED
 

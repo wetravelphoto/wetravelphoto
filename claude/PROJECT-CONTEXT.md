@@ -311,6 +311,11 @@ Authority: `claude/tenant-scoping.md`.
 
 This is the part being replaced, and it is worth understanding as it is.
 
+*Since P1 (2026-09-30) the replacement's tables exist in production —
+`photo_assets`, `photo_usages`, and a nullable `asset_id` on `photos` and
+`site_images` — but they are empty and **nothing reads or writes them yet**.
+Everything below still describes how the application actually handles images.*
+
 - `photos` — the gallery membership row, with derivative paths, dimensions and
   EXIF. `photos.album_id` is `NOT NULL` and **ON DELETE CASCADE** (verified
   against production); there are no triggers on `albums` or `photos`.
@@ -743,12 +748,13 @@ Database suites need a local Postgres carrying the fixture:
 
 ```bash
 createdb wtp
-psql -d wtp -f db/test-fixture.sql         # now contains jobs AND page_views
+psql -d wtp -f db/test-fixture.sql         # contains jobs, page_views AND the P1 photo tables
 
 psql -d wtp -f db/verify-analytics.sql        # 76 assertions
 psql -d wtp -f db/verify-jobs.sql             # 107
-psql -d wtp -f db/verify-tenant-isolation.sql # 14
-bash scripts/fixture-matches-migration.sh     # 403 jobs facts + 175 page_views
+psql -d wtp -f db/verify-tenant-isolation.sql # 25 (14 + 11 for the photo tables)
+psql -d wtp -f db/verify-photo-assets.sql     # 137
+bash scripts/fixture-matches-migration.sh     # 403 jobs + 175 page_views + 435 P1 facts
 bash scripts/jobs-concurrency.sh              # 17, needs two connections
 # db/verify-draft.sql is BROKEN and deliberately not in the loop — see open-items
 ```
@@ -758,14 +764,23 @@ TypeScript suites live in `.mk/` and are run directly:
 ```bash
 npx tsx .mk/analytics.ts       # 295   (needs the database)
 npx tsx .mk/jobs.ts            # 64    (needs the database)
+npx tsx .mk/photo-assets.ts    # 55    (needs the database)
 npx tsx .mk/section-values.ts  # 1557
 npx tsx .mk/settings.ts        # 408
-npx tsx .mk/textvars.ts        # 94
-npx tsx .mk/perdevice.ts       # 75
-npx tsx .mk/blockable.ts       # 749
-npx tsx .mk/preview-chrome.ts  # 31
-# and the .mk/*.cjs bundles are run with `node`
 ```
+
+*On a Windows machine* (P1 was rehearsed on one, against portable PostgreSQL
+17.6): set `PGCLIENTENCODING=UTF8`, because `psql` can otherwise take the
+console's WIN1252 and the migrations carry UTF-8 in their comments; and note
+that `.mk/analytics.ts`, `jobs.ts`, `section-values.ts` and `settings.ts`
+hard-code the old Linux sandbox root `/home/claude/build`. Both are recorded in
+`claude/open-items.md` §5.
+
+That is every suite in `.mk/`. Earlier versions of this list also named
+`textvars.ts`, `perdevice.ts`, `blockable.ts`, `preview-chrome.ts` and `.cjs`
+bundles; **none has ever been committed to this repository** (whole git
+history checked, 2026-09-29). The missing coverage is recorded in
+`claude/open-items.md` §5.
 
 Conventions inside these suites, worth matching rather than reinventing: a
 `pass` counter plus a `fail: string[]`; an `ok(name, good, detail)` helper; a
@@ -783,10 +798,12 @@ to the real role and reset it immediately.
 | **S2** | Programmatic section value validation | **COMPLETE** (no migration) |
 | **S3** | Jobs infrastructure | **DEPLOYED TO PRODUCTION 2026-09-29** |
 | **S4** | Analytics instrumentation | **DEPLOYED TO PRODUCTION 2026-09-29** |
+| **P1** | `photo_assets` / `photo_usages` tables and constraints | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled** |
 
-All four are finished work: S1 and S2 complete, S3 and S4 deployed, verified,
-reconciled into the schema-truth files, and their **application code committed
-and pushed** (S4's on 2026-09-30). **P1 is next and has not been started.**
+S1 and S2 are complete; S3, S4 and P1 are deployed, verified and reconciled
+into the schema-truth files. S3's and S4's application code is committed and
+pushed (S4's committed 2026-09-29, `2af178b`); P1's reconciliation is awaiting
+Gonzalo's commit. **P2 is next and has not been started.**
 
 ## Production migration identifiers
 
@@ -794,15 +811,20 @@ and pushed** (S4's on 2026-09-30). **P1 is next and has not been started.**
 |---|---|---|---|
 | S3 | `20260929212635` | `jobs_infrastructure_2026_09_29` | `9048133d6ff9431150ab07e1e48188718edf33b83eb6cfb139bb937e0ea7797f` |
 | S4 | `20260929231653` | `analytics_instrumentation_2026_09_29` | `c1acb1ae3a68c21094622820c768343e1e5fba63de6ee2f769ba5d4ddd4bfbdf` |
+| P1 | `20260930123113` | `photo_assets_p1_2026_09_29` | `fedb6e7f457f9a7e7568efefcb2116ca7ca1b38db113dd3b1d1bf47bdc887eef` |
+
+(P1's hash is of the file with LF line endings, as git stores it. A Windows
+checkout with `core.autocrlf=true` is CRLF and hashes differently.)
 
 ## Production shape, as reconciled
 
-**35 tables · 494 columns · 13 functions · 54 policies · RLS on all 35 ·
+**37 tables · 549 columns · 13 functions · 56 policies · RLS on all 37 ·
 PostgreSQL 17.6.**
 
-The policy count is 54 because S4 **removed** one: `page_views` used to carry
-`"Anyone can record a view"` as `for insert with check (true)`. The sequence is
-54 → 55 (the queue added one) → 54 (analytics removed one).
+The policy sequence is 54 → 55 (the queue added one) → 54 (analytics removed
+`"Anyone can record a view"`, which was `for insert with check (true)`) → 56
+(P1 added one tenant policy on each photo table). P1 added 2 tables and 55
+columns (38 + 15 + two `asset_id`) and no function.
 
 ## What each phase actually changed
 
@@ -822,38 +844,44 @@ The policy count is 54 because S4 **removed** one: `page_views` used to carry
   closed the open insert policy and gave `page_views` a `tenant_id` — without
   which a photographer could not have read their own homepage views at all,
   because RLS reached the site through the album or story.
+- **P1** created `photo_assets` and `photo_usages` and **nothing reads or
+  writes them yet** — no user-visible change. What it settled, each proved
+  locally and again in production:
+  - **No tenant default** on either table: a forgotten tenant under the
+    service-role client is a NOT NULL error, not a row filed under the oldest
+    site. The parents' existing `tenant_for_insert()` defaults were left alone.
+  - **Privileges stated whole:** `authenticated` SELECT only; `anon`,
+    `service_role` and PUBLIC nothing; no write function. P2 and P3 each add
+    the narrowest writer they need, deliberately.
+  - **Tenant-aware composite foreign keys** on all five parents, shown to
+    refuse a cross-tenant row that a plain foreign key admits.
+  - **Seven per-kind partial unique indexes**, shown to refuse a duplicate slot
+    of every kind that one wide UNIQUE admits.
+  - **Deleting a site that holds a used asset succeeds** — the tenant CASCADE
+    and the asset RESTRICT compose; measured locally and in production.
+  - A **`page_key` CHECK** that is the SQL twin of `isPageKey()`, `notfound`
+    included, held to it by `.mk/photo-assets.ts` as a permanent invariant.
+  - `photos.asset_id` / `site_images.asset_id` exist, nullable, **with no
+    foreign key until P4**.
 
 ---
 
 # 11. The current next phase
 
-## P1 — `photo_assets` / `photo_usages` tables and constraints
+## P2 — unified ingestion
 
 **Not started. Do not start it without being asked.**
 
-P1 is **intentionally additive infrastructure.** It creates the two tables, the
-seven partial unique indexes, the four `unique (id, tenant_id)` constraints on
-the parent tables, the nullable `asset_id` columns on `photos` and
-`site_images`, and the tenant policies — and **nothing reads any of it.**
+One `ingest()`, three callers (`registerPhoto`, `registerSiteImage`,
+`registerJournalImage`), idempotent on `(tenant_id, key_base)`, so that every
+new upload produces an asset **before** the backfill runs. No photo
+schema-shape change — but P1 granted no application role any write on the photo
+tables, so P2 must deliberately introduce the **narrowest write capability
+asset ingestion requires**, in its own separately reviewed migration. Its shape
+is P2's decision, not settled here.
 
-The requirements that define it:
-
-- **No user-visible behaviour change.** The site, the admin and the editor are
-  byte-identical before and after.
-- The foreign keys from `photos.asset_id` / `site_images.asset_id` are
-  **deliberately deferred to P4**, so an empty column cannot fail a constraint.
-- The new table names go into `check:tenants`' `SCOPED` list **in the same
-  commit**, before a single query exists, so the first unscoped read fails the
-  build. (`photo-migration-plan.md` says "the four new table names" while P1
-  creates two tables — read the plan, not the count.)
-- Uniqueness per kind must be **shown to fail** against a single compound
-  `UNIQUE` first — that is the defect the design corrects, and a test that never
-  saw it fail proves nothing.
-- Cross-tenant tests run **under the service-role client**, so a pass proves the
-  database is doing the work and not RLS.
-- Rollback is a drop.
-
-Detail and the full test list: `claude/photo-migration-plan.md`.
+Detail, tests and the must-not-change list: `claude/photo-migration-plan.md`,
+P2. The P1 record is in §10 and in `db/schema-verified.md`.
 
 ---
 
@@ -863,7 +891,7 @@ Detail and the full test list: `claude/photo-migration-plan.md`.
 
 | phase | what | user-visible change |
 |---|---|---|
-| **P1** | Tables, constraints, indexes, policies. Pure DDL. | none |
+| **P1** | Tables, constraints, indexes, policies. Pure DDL. **DEPLOYED 2026-09-30** (`20260930123113`) and reconciled. | none |
 | **P2** | **Unified ingestion.** One `ingest()`, three callers, idempotent on `key_base`. Done *before* the backfill so there is no new stream of un-asseted files. EXIF becomes universal; journal images finally exist as records. | none |
 | **P3** | **The extractor and `syncUsages`.** Every document edit projects its usages. Deliberately before the backfill, so no live edit goes unprojected. The invariant test: drop every usage row, re-run over every document, and the table comes back identical. | none |
 | **P4** | **Backfill**, in idempotent passes through the queue, then the two deferred foreign keys — which applying without violation is itself the proof the passes were complete. | none |
@@ -880,8 +908,10 @@ own approval.
 
 # 13. The broader roadmap
 
-`claude/roadmap.md` is the master list and the detailed authority. What matters
-here is what today's decisions must not block.
+`claude/roadmap.md` is the broad feature inventory. It does not override a
+domain's own canonical document (photo, AI, analytics, schema truth), and
+`open-items.md` beats it on priority — see §16. What matters here is what
+today's decisions must not block.
 
 - **More premium section types** (roadmap 13), one at a time:
   pricing/packages, FAQ, testimonials; then photo grid, text block, image+text
@@ -897,9 +927,20 @@ here is what today's decisions must not block.
     uneditable. What *is* worth lifting is interaction mechanics — an
     accordion's keyboard handling, a carousel's physics — re-skinned to tokens.
   - **Each new type now costs one extra word per text field** (`textStyle: true`)
-    and one line in its stylesheet to get the whole typography panel — **and,
-    since S4, one line in `record_page_view`'s built-in page map if it is a new
-    built-in page.** `.mk/analytics.ts` asserts the SQL map matches `PAGES`.
+    and one line in its stylesheet to get the whole typography panel.
+  - **A new BUILT-IN page costs two lines of SQL, each in a migration, each
+    with a suite that fails until it is there:**
+    - since S4, one line in `record_page_view`'s built-in page map — unless the
+      page is not visitable, as `notfound` is not. `.mk/analytics.ts` asserts
+      the SQL map matches `PAGES`.
+    - since P1, one key in the `photo_usages_page_key_shape` CHECK, which is the
+      SQL twin of `isPageKey()` and **does** include non-visitable pages like
+      `notfound` — a placement is not a visit. `.mk/photo-assets.ts` holds the
+      two to exact parity as a **permanent invariant**: it fails the moment
+      `PAGES` gains a key the CHECK lacks, in both the migration text and the
+      live constraint.
+    Photographers' own pages (`p_xxxxxxxx`) cost nothing: both contracts
+    accept `CUSTOM_KEY` already.
 - **3–5 Scenes per section type, then five templates** (roadmap 37) — Wildlife,
   Landscape, Wedding, Sessions, Sports, each with its own section *designs* and
   then mix-and-match. §4 is why the layouts come first.
@@ -972,7 +1013,8 @@ Each verified against the canonical documents on 2026-09-29.
 | **A template is a preset, never its own layout code.** Templates become presets over reusable Scenes; layouts come first. | `visual-editor-plan.md`; roadmap 37 |
 | **A look is a SNAPSHOT, not a live subscription**, with full history, and every apply is undoable. | `looks-and-tiers.md` |
 | **Content and design are separated by `Field.content`, enforced by `splitSettings`** — not by discipline. | `registry.ts`; `looks-and-tiers.md` |
-| **The `photo_assets` / `photo_usages` split is approved**, revision 5, usages being a disposable read-only projection. | `photo-assets-design.md` §8 |
+| **The `photo_assets` / `photo_usages` split is approved**, revision 6, usages being a disposable read-only projection — and its tables are deployed (P1, 2026-09-30). | `photo-assets-design.md` §8 |
+| **New tenant-owned tables get NO tenant default**; every writer names the site. | `photo-assets-design.md` §3.6; P1 |
 | **AI proposes through deterministic systems** — into the draft, validated by the same sanitizers, choosing among declared values. **No model writes CSS, HTML, SQL or a storage path.** | `intelligence-architecture.md` Parts 5 and 8 |
 | **Provider-agnostic AI**, one interface, OpenAI as the first adapter, no vendor SDK anywhere else. | `intelligence-architecture.md` Part 4 |
 | **Contextual AI affordances before any chatbot**, and no conversational centre. | `intelligence-architecture.md` Parts 5 and 8 |
@@ -995,27 +1037,38 @@ Each verified against the canonical documents on 2026-09-29.
 
 # 16. Document map
 
-**`imported` means `CLAUDE.md` pulls it into every session with `@`.
-`in repo` means it is on disk and a session can open it when the task needs it.
-`project` means it exists only in the claude.ai project "WetravelPhoto"** — ask
-for it rather than reconstructing it. The thirteen architecture and planning
-documents were copied from the project into `claude/` on 2026-09-30 as the real
-files, not retyped: a hand-copied canonical document is a second copy that
-drifts.
+**`imported` means `CLAUDE.md` pulls it into every session with `@` — only two
+documents are: this one and `db/schema-verified.md`. `in repo` means it is on
+disk and is NOT in context until a session opens it; the primary canonical
+documents below are `in repo`, and the one that owns an area must be read before
+changing it. `project` means it exists only in the claude.ai project
+"WetravelPhoto"** — ask for it rather than reconstructing it. The thirteen
+architecture and planning documents were copied from the project into `claude/`
+on 2026-09-29 (commit `0761626`) as the real files, not retyped: a hand-copied
+canonical document is a second copy that drifts.
+
+**Precedence, where two documents disagree** (the same rules as `CLAUDE.md`):
+`db/schema-verified.md` beats everything on what the production database IS; a
+phase- or domain-specific canonical document beats `roadmap.md` in its own
+domain — `photo-assets-design.md` / `photo-migration-plan.md` for photo work,
+`intelligence-architecture.md` for AI, `analytics-s4.md` for analytics;
+`open-items.md` beats `roadmap.md` on current priority; `roadmap.md` is a broad
+feature inventory that beats only older, general documents; and any canonical
+document beats this file, which should then be corrected.
 
 | document | where | owns |
 |---|---|---|
 | `CLAUDE.md` | in repo | **Operating instructions.** How a session is allowed to work, and the standard commands. Auto-loaded. |
 | `claude/PROJECT-CONTEXT.md` | imported | **This file.** Product, architecture, current state, settled decisions. |
-| `claude/roadmap.md` | imported | **The master future feature roadmap**, in priority order with sizes. Where it disagrees with older docs, it wins. |
-| `claude/open-items.md` | imported | **Current blockers, issues and priorities**, plus the "what shipped" log. Newer than roadmap.md on priority. |
-| `claude/photo-assets-design.md` | imported | **The approved photo data model.** Schema authority for `photo_assets` / `photo_usages`. |
-| `claude/photo-migration-plan.md` | imported | **P1–P6 implementation order**, with each phase's tests, rollback and must-not-change list. |
-| `claude/analytics-s4.md` | imported | **Analytics design and deployment record**, including the privacy stance. |
 | `db/schema-verified.md` | imported | **Verified production database facts** — what was checked, what was reconstructed, what was found and deliberately left alone. |
+| `claude/roadmap.md` | in repo | **The broad feature inventory**, with sizes. Does not override the domain documents below. |
+| `claude/open-items.md` | in repo | **Current blockers, issues and priorities**, plus the "what shipped" log. Beats roadmap.md on priority. |
+| `claude/photo-assets-design.md` | in repo | **The approved photo data model.** Schema authority for `photo_assets` / `photo_usages`. |
+| `claude/photo-migration-plan.md` | in repo | **P1–P6 implementation order**, with each phase's tests, rollback and must-not-change list. |
+| `claude/analytics-s4.md` | in repo | **Analytics design and deployment record**, including the privacy stance. |
+| `claude/intelligence-architecture.md` | in repo | **The AI architecture** — inspection, decisions and build order. |
 | `db/schema-2026-09.sql` | in repo | **The production schema snapshot.** Documentation; never run against production. |
 | `db/test-fixture.sql` | in repo | The local rehearsal room. Must match production. |
-| `claude/intelligence-architecture.md` | imported | **The AI architecture** — inspection, decisions and build order. |
 | `claude/sections-engine.md` | in repo | The section registry and renderer contract. |
 | `claude/the-canvas.md` | in repo | The visual editor. |
 | `claude/draft-layer.md` | in repo | Draft, publish, undo, versions, review links. |

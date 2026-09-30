@@ -94,6 +94,13 @@ const SCOPED = [
   // written next has to as well. Analytics is the second place after the queue
   // where every site's rows sit in one table that one screen reads.
   'page_views',
+  // Added 2026-09-29 with P1, before a single query exists, so the first
+  // unscoped read fails the build rather than being noticed later. Both carry
+  // a tenant_id with NO default, and the backfill, ingestion and the drain
+  // will reach them through the service-role client, which RLS does not
+  // narrow — the application filter is the only one those paths have.
+  'photo_assets',
+  'photo_usages',
 ]
 
 /**

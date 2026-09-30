@@ -53,6 +53,22 @@
 -- make every test about "what a pre-S4 row looks like" pass for the wrong
 -- reason.
 --
+-- ── UPDATED 2026-09-30: photo assets (P1) ───────────────────────────────────
+--
+-- `photo_assets` and `photo_usages`, four `unique (id, tenant_id)` targets on
+-- photos / albums / blog_posts / catalog_items, and a nullable `asset_id` on
+-- photos and site_images, deployed by db/migrations/2026-09-29_photo_assets.sql,
+-- recorded by Supabase as migration version **20260930123113**
+-- (`photo_assets_p1_2026_09_29`), sha256
+-- **fedb6e7f457f9a7e7568efefcb2116ca7ca1b38db113dd3b1d1bf47bdc887eef**, and
+-- verified against the live database afterwards (db/schema-verified.md).
+--
+-- Production is therefore now **37 tables, 549 columns, 13 functions**, RLS on
+-- all 37, and **56 policies** — one "Tenant members manage" on each new table.
+-- Both new tables hold 0 rows: nothing reads or writes them until P2/P3.
+-- Everything P1 added is copied from the migration, not retyped from memory, and
+-- scripts/fixture-matches-migration.sh is what stops the copy drifting.
+--
 -- ── How faithful this is ────────────────────────────────────────────────────
 --
 -- Columns, types, nullability, defaults, foreign keys with their delete
@@ -519,9 +535,77 @@ create table page_views (
   device        text
 );
 
+create table photo_assets (
+  id                  uuid not null default gen_random_uuid(),
+  -- NO DEFAULT, deliberately: every writer names the site. P1 decision; see
+  -- claude/photo-assets-design.md §3.6.
+  tenant_id           uuid not null,
+  key_base            text not null,
+  original_path       text,
+  display_path        text not null,
+  derivatives         jsonb not null default '{}'::jsonb,
+  original_bytes      bigint,
+  content_type        text,
+  filename            text,
+  content_sha256      text,
+  width               integer,
+  height              integer,
+  orientation         text generated always as (
+                        case when width is null or height is null then null
+                             when width > height then 'landscape'
+                             when width < height then 'portrait'
+                             else 'square' end) stored,
+  aspect_ratio        numeric(8,4) generated always as (
+                        case when coalesce(height, 0) = 0 then null
+                             else round(width::numeric / height, 4) end) stored,
+  taken_at            timestamptz,
+  latitude            double precision,
+  longitude           double precision,
+  camera_make         text,
+  camera_model        text,
+  lens                text,
+  iso                 integer,
+  aperture            numeric(4,1),
+  shutter             text,
+  focal_length        numeric(6,1),
+  keywords            text[] not null default '{}',
+  exif                jsonb not null default '{}'::jsonb,
+  alt_text            text,
+  alt_source          text,
+  alt_reviewed_at     timestamptz,
+  state               text not null default 'pending',
+  derived_at          timestamptz,
+  last_error          text,
+  archived_at         timestamptz,
+  deleted_at          timestamptz,
+  original_purged_at  timestamptz,
+  created_by          uuid,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
 create table photo_shop_categories (
   photo_id     uuid not null,
   category_id  uuid not null
+);
+
+create table photo_usages (
+  id            uuid not null default gen_random_uuid(),
+  -- NO DEFAULT, deliberately: every writer names the site.
+  tenant_id     uuid not null,
+  asset_id      uuid not null,
+  scope         text not null default 'live',
+  kind          text not null,
+  photo_id      uuid,
+  album_id      uuid,
+  post_id       uuid,
+  product_id    uuid,
+  page_key      text,
+  field         text not null,
+  position      integer not null default 0,
+  alt_override  text,
+  decorative    boolean not null default false,
+  created_at    timestamptz not null default now()
 );
 
 create table photos (
@@ -543,7 +627,9 @@ create table photos (
   tags               text[] not null default '{}'::text[],
   original_path      text,
   derivatives        jsonb not null default '{}'::jsonb,
-  original_bytes     bigint
+  original_bytes     bigint,
+  -- P1. Nullable, and deliberately NO foreign key until P4's backfill fills it.
+  asset_id           uuid
 );
 
 create table print_options (
@@ -639,7 +725,9 @@ create table site_images (
   bytes          bigint,
   filename       text,
   created_by     uuid,
-  created_at     timestamptz not null default now()
+  created_at     timestamptz not null default now(),
+  -- P1. Nullable, and deliberately NO foreign key until P4's backfill fills it.
+  asset_id       uuid
 );
 
 create table site_secrets (
@@ -1485,7 +1573,9 @@ alter table order_items            add constraint order_items_pkey primary key (
 alter table orders                 add constraint orders_pkey primary key (id);
 alter table page_sections          add constraint page_sections_pkey primary key (id);
 alter table page_views             add constraint page_views_pkey primary key (id);
+alter table photo_assets           add constraint photo_assets_pkey primary key (id);
 alter table photo_shop_categories  add constraint photo_shop_categories_pkey primary key (photo_id, category_id);
+alter table photo_usages           add constraint photo_usages_pkey primary key (id);
 alter table photos                 add constraint photos_pkey primary key (id);
 alter table print_options          add constraint print_options_pkey primary key (id);
 alter table products               add constraint products_pkey primary key (id);
@@ -1519,6 +1609,15 @@ alter table newsletter_signups add constraint newsletter_signups_email_key uniqu
 alter table template_versions  add constraint template_versions_template_id_version_key unique (template_id, version);
 alter table templates          add constraint templates_slug_key unique (slug);
 alter table tenants            add constraint tenants_domain_key unique (domain);
+
+-- P1. The targets of photo_usages' tenant-aware foreign keys: redundant with each
+-- primary key as a uniqueness rule, and required anyway, because a composite
+-- foreign key can only reference a unique constraint on exactly its columns.
+alter table photos             add constraint photos_id_tenant unique (id, tenant_id);
+alter table albums             add constraint albums_id_tenant unique (id, tenant_id);
+alter table blog_posts         add constraint blog_posts_id_tenant unique (id, tenant_id);
+alter table catalog_items      add constraint catalog_items_id_tenant unique (id, tenant_id);
+alter table photo_assets       add constraint photo_assets_id_tenant unique (id, tenant_id);
 
 -- ── Foreign keys, with the delete action production actually has ────────────
 alter table album_clients add constraint album_clients_album_id_fkey
@@ -1648,6 +1747,29 @@ alter table template_versions add constraint template_versions_template_id_fkey
 alter table tenant_domains add constraint tenant_domains_tenant_id_fkey
   foreign key (tenant_id) references tenants(id) on delete cascade;
 
+-- P1, from db/migrations/2026-09-29_photo_assets.sql. Every parent reference on
+-- photo_usages carries the tenant, so a row claiming site A cannot point at a
+-- parent owned by site B — enforced for every role, the owner included.
+-- RESTRICT on the asset: a photograph still placed somewhere cannot be deleted.
+-- Deleting a SITE still succeeds: verified in production 2026-09-30 (tenant,
+-- asset and usages all gone), and asserted by db/verify-photo-assets.sql.
+alter table photo_assets add constraint photo_assets_tenant_fk
+  foreign key (tenant_id) references tenants(id) on delete cascade;
+alter table photo_assets add constraint photo_assets_created_by_fk
+  foreign key (created_by) references profiles(id) on delete set null;
+alter table photo_usages add constraint photo_usages_tenant_fk
+  foreign key (tenant_id) references tenants(id) on delete cascade;
+alter table photo_usages add constraint photo_usages_asset_fk
+  foreign key (asset_id, tenant_id) references photo_assets (id, tenant_id) on delete restrict;
+alter table photo_usages add constraint photo_usages_photo_fk
+  foreign key (photo_id, tenant_id) references photos (id, tenant_id) on delete cascade;
+alter table photo_usages add constraint photo_usages_album_fk
+  foreign key (album_id, tenant_id) references albums (id, tenant_id) on delete cascade;
+alter table photo_usages add constraint photo_usages_post_fk
+  foreign key (post_id, tenant_id) references blog_posts (id, tenant_id) on delete cascade;
+alter table photo_usages add constraint photo_usages_product_fk
+  foreign key (product_id, tenant_id) references catalog_items (id, tenant_id) on delete cascade;
+
 -- ── CHECK constraints ───────────────────────────────────────────────────────
 -- The survey output abbreviated these to "CHECK col IN (...)". The predicates
 -- below are a faithful reconstruction of that meaning, NOT the literal text
@@ -1741,6 +1863,48 @@ alter table tenant_domains add constraint tenant_domains_host_shape check (
   and length(host) between 3 and 253
 );
 
+-- P1. Unlike the survey-era CHECKs above, these are copied VERBATIM from
+-- db/migrations/2026-09-29_photo_assets.sql, and the drift guard compares them.
+alter table photo_assets add constraint photo_assets_state_known
+  check (state in ('pending','derived','failed'));
+alter table photo_assets add constraint photo_assets_alt_source_known
+  check (alt_source is null or alt_source in ('photographer','ai'));
+alter table photo_assets add constraint photo_assets_alt_source_present
+  check (alt_text is null or alt_source is not null);
+
+alter table photo_usages add constraint photo_usages_kind_known check (kind in (
+  'gallery','gallery_cover','page_section','page_legacy',
+  'story_cover','story_block','shop_listing'
+));
+alter table photo_usages add constraint photo_usages_scope_known check (scope in ('live','draft'));
+alter table photo_usages add constraint photo_usages_scope_by_kind check (
+  scope = 'live' or kind in ('page_section','page_legacy')
+);
+-- The SQL twin of isPageKey() in lib/sections/pages.ts, notfound included. A new
+-- built-in page needs a line here; .mk/photo-assets.ts fails until it has one.
+alter table photo_usages add constraint photo_usages_page_key_shape check (
+  page_key is null
+  or page_key in ('home','about','contact','journal','galleries','shop','notfound')
+  or page_key ~ '^p_[a-z0-9]{8}$'
+);
+alter table photo_usages add constraint photo_usages_one_parent check (
+   (kind = 'gallery'
+      and photo_id is not null and album_id is null and post_id is null
+      and product_id is null and page_key is null)
+or (kind = 'gallery_cover'
+      and album_id is not null and photo_id is null and post_id is null
+      and product_id is null and page_key is null)
+or (kind in ('story_cover','story_block')
+      and post_id is not null and photo_id is null and album_id is null
+      and product_id is null and page_key is null)
+or (kind = 'shop_listing'
+      and product_id is not null and photo_id is null and album_id is null
+      and post_id is null and page_key is null)
+or (kind in ('page_section','page_legacy')
+      and page_key is not null and photo_id is null and album_id is null
+      and post_id is null and product_id is null)
+);
+
 -- Standalone indexes only. Primary keys and UNIQUE constraints create their own
 -- and are not repeated here.
 
@@ -1792,6 +1956,42 @@ create index        jobs_tenant_status  on jobs (tenant_id, status, created_at d
 create unique index jobs_pending_dedupe on jobs (tenant_id, kind, dedupe_key)
   where dedupe_key is not null and status in ('queued', 'running');
 
+-- P1's, from db/migrations/2026-09-29_photo_assets.sql. The seven
+-- photo_usages_slot_* are one PARTIAL unique index per usage kind, not one wide
+-- UNIQUE: a unique constraint over the nullable parent columns is NULLS DISTINCT
+-- and would admit a duplicate of every kind. The content hash is indexed and
+-- deliberately NOT unique. Several show as "unused" in the advisor until P2/P3
+-- write rows — recorded in claude/open-items.md, not acted on.
+create unique index photo_assets_key        on photo_assets (tenant_id, key_base);
+create index        photo_assets_sha        on photo_assets (tenant_id, content_sha256)
+  where content_sha256 is not null;
+create index        photo_assets_library    on photo_assets (tenant_id, created_at desc)
+  where deleted_at is null and archived_at is null;
+create index        photo_assets_unfinished on photo_assets (state)
+  where state in ('pending','failed');
+create index        photo_assets_sweep      on photo_assets (deleted_at)
+  where deleted_at is not null;
+create index        photo_assets_no_alt     on photo_assets (tenant_id)
+  where alt_text is null and deleted_at is null;
+
+create unique index photo_usages_slot_gallery     on photo_usages (photo_id)
+  where kind = 'gallery';
+create unique index photo_usages_slot_cover       on photo_usages (album_id, field)
+  where kind = 'gallery_cover';
+create unique index photo_usages_slot_section     on photo_usages (tenant_id, scope, page_key, position, field)
+  where kind = 'page_section';
+create unique index photo_usages_slot_legacy      on photo_usages (tenant_id, scope, page_key, field)
+  where kind = 'page_legacy';
+create unique index photo_usages_slot_story_cover on photo_usages (post_id)
+  where kind = 'story_cover';
+create unique index photo_usages_slot_story_block on photo_usages (post_id, field, position)
+  where kind = 'story_block';
+create unique index photo_usages_slot_shop        on photo_usages (product_id)
+  where kind = 'shop_listing';
+create index        photo_usages_asset            on photo_usages (asset_id);
+create index        photo_usages_needs_alt        on photo_usages (tenant_id, asset_id)
+  where scope = 'live' and decorative = false and alt_override is null;
+
 -- Row level security, exactly as production has it. The distinctions below are
 -- deliberate and must not be homogenised:
 --   · direct tenant_id scoping          ("Tenant members manage" on most tables)
@@ -1821,7 +2021,9 @@ alter table order_items            enable row level security;
 alter table orders                 enable row level security;
 alter table page_sections          enable row level security;
 alter table page_views             enable row level security;
+alter table photo_assets           enable row level security;
 alter table photo_shop_categories  enable row level security;
+alter table photo_usages           enable row level security;
 alter table photos                 enable row level security;
 alter table print_options          enable row level security;
 alter table products               enable row level security;
@@ -1878,6 +2080,8 @@ select public.apply_tenant_policy('newsletter_signups');
 select public.apply_tenant_policy('order_items');
 select public.apply_tenant_policy('orders');
 select public.apply_tenant_policy('page_sections');
+select public.apply_tenant_policy('photo_assets');
+select public.apply_tenant_policy('photo_usages');
 select public.apply_tenant_policy('photos');
 select public.apply_tenant_policy('print_options');
 select public.apply_tenant_policy('products');
@@ -1998,6 +2202,15 @@ grant delete, insert, references, select, trigger, truncate, update
 -- and a photographer only through enqueue_jobs, all three SECURITY DEFINER.
 -- Verified against production 2026-09-29.
 grant select on jobs to authenticated;
+
+-- P1: the photo tables. authenticated may READ (narrowed by the tenant policy to
+-- its own site); anon, service_role and PUBLIC hold NOTHING, and nobody may
+-- write — P2 and P3 each add their own narrow writer, deliberately. Revoked
+-- first because a grant is additive. Verified against production 2026-09-30.
+revoke all on table photo_assets from public, anon, authenticated, service_role;
+revoke all on table photo_usages from public, anon, authenticated, service_role;
+grant select on table photo_assets to authenticated;
+grant select on table photo_usages to authenticated;
 
 -- A visitor resolves a site by its address and may do nothing else here.
 grant select on tenant_domains to anon;

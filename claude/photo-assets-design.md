@@ -1,0 +1,557 @@
+# Photo assets and photo usages — technical design
+
+**Status: APPROVED IN PRINCIPLE, 2026-09-29.** Not implemented. The build order
+is in `claude/photo-migration-plan.md`.
+
+Revision 5. Not to be redesigned again unless implementation reveals a concrete
+contradiction in the real codebase.
+
+---
+
+## Revision history
+
+| rev | change | reason |
+|---|---|---|
+| 1 | first design | — |
+| 2 | usages become a projection; typed FKs; furniture excluded; analysis versioned separately | `replaceSections` is delete-then-insert and five other writers rewrite whole documents |
+| 3 | usages read-only; `library` removed; `gallery` parents on `photos.id`; `content_sha256`; state drops `analyzed`; `photo_analysis` deferred; videos out; accessibility role on the field | Gonzalo's review |
+| 4 | per-kind partial unique indexes; `alt_effective` removed; composite tenant-aware foreign keys; `sort_order` mirror removed; video fields removed from projection and backfill | Gonzalo's review |
+| **5** | **cascade question closed against production**; status raised to approved | Gonzalo ran the constraint inspection, 2026-09-29 |
+
+---
+
+# 1. `photo_assets` — the canonical photograph
+
+```sql
+create table photo_assets (
+  id              uuid primary key default gen_random_uuid(),
+  tenant_id       uuid not null references tenants(id) on delete cascade
+                  default public.tenant_for_insert(),
+
+  -- ══ Identity and storage ═══════════════════════════════════════════════
+  -- key_base identifies one UPLOAD and all its derivatives. It does not
+  -- identify identical bytes uploaded again under a new uuid — that is
+  -- content_sha256's job.
+  key_base        text        not null,
+  original_path   text        null,
+  display_path    text        not null,
+  derivatives     jsonb       not null default '{}'::jsonb,
+  original_bytes  bigint      null,
+  content_type    text        null,
+  filename        text        null,
+  content_sha256  text        null,     -- hex sha256 of the original bytes
+
+  -- ══ Dimensions ═════════════════════════════════════════════════════════
+  width           integer     null,
+  height          integer     null,
+  orientation     text        generated always as (
+                    case when width is null or height is null then null
+                         when width > height then 'landscape'
+                         when width < height then 'portrait'
+                         else 'square' end) stored,
+  aspect_ratio    numeric(8,4) generated always as (
+                    case when coalesce(height, 0) = 0 then null
+                         else round(width::numeric / height, 4) end) stored,
+
+  -- ══ Capture metadata ═══════════════════════════════════════════════════
+  taken_at        timestamptz null,
+  latitude        double precision null,
+  longitude       double precision null,
+  camera_make     text        null,
+  camera_model    text        null,
+  lens            text        null,
+  iso             integer     null,
+  aperture        numeric(4,1) null,
+  shutter         text        null,
+  focal_length    numeric(6,1) null,
+  keywords        text[]      not null default '{}',
+  exif            jsonb       not null default '{}'::jsonb,
+
+  -- ══ The canonical description ══════════════════════════════════════════
+  alt_text        text        null,
+  alt_source      text        null,     -- 'photographer' | 'ai'
+  alt_reviewed_at timestamptz null,
+
+  -- ══ Ingestion state — FILE READINESS ONLY ══════════════════════════════
+  state           text        not null default 'pending',
+  derived_at      timestamptz null,
+  last_error      text        null,
+
+  -- ══ Lifecycle ══════════════════════════════════════════════════════════
+  archived_at        timestamptz null,
+  deleted_at         timestamptz null,
+  original_purged_at timestamptz null,
+
+  created_by      uuid references profiles(id) on delete set null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+
+  constraint photo_assets_state_known
+    check (state in ('pending','derived','failed')),
+  constraint photo_assets_alt_source_known
+    check (alt_source is null or alt_source in ('photographer','ai')),
+  constraint photo_assets_alt_source_present
+    check (alt_text is null or alt_source is not null),
+
+  -- Target for the tenant-aware foreign key in §3.3.
+  constraint photo_assets_id_tenant unique (id, tenant_id)
+);
+
+create unique index photo_assets_key on photo_assets (tenant_id, key_base);
+create index photo_assets_sha        on photo_assets (tenant_id, content_sha256)
+  where content_sha256 is not null;
+create index photo_assets_library    on photo_assets (tenant_id, created_at desc)
+  where deleted_at is null and archived_at is null;
+create index photo_assets_unfinished on photo_assets (state)
+  where state in ('pending','failed');
+create index photo_assets_sweep      on photo_assets (deleted_at)
+  where deleted_at is not null;
+create index photo_assets_no_alt     on photo_assets (tenant_id)
+  where alt_text is null and deleted_at is null;
+
+select public.apply_tenant_policy('photo_assets');
+```
+
+---
+
+# 2. `photo_usages` — a read-only projection
+
+## 2.1 The rule
+
+> **`photo_usages` is a derived index. It is written by `syncUsages()` and by
+> nothing else.** Every value in it is a copy whose authoritative home is the
+> document or relationship that owns the placement. Drop the table, re-run
+> `syncUsages` over every document, and it comes back identical.
+
+That last sentence is the test, and it is also the criterion for whether a
+column may be mirrored at all — see §2.4.
+
+## 2.2 Schema
+
+```sql
+create table photo_usages (
+  id            uuid primary key default gen_random_uuid(),
+  tenant_id     uuid not null references tenants(id) on delete cascade
+                default public.tenant_for_insert(),
+  asset_id      uuid not null,
+
+  scope         text not null default 'live',    -- 'live' | 'draft'
+  kind          text not null,
+
+  -- ── Typed parents. Exactly one is set, per the CHECK. ─────────────────
+  photo_id      uuid null,
+  album_id      uuid null,
+  post_id       uuid null,
+  product_id    uuid null,
+  page_key      text null,                       -- 'home', 'p_a1b2c3d4'
+
+  field         text not null,
+  -- A SLOT DISCRIMINATOR, not an ordering. §2.3.
+  position      integer not null default 0,
+
+  -- ── MIRRORS. Written only by syncUsages. Never authoritative. §2.4 ────
+  alt_override  text    null,
+  decorative    boolean not null default false,
+
+  created_at    timestamptz not null default now(),
+
+  -- ══ Tenant-aware foreign keys. §3.3 ══════════════════════════════════
+  foreign key (asset_id,   tenant_id) references photo_assets  (id, tenant_id)
+    on delete restrict,
+  foreign key (photo_id,   tenant_id) references photos        (id, tenant_id)
+    on delete cascade,
+  foreign key (album_id,   tenant_id) references albums        (id, tenant_id)
+    on delete cascade,
+  foreign key (post_id,    tenant_id) references blog_posts    (id, tenant_id)
+    on delete cascade,
+  foreign key (product_id, tenant_id) references catalog_items (id, tenant_id)
+    on delete cascade,
+
+  constraint photo_usages_kind_known check (kind in (
+    'gallery','gallery_cover','page_section','page_legacy',
+    'story_cover','story_block','shop_listing'
+  )),
+  constraint photo_usages_scope_known check (scope in ('live','draft')),
+
+  -- Only pages have a draft layer. Albums, posts and the catalog do not, so
+  -- a draft-scoped usage of those kinds would be meaningless.
+  constraint photo_usages_scope_by_kind check (
+    scope = 'live' or kind in ('page_section','page_legacy')
+  ),
+
+  constraint photo_usages_one_parent check (
+     (kind = 'gallery'
+        and photo_id is not null and album_id is null and post_id is null
+        and product_id is null and page_key is null)
+  or (kind = 'gallery_cover'
+        and album_id is not null and photo_id is null and post_id is null
+        and product_id is null and page_key is null)
+  or (kind in ('story_cover','story_block')
+        and post_id is not null and photo_id is null and album_id is null
+        and product_id is null and page_key is null)
+  or (kind = 'shop_listing'
+        and product_id is not null and photo_id is null and album_id is null
+        and post_id is null and page_key is null)
+  or (kind in ('page_section','page_legacy')
+        and page_key is not null and photo_id is null and album_id is null
+        and post_id is null and product_id is null)
+  )
+);
+```
+
+## 2.3 Uniqueness — one partial index per slot shape
+
+A ten-column `UNIQUE` over four nullable parent columns is `NULLS DISTINCT` by
+default, so for a `page_section` usage — where all four parent columns are null
+— two byte-identical rows would both be legal. Such a constraint looks like
+protection and provides none, which is worse than no constraint, because nobody
+writes a test for a guarantee they believe the database is giving.
+
+**Partial unique indexes, one per kind.** The `photo_usages_one_parent` CHECK
+guarantees the relevant column is `NOT NULL` for that kind, so **no index key
+contains a nullable column** and NULL semantics never arise.
+
+```sql
+create unique index photo_usages_slot_gallery
+  on photo_usages (photo_id)                             where kind = 'gallery';
+
+create unique index photo_usages_slot_cover
+  on photo_usages (album_id, field)                      where kind = 'gallery_cover';
+
+create unique index photo_usages_slot_section
+  on photo_usages (tenant_id, scope, page_key, position, field)
+                                                         where kind = 'page_section';
+
+create unique index photo_usages_slot_legacy
+  on photo_usages (tenant_id, scope, page_key, field)    where kind = 'page_legacy';
+
+create unique index photo_usages_slot_story_cover
+  on photo_usages (post_id)                              where kind = 'story_cover';
+
+create unique index photo_usages_slot_story_block
+  on photo_usages (post_id, field, position)             where kind = 'story_block';
+
+create unique index photo_usages_slot_shop
+  on photo_usages (product_id)                           where kind = 'shop_listing';
+
+create index photo_usages_asset on photo_usages (asset_id);
+```
+
+**Why not `NULLS NOT DISTINCT`.** It would work on PostgreSQL 15 and later, but
+it is the wrong shape regardless: one ten-column index in which four columns are
+always null for every row, wider and less useful than seven narrow ones. The
+partial indexes are version-independent, and each doubles as the lookup index
+for its kind.
+
+| kind | slot | why |
+|---|---|---|
+| `gallery` | `photo_id` | one `photos` row is one membership |
+| `gallery_cover` | `album_id`, `field` | an album has a cover photo *and* may have a custom cover path |
+| `page_section` | `page_key`, `position`, `field` | **`position` is the section's ordinal on the page.** Two `intro` sections on one page both have an `image_path`, so page + field alone is not a slot. Section ids die at publish and positions are rewritten server-side to 0..n, so the ordinal is the stable discriminator within a rebuild |
+| `page_legacy` | `page_key`, `field` | one settings column, one value |
+| `story_cover` | `post_id` | one cover |
+| `story_block` | `post_id`, `field`, `position` | `field = 'block:<blockId>'` (block ids are stable, `lib/blocks.ts`), `position` = index within that block's `images[]` |
+| `shop_listing` | `product_id` | `catalog_items.photo_id` is already `unique` |
+
+**`position` is a slot discriminator, never an ordering.** Order is read from
+`photos.sort_order`, where it is authoritative — mirroring it would have exactly
+the staleness problem §2.4 rejects.
+
+## 2.4 Alt text is resolved, not materialized — and the rule that decides
+
+`photo_assets.alt_text` changes independently of the documents that trigger a
+rebuild, most obviously when the alt-text feature writes it in bulk. A
+materialized effective value would therefore be stale with no rebuild to correct
+it, and the only invalidation would be a fan-out re-sync of every usage of that
+asset on every canonical alt write — write amplification the feature would hit
+on its first batch run.
+
+> **A value may be mirrored into `photo_usages` only if its authoritative source
+> lives inside the document whose rewrite triggers the rebuild.** Anything that
+> can change independently of that document must be resolved at read time.
+
+| candidate | authoritative source | mirrored? |
+|---|---|---|
+| `alt_override` | the section's `<field>_alt` key / `BlockImage.alt` — **inside the document** | **yes** |
+| `decorative` | the registry field's `accessibilityRole` — **in code** | **yes, with a stated invalidation** |
+| `alt_effective` | partly `photo_assets.alt_text` — **outside** | no |
+| `sort_order` | `photos.sort_order` — **outside** | no |
+| `focal` | section settings — inside, but nothing in V1 reads the mirror | no (deferred) |
+
+`decorative` is the one mirror whose source is not a document, and it is
+mirrored because there is no alternative: the declaration lives in TypeScript
+and a SQL query cannot join to it. Its invalidation is explicit and bounded —
+**changing a field's `accessibilityRole` requires a re-sync job for that field**,
+which goes on the deploy checklist. A rare, deliberate act, not an ordinary
+write.
+
+### Resolution order
+
+```
+usage.decorative === true   → alt=""
+usage.alt_override          → the override
+asset.alt_text              → the canonical description
+otherwise                   → missing: empty alt, and a warning in the editor
+```
+
+### The "needs alt" query
+
+```sql
+select u.id, u.kind, u.page_key, u.post_id, u.album_id, u.field, a.id as asset_id
+from photo_usages u
+join photo_assets a on a.id = u.asset_id and a.tenant_id = u.tenant_id
+where u.tenant_id = $1
+  and u.scope = 'live'
+  and u.decorative = false
+  and u.alt_override is null
+  and a.alt_text is null
+  and a.deleted_at is null;
+```
+
+```sql
+create index photo_usages_needs_alt on photo_usages (tenant_id, asset_id)
+  where scope = 'live' and decorative = false and alt_override is null;
+```
+
+---
+
+# 3. Tenant integrity
+
+## 3.1 The hole this closes
+
+`photo_usages.tenant_id` plus a plain `references albums(id)` does not prevent a
+row with `tenant_id = A` pointing at an album owned by B. RLS would refuse that
+write for a signed-in editor — but **the service-role client bypasses RLS**, and
+the backfill, the jobs drain and any future admin tool all run under it.
+
+## 3.2 What the parents look like
+
+All four already have what is needed: `id uuid primary key` and `tenant_id uuid
+not null` (`2026-09-24_no_guessing_tenant.sql` dropped the defaults and kept
+`NOT NULL`, precisely so *"a forgotten tenant is a hard error rather than a
+silent write into the oldest tenant"*).
+
+## 3.3 Tenant-aware composite foreign keys
+
+```sql
+alter table photos        add constraint photos_id_tenant        unique (id, tenant_id);
+alter table albums        add constraint albums_id_tenant        unique (id, tenant_id);
+alter table blog_posts    add constraint blog_posts_id_tenant    unique (id, tenant_id);
+alter table catalog_items add constraint catalog_items_id_tenant unique (id, tenant_id);
+-- photo_assets carries its own, declared inline in §1.
+```
+
+`photo_usages` then references `(parent_id, tenant_id)` — the five foreign keys
+in §2.2.
+
+- **Enforced by the planner on every write**, including service-role writes.
+  Nothing bypasses it and no code has to remember it.
+- **`MATCH SIMPLE`, the default, does exactly what is wanted**: a composite
+  foreign key is not checked when any referencing column is null, so each parent
+  key binds only when that parent is set, while `asset_id` — `NOT NULL` beside a
+  `NOT NULL` tenant — always binds.
+- **It matches the codebase's philosophy.** `apply_tenant_policy` exists because
+  *"twenty tables were once given the same owner check by copy-paste"* and *"one
+  definition, called from everywhere, is the fix"*.
+- **Cost: four redundant btree indexes**, roughly 10 MB on `photos` at 200,000
+  rows.
+
+**Rejected:** a trigger calling the existing `tenant_of()` helper. It would
+work, but a trigger is invisible at the point of the write — the specific
+failure mode the ad-blocker and `.cv-sr` incidents both turned on. A foreign key
+shows up in the table definition.
+
+## 3.4 The residual hole, stated plainly
+
+**`page_key` has no parent row and therefore no foreign key.** Mitigated, not
+closed:
+
+1. `syncUsages` derives `page_key` from a document already read under the
+   caller's tenant; no path supplies a key from outside.
+2. A CHECK on the key's format (`isPageKey`), matching `sanitizeSeoMap`.
+3. The nightly orphan sweep reports usages whose `page_key` is not in that
+   tenant's `custom_pages` or built-in set.
+
+Closing it properly means giving custom pages a real table — a much larger
+change, and not one this migration should force.
+
+## 3.5 Tests
+
+Run with the **service-role client**, so a pass proves the database is doing the
+work and not RLS: a usage with tenant A and a parent owned by B is rejected, for
+each of the five foreign keys; a tenant mismatch against its own asset is
+rejected; updating a usage's `tenant_id` is rejected; moving a parent row to
+another tenant while a usage points at it is rejected.
+`db/verify-tenant-isolation.sql` is extended: a foreign tenant reads 0 assets
+and 0 usages, `anon` reads 0 of both, a platform admin still reaches across.
+
+---
+
+# 4. Usage kinds, parents and fields
+
+| kind | parent | fields (V1) | maintained by |
+|---|---|---|---|
+| `gallery` | `photo_id` → `photos` | `'photo'` | created with the `photos` row; **removed by cascade** |
+| `gallery_cover` | `album_id` → `albums` | `cover_photo_id`, `cover_custom_path` | `syncUsages` on album save |
+| `page_section` | `page_key` | `image_path`, `image_path_mobile`, `video_poster`, `bg_image` | `syncUsages` from `replaceSections`, `writeDraftPage`, `restoreDraftFrom`, `discard` |
+| `page_legacy` | `page_key` | `hero_image_path`, `intro_image_path`, `contact_image_path`, `about_image_path` | `syncUsages` from `patchSiteSettings` |
+| `story_cover` | `post_id` → `blog_posts` | `featured_custom_path` | `syncUsages` on post save |
+| `story_block` | `post_id` → `blog_posts` | `block:<blockId>` | `syncUsages` on post save |
+| `shop_listing` | `product_id` → `catalog_items` | `'photo'` | `syncUsages` on catalog save |
+
+**Not in the projection or the backfill:** `albums.cover_video_path` and the
+hero's `video_path`. Videos stay outside `photo_assets` in V1, and all existing
+video handling is untouched — same columns, same settings keys, same renderers,
+same delete path. `video_poster` **is** included: it is an image from the image
+picker.
+
+## 4.1 Accessibility roles
+
+```ts
+/** What this image slot IS, for a screen reader. */
+accessibilityRole?: 'content' | 'decorative' | 'user-selectable'
+```
+
+Default for `kind: 'image'` is `'content'`.
+
+| field | section | role |
+|---|---|---|
+| `image_path` | `hero` | **`content`** — a photographer's primary hero image is meaningful and must not vanish from the screen-reader experience |
+| `video_poster` | `hero` | `decorative` |
+| `image_path` | `mark` | `decorative` — an accent mark, not a photograph |
+| `image_path` | `intro` / `about` / `contact` | `content` |
+| `bg_image` | shared, every section | `decorative` |
+
+**Not a permanent semantic rule for every hero.** When the Scene architecture
+lands, the accessibility role belongs to **each Scene slot**: a Scene declares
+its own hero image as `content`, `decorative`, or eventually `user-selectable`,
+depending on the composition. `bg_image` stays `decorative` by default under any
+Scene.
+
+No photographer sees a decorative toggle in V1 — the composition declares its
+own semantics, the same idea as `Field.content` declaring the design/content
+line rather than a human deciding it per value.
+
+---
+
+# 5. V1 tables and deferred work
+
+## Created in V1
+
+`photo_assets`, `photo_usages`, `photos.asset_id`, `site_images.asset_id`
+(deprecated on arrival), four `unique (id, tenant_id)` constraints on the parent
+tables, `lib/photos/*`, `Field.accessibilityRole`, and one `<field>_alt` sibling
+key per image field.
+
+## Documented, not created
+
+`photo_analysis` (lands with the first analyzer), `photo_embeddings` (Step 8;
+dimensions deferred entirely to a benchmark then).
+
+```sql
+-- NOT created in V1.
+create table photo_analysis (
+  asset_id    uuid not null references photo_assets(id) on delete cascade,
+  analyzer    text not null,      -- 'identity' | 'colour' | 'quality' | 'labels' | 'faces'
+  version     integer not null,
+  result      jsonb not null,
+  model       text null,
+  cost_micros bigint null,
+  created_at  timestamptz not null default now(),
+  primary key (asset_id, analyzer, version)
+);
+select public.apply_tenant_policy_via('photo_analysis', 'asset_id', 'photo_assets');
+```
+
+## Deferred columns
+
+`photo_usages.focal`, `crop`, `treatment`, `caption_override`;
+`photo_assets.default_focal`, `caption`, `usage_count`; kinds `portfolio`,
+`venue`, `social`, `marketing`; **videos**.
+
+---
+
+# 6. Ingestion, backfill, rendering, deletion, scale
+
+**Ingestion.** One `ingest()`, three callers, idempotent on `key_base`, with a
+`.mk` scan proving no `processExistingOriginal(` call site skips it. EXIF
+extraction becomes universal — today only gallery uploads get it.
+
+**Backfill.** Idempotent passes; duplicate detection is the unique index on
+`(tenant_id, key_base)`; furniture, history snapshots and video paths excluded;
+a path with no asset mints one in `state = 'pending'` and queues a derive job.
+The backfill and `syncUsages` share **one** extractor module, so they cannot
+disagree about what a document references.
+
+**Rendering.** Nothing changes until the resolver lands; then `resolveImage`
+prefers the asset and falls back to the path, which is never removed.
+`srcSetFromPath` is retired only when a query reports zero path-only usages —
+not in this sequence.
+
+**Deletion.** `on delete restrict` on `asset_id` means the database refuses to
+delete an asset that is still used. Soft delete, 30-day grace, and the sweeper
+re-checks zero **live and draft** usages immediately before removing storage.
+`deleteAlbum`'s `JSON.stringify().includes()` scan becomes an indexed count.
+
+**Scale.** ~120 MB of assets and ~30 MB of usages at 200,000 photographs.
+"Where is this used" is an index scan on `photo_usages (asset_id)`; "which are
+unused" is an anti-join on the same index. Neither parses JSON.
+
+---
+
+# 7. The cascade — CLOSED against production, 2026-09-29
+
+Verified by inspection of the production database. Recorded in
+`db/schema-verified.md`.
+
+| | |
+|---|---|
+| `photos.album_id` | `uuid NOT NULL` |
+| constraint | `photos_album_id_fkey` |
+| definition | `FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE` |
+| `confdeltype` | `c` |
+| orphaned `photos` rows | **0** |
+| triggers on `albums` or `photos` | **none** |
+
+**The application comment was right and the fixture was wrong.**
+`db/test-fixture.sql` has been corrected: `album_id uuid not null references
+albums(id) on delete cascade`, with a note saying it is verified and what
+depends on it.
+
+**What this settles.** `deleteAlbum` deletes only the album row, and every
+`photos` row under it goes by cascade with no application code and no trigger in
+the path. Combined with `photo_usages.photo_id → photos(id, tenant_id) on delete
+cascade`, deleting an album removes:
+
+1. the album row,
+2. its `photos` membership rows, by the production cascade,
+3. their projected `gallery` usage rows, by ours.
+
+**No application-level deletion logic is required for that relationship**, and
+`gallery` is therefore the only usage kind that never participates in
+`syncUsages` — it is created beside the `photos` row on upload and destroyed
+with it.
+
+This guarantee is only true while that cascade is real. A change to
+`photos_album_id_fkey` is a change to this design, and `db/schema-verified.md`
+says so.
+
+---
+
+# 8. Status
+
+**Approved in principle.** No open blocking decisions.
+
+*Settled:* per-kind partial unique indexes · usages as a disposable, read-only
+projection · contextual alt override plus canonical asset alt, resolved at read
+time · composite tenant-aware foreign keys · gallery usage parented by
+`photos.id` · no synthetic `library` usage · site furniture outside the
+photograph model · videos outside V1 · 30-day deletion grace with a final
+live/draft re-check · `site_images` retained but deprecated · no Phase D this
+quarter · embeddings deferred to Step 8 · `hero.image_path` is `content` today,
+with future Scenes declaring their own slot semantics · `photo_analysis`
+deferred until the first analyzer exists · usage-specific editable values owned
+by their source documents and relationships, never by `photo_usages`.
+
+Not to be redesigned again unless implementation reveals a concrete
+contradiction in the real codebase.

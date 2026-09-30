@@ -137,12 +137,19 @@ export default function AlbumSettingsEditor(props: {
   async function handleCustomUpload(files: FileList | null) {
     if (!files?.length) return
     setUploading('image')
-    const fd = new FormData()
-    fd.append('file', files[0])
-    await uploadCustomCover(albumId, fd)
-    setUploading(null)
-    setPickerOpen(false)
-    router.refresh()
+    // A failed upload throws. Without the `finally` the button stayed on
+    // "Uploading…" and every upload button stayed disabled until a reload.
+    // The error itself is not swallowed; there is no error display here to
+    // show it in, so it still surfaces as the rejected action.
+    try {
+      const fd = new FormData()
+      fd.append('file', files[0])
+      await uploadCustomCover(albumId, fd)
+      setPickerOpen(false)
+      router.refresh()
+    } finally {
+      setUploading(null)
+    }
   }
 
   async function handleVideoUpload(files: FileList | null) {

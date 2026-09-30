@@ -3,9 +3,7 @@
 import { requireEditor } from '@/lib/auth'
 import { ownsKey } from '@/lib/storage-keys'
 import { createClient } from '@/lib/supabase/server'
-import { r2Client } from '@/lib/r2'
-import { GetObjectCommand } from '@aws-sdk/client-s3'
-import { processExistingOriginal } from '@/lib/derivatives'
+import { IngestError, fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
 import { estimateReadMinutes, type Block } from '@/lib/blocks'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -171,16 +169,22 @@ export async function registerJournalImage(key: string, base: string): Promise<s
     throw new Error('That upload does not belong to this site.')
   }
 
-  const object = await r2Client.send(
-    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key })
-  )
-
-  if (!object.Body) return null
-
-  const buffer = Buffer.from(await object.Body.transformToByteArray())
-  const processed = await processExistingOriginal(buffer, base, key)
-
-  return processed.displayPath
+  // Since P2 the image becomes a photograph asset (lib/photos/ingest.ts). Its
+  // placement stays in the post that uses it; P3 projects it from there.
+  // An object that cannot be read back still answers null, as it always did;
+  // any other failure throws — a path is never handed back for a photograph
+  // whose asset was not recorded.
+  const supabase = await createClient()
+  try {
+    const result = await ingestPhoto(
+      { route: 'journal', tenantId, keyBase: base, sourceKey: key },
+      { db: fromSupabase(supabase) }
+    )
+    return result.displayPath
+  } catch (e) {
+    if (e instanceof IngestError && e.reason === 'unreadable') return null
+    throw e
+  }
 }
 
 export async function bulkUpdateStatus(ids: string[], status: 'draft' | 'published') {

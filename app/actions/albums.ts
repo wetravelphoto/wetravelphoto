@@ -7,7 +7,7 @@ import { hashPassword } from '@/lib/password'
 import { r2Client } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
-import { processExistingOriginal } from '@/lib/derivatives'
+import { fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
 import { randomUUID } from 'crypto'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -169,17 +169,18 @@ export async function uploadCustomCover(albumId: string, formData: FormData) {
   // still cost ~650KB with no smaller file to fall back on. The path ends in
   // /<size>.webp, which is what srcSetFromPath keys off to build the srcset —
   // covers have no derivatives column of their own.
+  //
+  // Since P2 the cover is a photograph asset too, and the album's cover is set
+  // in the SAME database transaction that records it (lib/photos/ingest.ts,
+  // `register_album_cover`). Still only the sizes are stored: a cover has
+  // never kept its original, and its asset says so with `original_path` NULL.
   const keyBase = tenantKey(tenantId, `covers/${albumId}/${randomUUID()}`)
-  const processed = await processExistingOriginal(buffer, keyBase, keyBase)
-
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('albums')
-    .update({ cover_custom_path: processed.displayPath, cover_photo_id: null })
-    .eq('tenant_id', tenantId)
-    .eq('id', albumId)
+  await ingestPhoto(
+    { route: 'cover', tenantId, albumId, keyBase, bytes: buffer, filename: file.name },
+    { db: fromSupabase(supabase) }
+  )
 
-  if (error) throw new Error(error.message)
   revalidatePath('/admin')
   revalidatePath(`/admin/trips/${albumId}/settings`)
   revalidatePath('/')

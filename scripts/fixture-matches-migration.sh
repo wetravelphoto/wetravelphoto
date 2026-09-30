@@ -69,6 +69,21 @@
 # a wrong `aspect_ratio` rounding, and a missing `albums_id_tenant` are each
 # reported as drift and each reverts to agreement.
 #
+# ── The S3 hotfix and P2 (deployed 2026-09-30) ──────────────────────────────
+#
+# `jobs` is now rebuilt from the jobs migration FOLLOWED BY the enqueue_jobs
+# tenant-guard hotfix, because that pair is what production runs. enqueue_jobs
+# is dropped by name first — `drop table jobs cascade` never removed it (it
+# returns an integer, not a jobs row), so an earlier version compared a
+# fixture copy against itself for that one function.
+#
+# P2 changed functions only. Its five are dropped by name with the P1 strip
+# and rebuilt from db/migrations/2026-09-30_photo_ingest.sql; their
+# definitions and EXECUTE grants are compared as part of photo_assets' facts.
+# Proved to bite on: the fixture's enqueue_jobs guard reverted to the
+# NULL-blind form, a changed check in upsert_photo_asset, an extra EXECUTE
+# grant on the helper, a wrapper made SECURITY INVOKER, and a missing function.
+#
 # Wants psql on PATH and a server it may create a scratch database on:
 #
 #   PGHOST=/tmp PGPORT=5433 PGUSER=postgres
@@ -89,11 +104,19 @@ FIXTURE="$ROOT/db/test-fixture.sql"
 JOBS="$ROOT/db/migrations/2026-09-29_jobs.sql"
 ANALYTICS="$ROOT/db/migrations/2026-09-29_analytics.sql"
 PHOTOS="$ROOT/db/migrations/2026-09-29_photo_assets.sql"
+# Deployed 2026-09-30: production's jobs is the jobs migration PLUS this hotfix
+# (enqueue_jobs' NULL-safe tenant guard), and production's photo tables carry
+# P2's five functions.
+HOTFIX="$ROOT/db/migrations/2026-09-30_enqueue_jobs_tenant_guard.sql"
+INGEST="$ROOT/db/migrations/2026-09-30_photo_ingest.sql"
 
 # Every table P1 created or altered. Compared whole — see the note at the top.
 P1_TABLES="photo_assets photo_usages photos albums blog_posts catalog_items site_images"
+# P2's functions, compared with photo_assets' facts: definition (which carries
+# SECURITY, search_path and body) and EXECUTE grants.
+P2_FNS="'upsert_photo_asset','register_gallery_photo','register_site_image','register_journal_image','register_album_cover'"
 
-for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS"; do
+for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST"; do
   [ -r "$f" ] || { echo "cannot read $f" >&2; exit 1; }
 done
 
@@ -167,7 +190,10 @@ SQL
 JOBS_FACTS=$(facts_sql jobs "'enqueue_jobs','claim_jobs','finish_job'")
 PV_FACTS=$(facts_sql page_views "'record_page_view'")
 declare -A P1_FACTS P1_BEFORE P1_AFTER
-for t in $P1_TABLES; do P1_FACTS[$t]=$(facts_sql "$t" "''"); done
+for t in $P1_TABLES; do
+  if [ "$t" = photo_assets ]; then P1_FACTS[$t]=$(facts_sql "$t" "$P2_FNS")
+                              else P1_FACTS[$t]=$(facts_sql "$t" "''"); fi
+done
 
 cleanup
 createdb "$DB" >/dev/null || { echo "could not create $DB" >&2; exit 1; }
@@ -191,6 +217,9 @@ for t in $P1_TABLES; do P1_BEFORE[$t]=$(psql -X -q -t -A -d "$DB" -c "${P1_FACTS
 # first, because `tenant_id` comes back NOT NULL.
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop.log 2>&1 <<'SQL'
 drop table public.jobs cascade;
+-- enqueue_jobs returns an integer, so the CASCADE above does not take it; it
+-- is dropped by name so the jobs migration and the hotfix must recreate it.
+drop function public.enqueue_jobs(uuid, text, jsonb);
 
 delete from public.page_views;
 -- The policy first: it names `tenant_id`, so the column cannot be dropped while
@@ -221,6 +250,13 @@ fi
 # new tables first: photo_usages' foreign keys depend on the four parent unique
 # constraints, which cannot be dropped while those keys exist.
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-p1.log 2>&1 <<'SQL'
+-- P2's five functions, by name (a missing one is a failure, not a skip), so
+-- the P2 migration has to create them.
+drop function public.register_gallery_photo(uuid, uuid, text, text, text, jsonb, integer, integer, bigint, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb, double precision, double precision);
+drop function public.register_site_image(uuid, text, text, text, jsonb, integer, integer, bigint, text, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb);
+drop function public.register_journal_image(uuid, text, text, text, jsonb, integer, integer, bigint, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb);
+drop function public.register_album_cover(uuid, uuid, text, text, jsonb, integer, integer, bigint, text, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb);
+drop function public.upsert_photo_asset(uuid, text, text, text, jsonb, integer, integer, bigint, text, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb, double precision, double precision, uuid);
 drop table public.photo_usages;
 drop table public.photo_assets;
 alter table public.photos        drop column asset_id;
@@ -238,6 +274,10 @@ if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$JOBS" >/tmp/fmm-jobs.log 2>&1; 
   echo "FAIL  the jobs migration does not build jobs from nothing:"; tail -5 /tmp/fmm-jobs.log; exit 1
 fi
 
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HOTFIX" >/tmp/fmm-hotfix.log 2>&1; then
+  echo "FAIL  the enqueue_jobs hotfix does not apply:"; tail -5 /tmp/fmm-hotfix.log; exit 1
+fi
+
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$ANALYTICS" >/tmp/fmm-analytics.log 2>&1; then
   echo "FAIL  the analytics migration does not rebuild page_views:"; tail -8 /tmp/fmm-analytics.log; exit 1
 fi
@@ -246,13 +286,17 @@ if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$PHOTOS" >/tmp/fmm-photos.log 2>
   echo "FAIL  the P1 migration does not rebuild the photo tables:"; tail -8 /tmp/fmm-photos.log; exit 1
 fi
 
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$INGEST" >/tmp/fmm-ingest.log 2>&1; then
+  echo "FAIL  the P2 migration does not rebuild its functions:"; tail -8 /tmp/fmm-ingest.log; exit 1
+fi
+
 JOBS_AFTER=$(psql -X -q -t -A -d "$DB" -c "$JOBS_FACTS")
 PV_AFTER=$(psql -X -q -t -A -d "$DB" -c "$PV_FACTS")
 for t in $P1_TABLES; do P1_AFTER[$t]=$(psql -X -q -t -A -d "$DB" -c "${P1_FACTS[$t]}"); done
 
 fail=0
 
-for pair in "jobs:2026-09-29_jobs.sql" "page_views:2026-09-29_analytics.sql"; do
+for pair in "jobs:2026-09-29_jobs.sql + 2026-09-30_enqueue_jobs_tenant_guard.sql" "page_views:2026-09-29_analytics.sql"; do
   table="${pair%%:*}"; file="${pair##*:}"
   if [ "$table" = jobs ]; then before="$JOBS_BEFORE"; after="$JOBS_AFTER"
                           else before="$PV_BEFORE";   after="$PV_AFTER"; fi
@@ -282,6 +326,7 @@ done
 for table in $P1_TABLES; do
   before="${P1_BEFORE[$table]}"; after="${P1_AFTER[$table]}"
   file=2026-09-29_photo_assets.sql
+  [ "$table" = photo_assets ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_ingest.sql (5 functions)"
 
   if [ -z "$before" ]; then
     echo "FAIL  the fixture built no $table at all."

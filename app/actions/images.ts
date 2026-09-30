@@ -1,11 +1,9 @@
 'use server'
 
-import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { createClient } from '@/lib/supabase/server'
 import { requireEditor } from '@/lib/auth'
-import { r2Client } from '@/lib/r2'
 import { ownsKey } from '@/lib/storage-keys'
-import { processExistingOriginal } from '@/lib/derivatives'
+import { fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
 
 /**
  * PHOTOGRAPHS FOR THE EDITOR'S PICKER
@@ -110,6 +108,13 @@ export async function listPickerImages(source: string): Promise<PickerImage[]> {
  * Registering is NOT publishing. The path goes into the draft like any other
  * setting, so an uploaded photograph reaches the live site on Publish and a
  * Discard leaves nothing behind but an unused file.
+ *
+ * Since P2 the photograph's asset and its Uploads row are written in one
+ * database transaction (lib/photos/ingest.ts). If that fails, the upload
+ * FAILS: this used to hand back a usable path even when the Uploads row could
+ * not be written, leaving a file no table mentioned. Now the attempt's files
+ * are cleaned up and the picker is told, in the same `{ ok: false }` shape it
+ * already shows.
  */
 export async function registerSiteImage(
   key: string,
@@ -125,45 +130,19 @@ export async function registerSiteImage(
     return { ok: false, message: 'That upload does not belong to this site.' }
   }
 
-  let processed
+  const supabase = await createClient()
   try {
-    const object = await r2Client.send(
-      new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key })
+    const result = await ingestPhoto(
+      { route: 'site', tenantId, keyBase: base, sourceKey: key, filename },
+      { db: fromSupabase(supabase) }
     )
-    if (!object.Body) return { ok: false, message: 'The upload could not be read back.' }
-
-    const buffer = Buffer.from(await object.Body.transformToByteArray())
-    processed = await processExistingOriginal(buffer, base, key)
+    return { ok: true, path: result.displayPath, id: result.siteImageId ?? null }
   } catch (e) {
     return {
       ok: false,
       message: e instanceof Error ? e.message : 'That file could not be read as a photograph.',
     }
   }
-
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('site_images')
-    .insert({
-      tenant_id: tenantId,
-      storage_path: processed.displayPath,
-      original_path: processed.originalPath,
-      derivatives: processed.derivatives,
-      width: processed.width,
-      height: processed.height,
-      bytes: processed.originalBytes,
-      filename: filename?.slice(0, 120) ?? null,
-    })
-    .select('id')
-    .maybeSingle()
-
-  // The file and its sizes exist either way, so the photograph is still
-  // usable; it just will not be in the Uploads list. Better than refusing the
-  // upload the photographer has already waited for — the id comes back null
-  // and the picker simply offers nothing to remove.
-  if (error) console.error('[images] could not file the upload:', error.message)
-
-  return { ok: true, path: processed.displayPath, id: (data?.id as string) ?? null }
 }
 
 /**

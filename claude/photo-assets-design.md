@@ -1,12 +1,13 @@
 # Photo assets and photo usages — technical design
 
 **Status: APPROVED IN PRINCIPLE, 2026-09-29.** The tables of §1–§3 are
-**deployed** (P1, Supabase migration `20260930123113`, 2026-09-30) exactly as
-revision 6 states them, and nothing reads or writes them yet; the rest —
-ingestion, `syncUsages`, backfill, resolver, deletion — is P2–P6. The build
+**deployed** (P1, Supabase `20260930123113`) and so is the ingestion boundary of
+§9 (P2, Supabase `20260930191116`), both 2026-09-30: every real photograph
+upload now writes its asset, and nothing READS the photo tables yet. The rest —
+`syncUsages`, backfill, resolver, deletion — is P3–P6. The build
 order is in `claude/photo-migration-plan.md`.
 
-Revision 6. Not to be redesigned again unless implementation reveals a concrete
+Revision 7. Not to be redesigned again unless implementation reveals a concrete
 contradiction in the real codebase.
 
 ---
@@ -20,7 +21,8 @@ contradiction in the real codebase.
 | 3 | usages read-only; `library` removed; `gallery` parents on `photos.id`; `content_sha256`; state drops `analyzed`; `photo_analysis` deferred; videos out; accessibility role on the field | Gonzalo's review |
 | 4 | per-kind partial unique indexes; `alt_effective` removed; composite tenant-aware foreign keys; `sort_order` mirror removed; video fields removed from projection and backfill | Gonzalo's review |
 | 5 | cascade question closed against production; status raised to approved | Gonzalo ran the constraint inspection, 2026-09-29 |
-| **6** | **reconciliation before P1**: no tenant default on either new table (§3.6); §3.2 corrected about the parents' defaults; the P1 privilege set stated (§3.7); a `page_key` CHECK matching `isPageKey()` (§2.2, §3.4); a tenant-deletion proof required (§3.5) | the P1 orientation compared this document with the repository, 2026-09-29; decisions by Gonzalo |
+| **7** | **P2 ingestion boundary (§9)**: four route-specific SECURITY DEFINER wrappers over one uncallable internal upsert; atomic per route; idempotent and lock-serialised; failure hardening with checked cleanup; normalised EXIF with a 1 KB allowlisted `exif`; latitude/longitude only for gallery uploads; custom covers in scope with `original_path = NULL`; the accent mark excluded; §3.6's rationale corrected | the P2 orientation (2026-09-30) found four upload routes, all running as the photographer; decisions by Gonzalo |
+| 6 | reconciliation before P1: no tenant default on either new table (§3.6); §3.2 corrected about the parents' defaults; the P1 privilege set stated (§3.7); a `page_key` CHECK matching `isPageKey()` (§2.2, §3.4); a tenant-deletion proof required (§3.5) | the P1 orientation compared this document with the repository, 2026-09-29; decisions by Gonzalo |
 
 ---
 
@@ -445,11 +447,17 @@ the empty string, and an object-prototype name such as `constructor`).
 `photo_assets.tenant_id` and `photo_usages.tenant_id` are `uuid NOT NULL` with
 **no default**. `tenant_for_insert()` is `coalesce(current_tenant_id(),
 default_tenant_id())`, and under the service-role client there is no current
-tenant, so it falls back to the **oldest tenant on the platform**. Ingestion,
-the backfill and the job handlers all run under that client. A forgotten tenant
-must fail as a NOT NULL violation rather than land in somebody else's site —
-the same reasoning as `jobs`, `page_views` and
-`2026-09-24_no_guessing_tenant.sql`.
+tenant, so it falls back to the **oldest tenant on the platform**. The backfill
+and the job handlers run under that client. A forgotten tenant must fail as a
+NOT NULL violation rather than land in somebody else's site — the same
+reasoning as `jobs`, `page_views` and `2026-09-24_no_guessing_tenant.sql`.
+
+*Corrected in rev 7.* Earlier text said ingestion also runs under the
+service-role client. **It does not**: the four upload routes run as the signed-in
+photographer (§9), and for a platform admin editing another site
+`current_tenant_id()` is the admin's OWN site — so a default would guess wrong
+there too. The decision stands; the reason given for ingestion was wrong. The
+P2 wrappers take the tenant as an explicit parameter and validate it.
 
 ## 3.7 Privileges in P1 (rev 6)
 
@@ -491,7 +499,19 @@ needs, deliberately and in its own migration — P2 (ingestion) is the first.
 hero's `video_path`. Videos stay outside `photo_assets` in V1, and all existing
 video handling is untouched — same columns, same settings keys, same renderers,
 same delete path. `video_poster` **is** included: it is an image from the image
-picker.
+picker. **The hero's `video_path` is declared `kind: 'image'` in the registry**
+(and edited through the photo picker), so the extractor must exclude it **by
+key** — the field kind cannot tell it apart (recorded rev 7, for P3).
+
+**The accent mark is not a photograph (rev 7).** `mark.image_path` is uploaded
+raw through the branding path, may be SVG, and never passes through the WebP
+ladder. It is site furniture like the logos: excluded from ingestion (P2), from
+the projection (P3), from the backfill (P4), and from `photo_assets`. The
+`decorative` role §4.1 lists for it therefore never reaches a usage.
+
+**The page share image has no kind yet (rev 7, for P3).** `PageSettings` sets a
+per-page share image through the photo picker; none of the seven kinds covers
+it. Whether it becomes a kind is a P3 decision; P2 adds no kind.
 
 ## 4.1 Accessibility roles
 
@@ -561,9 +581,12 @@ select public.apply_tenant_policy_via('photo_analysis', 'asset_id', 'photo_asset
 
 # 6. Ingestion, backfill, rendering, deletion, scale
 
-**Ingestion.** One `ingest()`, three callers, idempotent on `key_base`, with a
-`.mk` scan proving no `processExistingOriginal(` call site skips it. EXIF
-extraction becomes universal — today only gallery uploads get it.
+**Ingestion.** One `ingest()`, **four** routes (gallery, site/editor, journal,
+custom cover — rev 7; the earlier "three callers" missed the cover), idempotent
+on `key_base`, with a `.mk` scan proving no `processExistingOriginal(` or
+`processPhoto(` call site skips it except one named, temporary exemption. EXIF
+**normalisation** becomes universal; geolocation does not (§9.5). The whole
+boundary is §9.
 
 **Backfill.** Idempotent passes; duplicate detection is the unique index on
 `(tenant_id, key_base)`; furniture, history snapshots and video paths excluded;
@@ -647,3 +670,215 @@ decision is made.
 
 Not to be redesigned again unless implementation reveals a concrete
 contradiction in the real codebase.
+
+---
+
+# 9. P2 — the ingestion boundary (rev 7; DEPLOYED 2026-09-30, Supabase `20260930191116`)
+
+Decided in the P2 design pass, 2026-09-30. The build order and tests are in
+`claude/photo-migration-plan.md`, P2. Function names follow the repository's
+existing `verb_object` convention (`enqueue_jobs`, `claim_jobs`, `finish_job`,
+`record_page_view`, `push_draft_step`) and the application's own verbs
+(`registerPhoto`, `registerSiteImage`, `registerJournalImage`).
+
+## 9.1 Shape of the boundary
+
+- **No direct table grant.** `authenticated` keeps SELECT only on
+  `photo_assets` and `photo_usages`; `service_role` keeps nothing; no upload
+  route moves to the service-role client.
+- **Four route-specific wrappers**, SECURITY DEFINER, `search_path = ''`, every
+  reference fully qualified, EXECUTE revoked from `public`, `anon`,
+  `authenticated` and `service_role` first, then granted **to `authenticated`
+  only** — the four routes run as the signed-in photographer.
+- **One internal helper** that does the asset upsert, SECURITY **INVOKER**,
+  `search_path = ''`, EXECUTE revoked from every application role and granted
+  to none. It runs only inside a wrapper (i.e. as the owner); an application
+  role that somehow reached it would lack both EXECUTE and any table privilege.
+- **Each wrapper accepts only what its route may set.** There is no parameter
+  for `state`, `alt_text`, `alt_source`, `alt_reviewed_at`, `archived_at`,
+  `deleted_at`, `original_purged_at` or `created_by` — they cannot be passed,
+  not merely rejected. Latitude/longitude parameters exist on the gallery
+  wrapper only. The cover wrapper has no `original_path` parameter.
+
+## 9.2 The proposed signatures
+
+Shared "file facts" (server-computed, §9.4) and "capture" (normalised EXIF,
+§9.5) parameters, typed so the database checks their types:
+
+```
+-- file facts
+p_key_base text, p_original_path text, p_display_path text, p_derivatives jsonb,
+p_width integer, p_height integer, p_original_bytes bigint,
+p_content_sha256 text, p_content_type text
+-- capture
+p_taken_at timestamptz, p_camera_make text, p_camera_model text, p_lens text,
+p_iso integer, p_aperture numeric, p_shutter text, p_focal_length numeric,
+p_keywords text[], p_exif jsonb
+```
+
+| function | route | extra parameters | returns |
+|---|---|---|---|
+| `register_gallery_photo(p_tenant uuid, p_album uuid, <file facts>, <capture>, p_latitude double precision, p_longitude double precision)` | A | album; **latitude/longitude** | `table (photo_id uuid, asset_id uuid)` |
+| `register_site_image(p_tenant uuid, <file facts>, p_filename text, <capture>)` | B | filename | `table (site_image_id uuid, asset_id uuid)` |
+| `register_journal_image(p_tenant uuid, <file facts>, <capture>)` | C | — | `uuid` (the asset) |
+| `register_album_cover(p_tenant uuid, p_album uuid, <file facts WITHOUT p_original_path>, p_filename text, <capture>)` | D | album; filename | `uuid` (the asset) |
+| `upsert_photo_asset(…all of the above, p_filename, p_latitude, p_longitude, p_created_by uuid)` | internal | — | `uuid` |
+
+## 9.3 What each wrapper enforces, in order
+
+1. **Tenant.** `p_tenant` not null and a real tenant; `p_tenant =
+   public.current_tenant_id() or public.is_platform_admin()` — the established
+   rule, so a platform admin may act on the host site it is editing, and
+   nobody else may name a site they are not in. Refused with `42501`.
+   **Written `(…) is not true`, never `not (…)`:** for a caller with no profile
+   `current_tenant_id()` is NULL, the comparison is NULL, and `if not (NULL)`
+   does not raise — the check silently passes. P2's suite caught exactly that
+   in the first draft, and found the same pattern live in S3's `enqueue_jobs`
+   (`claude/open-items.md` §10).
+2. **Parent ownership** (A, D). The album exists **with** `tenant_id =
+   p_tenant`; "does not exist" and "belongs to another site" give the same
+   answer. (A's `gallery` usage is additionally bound by P1's composite
+   foreign key.)
+3. **Storage-key ownership, per route**, as an exact string built in SQL:
+   - A: `t/<p_tenant>/photos/<p_album>/<uuid>`
+   - B: `t/<p_tenant>/site-images/<uuid>`
+   - C: `t/<p_tenant>/journal/<uuid>`
+   - D: `t/<p_tenant>/covers/<p_album>/<uuid>`
+
+   — the shapes `/api/upload-url` and `uploadCustomCover` mint today. A key
+   from another route, another site or another album cannot be registered.
+4. **Paths inside the key** (in the helper, for every route): `p_original_path`
+   = `<key_base>/original.<jpg|png|webp|tif|avif>` (A–C) or absent (D); every
+   `p_derivatives` entry is `"<size>": "<key_base>/<size>.webp"` with `<size>`
+   in 400/800/1600/2400, `400` always present; `p_display_path` is the largest
+   one present — exactly what `processExistingOriginal` produces.
+5. **Facts** (helper): `p_content_sha256 ~ '^[0-9a-f]{64}$'`;
+   `p_original_bytes > 0`; **`p_width > 0` and `p_height > 0`** (final P2
+   ruling: a processed photograph has real dimensions, the row and the asset
+   agree on them, and a file that yields none fails ingestion — it is not
+   optional metadata to be NULLed); `p_content_type` NULL or in
+   `image/jpeg|png|webp|tiff|avif|heif`; `p_filename` ≤ 120 characters, no
+   control characters.
+
+   *Content type, per route (final P2 rule):* it comes from the format sharp
+   detects in the server's bytes. **Gallery, site and journal** — the three
+   signed-upload routes, which `/api/upload-url` limits to five image types —
+   **must** have a recognised type: a NULL is refused by the application
+   before anything is written, and by the wrapper (`22023`). **Only a custom
+   cover** may record NULL: it arrives in the form, may be any format sharp
+   decodes (a GIF, an SVG), and refusing those would turn a cover upload that
+   succeeds today into a failure. The type is never used to authorise
+   anything. *(Tightened in the integrity pass: "recognised" means exactly
+   `image/jpeg|png|webp|tiff|avif` for the signed routes — HEIF is refused
+   there; a cover may be HEIF or NULL.)*
+6. **Capture** (helper): §9.5 limits; `p_exif` an object of allowlisted keys
+   only, each of the allowlisted JSON type, ≤ 1024 bytes serialised.
+7. **The transaction**: helper upsert → the route's relationship (below) →
+   return. Errors use the S3 SQLSTATEs: `42501` ownership, `22023` a bad value,
+   `23502` a missing one.
+
+Route relationships — **every file fact of a relationship row is taken from
+the canonical asset row, never from the call's arguments** (integrity pass,
+2026-09-30). On a first registration they are the same values; on a retry
+against an asset whose relationship was deleted meanwhile, the helper does not
+rewrite the asset, so the recreated row must be built from the asset or the
+two would disagree. The album cover path likewise comes from the asset.
+Also enforced in SQL in that pass: latitude and longitude **both or neither**
+(`22023`), and the signed-upload routes' content type **exactly** one of the
+five `/api/upload-url` types (HEIF refused there; only a cover may be HEIF or
+unrecognised).
+
+- **A** — reuse `photos` where `(tenant_id, album_id, asset_id)` match, else
+  insert with the columns `registerPhoto` writes today (`storage_path` =
+  display path, `original_path`, `original_bytes`, `derivatives`, `width`,
+  `height`, `sort_order` = the album's max + 1 as today, `tags` = the
+  keywords, `taken_at`, `latitude`, `longitude`) plus `asset_id`; then the
+  `gallery` usage (`field = 'photo'`), `on conflict (photo_id) where kind =
+  'gallery' do nothing`.
+- **B** — reuse `site_images` where `(tenant_id, asset_id)` match, else insert
+  as `registerSiteImage` does today plus `asset_id`.
+- **C** — the asset only. The post owns placement; P3 projects it.
+- **D** — `update albums set cover_custom_path = <display path>,
+  cover_photo_id = null where id = p_album and tenant_id = p_tenant`, exactly
+  today's update, required to touch one row.
+
+## 9.4 The internal upsert, and why it is safe to retry
+
+```
+insert into public.photo_assets (…) values (…)
+  on conflict (tenant_id, key_base) do nothing;
+select id, content_sha256, archived_at, deleted_at
+  from public.photo_assets
+ where tenant_id = p_tenant and key_base = p_key_base
+   for update;
+```
+
+- On first insert the helper sets `state = 'derived'` and `derived_at = now()`
+  itself (P2 ingestion is synchronous: the ladder exists before the call), and
+  `created_by = p_created_by`, which each wrapper passes as `auth.uid()` — the
+  real uploader, so a platform admin uploading to another site is recorded as
+  themselves while `tenant_id` is the host site.
+- On an existing row it **changes nothing**: `created_by`, facts and state are
+  never rewritten by a retry. A different `content_sha256` at the same key is
+  refused (one key is one upload); an archived or deleted asset is refused (its
+  lifecycle is P6's).
+- The row lock serialises concurrent registrations of one upload; the
+  relationship lookup that follows runs after the lock, so under READ
+  COMMITTED it sees the winner's committed row and reuses it. No new unique
+  constraint on `photos` or `site_images` is needed.
+- The server computes `content_sha256` and `original_bytes` from the exact
+  bytes it processed; `content_type` from the format sharp detects; `filename`
+  from the route's own metadata, normalised. None is trusted for
+  authorisation — ownership is §9.3.
+
+## 9.5 Normalised EXIF — one module, four routes
+
+Columns, each NULL when absent or out of range (never an error):
+
+| column | source | rule |
+|---|---|---|
+| `taken_at` | DateTimeOriginal, else CreateDate | as `registerPhoto` parses it today |
+| `camera_make`, `camera_model` | Make, Model | trimmed, control characters removed, ≤ 64 |
+| `lens` | LensModel, else LensInfo as text | trimmed, ≤ 96 |
+| `iso` | ISO / ISOSpeedRatios | integer 1–1 000 000 |
+| `aperture` | FNumber | rounded to 0.1, 0.5–99.9 |
+| `shutter` | ExposureTime | `1/250` below one second, `2s` / `2.5s` at or above; ≤ 16 |
+| `focal_length` | FocalLength | rounded to 0.1, 0.1–9 999.9 |
+| `keywords` | IPTC Keywords, else XMP subject | **today's `photos.tags` rule** — trimmed, lower-cased, empties dropped, first 25 — plus each truncated to 200 characters |
+| `latitude`, `longitude` | GPS | **route A only** (it stores them today); B, C and D have no parameter, so NULL — no silent expansion of geolocation. *Measured in P2:* `exifr` returns `latitude`/`longitude` even with `gps: false`, so the gates are the normaliser (drops them unless the route is gallery) and the database signature (no parameter) — both tested |
+
+`exif` — an allowlisted, normalised subset, **`{}` when there is nothing**,
+otherwise:
+
+```json
+{
+  "v": 1,
+  "orientation": 1,
+  "offset_time": "+02:00",
+  "exposure_program": "aperture_priority",
+  "exposure_mode": "auto",
+  "exposure_bias_ev": -0.7,
+  "metering_mode": "pattern",
+  "flash_fired": false,
+  "white_balance": "auto",
+  "focal_length_35mm": 600,
+  "lens_make": "Sony",
+  "color_space": "srgb",
+  "software": "Adobe Lightroom Classic 13.2"
+}
+```
+
+- Every key optional except `v`; enumerations closed:
+  `exposure_program` ∈ manual, program, aperture_priority, shutter_priority,
+  creative, action, portrait, landscape, other · `exposure_mode` ∈ auto,
+  manual, bracket · `metering_mode` ∈ average, center_weighted, spot,
+  multi_spot, pattern, partial, other · `white_balance` ∈ auto, manual ·
+  `color_space` ∈ srgb, adobe_rgb, uncalibrated. Numbers ranged
+  (`orientation` 1–8, `exposure_bias_ev` ±20, `focal_length_35mm` 1–5000);
+  strings ≤ 64.
+- **Never stored**, whatever the file carries: any GPS tag, body/lens/internal
+  serial numbers, CameraOwnerName, Artist, Copyright, ImageDescription and
+  UserComment (free text), MakerNote and every binary blob or thumbnail, XMP
+  history and document ids, IPTC contact fields.
+- **Ceiling: 1024 bytes serialised**, enforced in SQL along with the key
+  allowlist and each key's JSON type. The largest shape above is ~420 bytes.

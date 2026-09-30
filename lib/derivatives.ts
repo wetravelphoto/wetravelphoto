@@ -1,6 +1,5 @@
 import sharp from 'sharp'
-import { PutObjectCommand } from '@aws-sdk/client-s3'
-import { r2Client } from '@/lib/r2'
+import { r2Storage, type PhotoStorage } from '@/lib/photos/storage'
 
 import { SIZES, type SizeKey, type Derivatives } from '@/lib/image-sizes'
 
@@ -15,19 +14,6 @@ export type { SizeKey, Derivatives }
  */
 const WEBP = { quality: 82, effort: 4 } as const
 
-const BUCKET = () => process.env.R2_BUCKET_NAME!
-
-async function put(key: string, body: Buffer, contentType: string) {
-  await r2Client.send(
-    new PutObjectCommand({
-      Bucket: BUCKET(),
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-      CacheControl: 'public, max-age=31536000, immutable',
-    })
-  )
-}
 
 export type ProcessedPhoto = {
   originalPath: string
@@ -45,8 +31,10 @@ export type ProcessedPhoto = {
 export async function processPhoto(
   buffer: Buffer,
   keyBase: string,
-  originalExtension: string
+  originalExtension: string,
+  storage: PhotoStorage = r2Storage
 ): Promise<ProcessedPhoto> {
+  const put = storage.write.bind(storage)
   const image = sharp(buffer, { failOn: 'none' })
   const meta = await image.metadata()
 
@@ -107,14 +95,22 @@ export function extensionFor(mime: string, fallback = 'jpg'): string {
 
 
 /**
- * Builds the display ladder for an original that has already been uploaded
- * directly to storage. Used by the presigned upload flow.
+ * Builds the display ladder from bytes the caller already holds, and writes
+ * ONLY the ladder — never an original. `originalPath` is returned as given.
+ *
+ * Despite the name it never reads storage: for a signed upload the caller has
+ * already read the original back; for a custom cover the bytes came in the
+ * form and no original is kept at all. Since P2 the only caller is
+ * lib/photos/ingest.ts, which passes a recording storage so a failed attempt
+ * knows exactly which keys it wrote.
  */
 export async function processExistingOriginal(
   buffer: Buffer,
   keyBase: string,
-  originalPath: string
+  originalPath: string,
+  storage: PhotoStorage = r2Storage
 ): Promise<ProcessedPhoto> {
+  const put = storage.write.bind(storage)
   const upright = sharp(buffer, { failOn: 'none' }).rotate()
   const meta = await upright.metadata()
 

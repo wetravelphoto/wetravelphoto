@@ -658,6 +658,7 @@ These are the hard rules. S1–S4 each cost something to learn them.
 | lesson | where it came from |
 |---|---|
 | A `grant` is additive; `service_role` had **nothing** on `jobs`, not "the usual defaults". | S3. The drain would have failed with *permission denied*. |
+| **An authorisation guard must be NULL-safe.** `if not (x = current_tenant_id() or …)` does not raise when `current_tenant_id()` is NULL (a caller with no profile). Write `(…) is not true`. | P2's suite caught it in its own draft — and then found the same shape live in S3's `enqueue_jobs`. Hotfixed 2026-09-30. `record_page_view` has it too, unexposed (service_role only). |
 | RLS protects rows, not values — a photographer could have written a job on their own site with `max_attempts` at a million. | S3. The fix was a narrow DEFINER function, not a broader policy. |
 | **A platform admin passes every tenant check**, so an unqualified query that is safe for an ordinary tenant is not safe at all. | The dashboard counted every site's views as one photographer's; `deleteDraft()` would have deleted every draft on the platform. |
 | `update … where id in (select … limit N for update skip locked)` does **not** claim at most N. The planner puts the subquery on the inner side of a semi-join and re-executes it per row. **Use a materialised CTE** — a CTE containing `FOR UPDATE` is never inlined. | S3. `p_limit => 1` claimed five. Plan-dependent, so it surfaced as a flaky test. |
@@ -748,13 +749,14 @@ Database suites need a local Postgres carrying the fixture:
 
 ```bash
 createdb wtp
-psql -d wtp -f db/test-fixture.sql         # contains jobs, page_views AND the P1 photo tables
+psql -d wtp -f db/test-fixture.sql         # jobs (hardened), page_views, the P1 tables, the P2 functions
 
 psql -d wtp -f db/verify-analytics.sql        # 76 assertions
-psql -d wtp -f db/verify-jobs.sql             # 107
+psql -d wtp -f db/verify-jobs.sql             # 114 (incl. the no-profile tenant gate)
 psql -d wtp -f db/verify-tenant-isolation.sql # 25 (14 + 11 for the photo tables)
 psql -d wtp -f db/verify-photo-assets.sql     # 137
-bash scripts/fixture-matches-migration.sh     # 403 jobs + 175 page_views + 435 P1 facts
+psql -d wtp -f db/verify-photo-ingest.sql     # 246
+bash scripts/fixture-matches-migration.sh     # 409 jobs + 175 page_views + 912 P1/P2 facts
 bash scripts/jobs-concurrency.sh              # 17, needs two connections
 # db/verify-draft.sql is BROKEN and deliberately not in the loop — see open-items
 ```
@@ -765,6 +767,7 @@ TypeScript suites live in `.mk/` and are run directly:
 npx tsx .mk/analytics.ts       # 295   (needs the database)
 npx tsx .mk/jobs.ts            # 64    (needs the database)
 npx tsx .mk/photo-assets.ts    # 55    (needs the database)
+npx tsx .mk/ingest.ts          # 175   (needs the database; two-connection concurrency)
 npx tsx .mk/section-values.ts  # 1557
 npx tsx .mk/settings.ts        # 408
 ```
@@ -799,11 +802,13 @@ to the real role and reset it immediately.
 | **S3** | Jobs infrastructure | **DEPLOYED TO PRODUCTION 2026-09-29** |
 | **S4** | Analytics instrumentation | **DEPLOYED TO PRODUCTION 2026-09-29** |
 | **P1** | `photo_assets` / `photo_usages` tables and constraints | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled** |
+| **S3 hotfix** | `enqueue_jobs` tenant guard made NULL-safe | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled** |
+| **P2** | Unified photo ingestion | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled — COMPLETE** |
 
-S1 and S2 are complete; S3, S4 and P1 are deployed, verified and reconciled
-into the schema-truth files. S3's and S4's application code is committed and
-pushed (S4's committed 2026-09-29, `2af178b`); P1's reconciliation is awaiting
-Gonzalo's commit. **P2 is next and has not been started.**
+S1 and S2 are complete; S3, S4, P1, the S3 hotfix and P2 are deployed, verified
+and reconciled into the schema-truth files. S3's, S4's and P1's application
+code is committed and pushed (P1's as `284876c`); the hotfix's and P2's are
+awaiting Gonzalo's commit. **P3 is next and has not been started.**
 
 ## Production migration identifiers
 
@@ -812,19 +817,31 @@ Gonzalo's commit. **P2 is next and has not been started.**
 | S3 | `20260929212635` | `jobs_infrastructure_2026_09_29` | `9048133d6ff9431150ab07e1e48188718edf33b83eb6cfb139bb937e0ea7797f` |
 | S4 | `20260929231653` | `analytics_instrumentation_2026_09_29` | `c1acb1ae3a68c21094622820c768343e1e5fba63de6ee2f769ba5d4ddd4bfbdf` |
 | P1 | `20260930123113` | `photo_assets_p1_2026_09_29` | `fedb6e7f457f9a7e7568efefcb2116ca7ca1b38db113dd3b1d1bf47bdc887eef` |
+| S3 hotfix | `20260930184309` | `enqueue_jobs_tenant_guard_2026_09_30` | `fb5e1689de95048f39c76f19a42ca2a7d18e2eecb3c0b8e69d0cbf8c7c4b1bc3` |
+| P2 | `20260930191116` | `photo_ingest_2026_09_30` | `6b83b8176f2f669e61e828eea59f84244d3954c47e123b48965031b7af880b9d` |
 
-(P1's hash is of the file with LF line endings, as git stores it. A Windows
-checkout with `core.autocrlf=true` is CRLF and hashes differently.)
+(The 2026-09-30 hashes are of the files with LF line endings, as git stores
+them. A Windows checkout with `core.autocrlf=true` is CRLF and hashes
+differently.)
 
 ## Production shape, as reconciled
 
-**37 tables · 549 columns · 13 functions · 56 policies · RLS on all 37 ·
+**37 tables · 549 columns · 18 functions · 56 policies · RLS on all 37 ·
 PostgreSQL 17.6.**
 
 The policy sequence is 54 → 55 (the queue added one) → 54 (analytics removed
 `"Anyone can record a view"`, which was `for insert with check (true)`) → 56
 (P1 added one tenant policy on each photo table). P1 added 2 tables and 55
-columns (38 + 15 + two `asset_id`) and no function.
+columns (38 + 15 + two `asset_id`) and no function. P2 added five functions
+(13 → 18) and changed nothing else; the hotfix changed one line of
+`enqueue_jobs`.
+
+The Supabase security advisor warns that `authenticated` may execute five
+SECURITY DEFINER functions — `enqueue_jobs` and P2's four `register_*`. **That
+is the approved design, not a finding to fix**: each is a narrow, fully
+validated door (tenant, resource, key shape, values, privileges — tested as the
+real roles), and the alternative would be direct table grants RLS cannot
+police. Recorded in `db/schema-verified.md`.
 
 ## What each phase actually changed
 
@@ -863,25 +880,60 @@ columns (38 + 15 + two `asset_id`) and no function.
     included, held to it by `.mk/photo-assets.ts` as a permanent invariant.
   - `photos.asset_id` / `site_images.asset_id` exist, nullable, **with no
     foreign key until P4**.
+- **The S3 hotfix** made `enqueue_jobs`' tenant guard NULL-safe. It read
+  `if not (p_tenant = current_tenant_id() or is_platform_admin())`; for a
+  signed-in account with no profile that is `not NULL`, which does not raise,
+  so such an account could queue work on any site. Now `(…) is not true`.
+  Found by P2's own suite, which tests the same guard shape.
+- **P2** made every real photograph upload — gallery, site/editor, journal,
+  custom cover — one canonical `photo_assets` row, written in the same
+  transaction as the route's own row, through four narrow definer functions.
+  Details below; live smoke results in `db/schema-verified.md`.
 
 ---
 
 # 11. The current next phase
 
-## P2 — unified ingestion
+## P3 — the extractor and `syncUsages`
 
-**Not started. Do not start it without being asked.**
+**Not started. Do not start it without being asked.** Every document edit
+projects its usages (the P2 gallery usage aside). Authority:
+`claude/photo-migration-plan.md`, P3, and its recorded P3 findings (the hero
+`video_path` excluded by key, the page share image with no usage kind, the
+accent mark excluded). P3 must introduce the narrowest write capability
+`syncUsages` needs — P1 and P2 grant no application role any direct write on
+`photo_usages`.
 
-One `ingest()`, three callers (`registerPhoto`, `registerSiteImage`,
-`registerJournalImage`), idempotent on `(tenant_id, key_base)`, so that every
-new upload produces an asset **before** the backfill runs. No photo
-schema-shape change — but P1 granted no application role any write on the photo
-tables, so P2 must deliberately introduce the **narrowest write capability
-asset ingestion requires**, in its own separately reviewed migration. Its shape
-is P2's decision, not settled here.
+## P2 — unified ingestion — DEPLOYED 2026-09-30
 
-Detail, tests and the must-not-change list: `claude/photo-migration-plan.md`,
-P2. The P1 record is in §10 and in `db/schema-verified.md`.
+Every new photograph upload produces an asset **before** the backfill runs.
+Deployed as Supabase `20260930191116` together with, and separately from, the
+S3 tenant-guard hotfix (`20260930184309`). Proved by
+`db/verify-photo-ingest.sql` (246) and `.mk/ingest.ts` (175), and smoke-tested
+live on all four routes. The shape:
+
+- **Four routes, not three**: gallery (`registerPhoto`), site/editor
+  (`registerSiteImage`), journal (`registerJournalImage`) and **custom gallery
+  covers** (`uploadCustomCover`, which keeps no original — the asset records
+  `original_path = NULL`). The accent mark is branding furniture and is **out**.
+- **The write boundary is four route-specific SECURITY DEFINER wrappers**
+  (`register_gallery_photo`, `register_site_image`, `register_journal_image`,
+  `register_album_cover`), EXECUTE to `authenticated` only, over one internal
+  upsert nobody can call. No direct table grant for anybody; uploads keep
+  running as the photographer. Each wrapper validates the tenant (the
+  platform-admin rule), the album, and the exact storage-key shape its route
+  mints, and has **no parameter** for anything the database should decide
+  (`state`, `alt_*`, lifecycle, `created_by`).
+- **Atomic and idempotent**: asset + relationship in one transaction,
+  serialised on a row lock of the asset; a retry reuses rather than duplicates.
+- **Failure is hardened**: a failed registration fails the upload, after a
+  cleanup that first checks no committed asset owns the files.
+- **EXIF is normalised everywhere; geolocation is not** — kept only for gallery
+  uploads, which store it today. The `exif` column is a 1 KB allowlist.
+
+Authority: `claude/photo-assets-design.md` §9 (revision 7) and
+`claude/photo-migration-plan.md`, P2. The P1 record is in §10 and in
+`db/schema-verified.md`.
 
 ---
 
@@ -892,7 +944,7 @@ P2. The P1 record is in §10 and in `db/schema-verified.md`.
 | phase | what | user-visible change |
 |---|---|---|
 | **P1** | Tables, constraints, indexes, policies. Pure DDL. **DEPLOYED 2026-09-30** (`20260930123113`) and reconciled. | none |
-| **P2** | **Unified ingestion.** One `ingest()`, three callers, idempotent on `key_base`. Done *before* the backfill so there is no new stream of un-asseted files. EXIF becomes universal; journal images finally exist as records. | none |
+| **P2** | **Unified ingestion.** One `ingest()`, four routes (gallery, site, journal, custom cover), idempotent on `key_base`. Done *before* the backfill so there is no new stream of un-asseted files. EXIF normalisation becomes universal (geolocation does not); journal images finally exist as records. **DEPLOYED 2026-09-30** (`20260930191116`) and reconciled. | none on success; failed uploads now fail cleanly |
 | **P3** | **The extractor and `syncUsages`.** Every document edit projects its usages. Deliberately before the backfill, so no live edit goes unprojected. The invariant test: drop every usage row, re-run over every document, and the table comes back identical. | none |
 | **P4** | **Backfill**, in idempotent passes through the queue, then the two deferred foreign keys — which applying without violation is itself the proof the passes were complete. | none |
 | **P5** | **Asset-aware pickers, the resolver and alt semantics.** P5a: identity travels through `onPick`. P5b: `resolveImage` prefers the asset's real derivatives and falls back to the stored path. | correct srcsets for small photographs; alt semantics |

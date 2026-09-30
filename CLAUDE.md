@@ -105,16 +105,18 @@ bash scripts/sandbox-build.sh           # expect: BUILD EXIT: 0
 ```
 
 Database suites — need a local Postgres carrying the fixture, which already
-contains `jobs`, `page_views` and the P1 photo tables in their deployed shape:
+contains `jobs` (with the hardened `enqueue_jobs`), `page_views`, the P1 photo
+tables and the P2 ingestion functions in their deployed shape:
 
 ```bash
 createdb wtp && psql -d wtp -f db/test-fixture.sql
 
 psql -d wtp -f db/verify-analytics.sql         # 76 assertions
-psql -d wtp -f db/verify-jobs.sql              # 107
+psql -d wtp -f db/verify-jobs.sql              # 114 (incl. the no-profile tenant gate)
 psql -d wtp -f db/verify-tenant-isolation.sql  # 25
 psql -d wtp -f db/verify-photo-assets.sql      # 137
-bash scripts/fixture-matches-migration.sh      # 403 jobs + 175 page_views + 435 P1 facts
+psql -d wtp -f db/verify-photo-ingest.sql      # 246
+bash scripts/fixture-matches-migration.sh      # 409 jobs + 175 page_views + 912 P1/P2 facts
 bash scripts/jobs-concurrency.sh               # 17, needs two connections
 ```
 
@@ -124,6 +126,7 @@ TypeScript suites live in `.mk/` and are run directly:
 npx tsx .mk/analytics.ts       # 295  (needs the database)
 npx tsx .mk/jobs.ts            #  64  (needs the database)
 npx tsx .mk/photo-assets.ts    #  55  (needs the database)
+npx tsx .mk/ingest.ts          # 175  (needs the database; two-connection concurrency)
 npx tsx .mk/section-values.ts  # 1557
 npx tsx .mk/settings.ts        #  408
 ```
@@ -167,19 +170,28 @@ unrelated — do not put Scene code there.
 **S3** jobs infrastructure — **deployed**, migration `20260929212635`.
 **S4** analytics instrumentation — **deployed**, migration `20260929231653`.
 **P1** `photo_assets` / `photo_usages` tables and constraints — **deployed**
-2026-09-30, migration `20260930123113`, and reconciled. Nothing reads or writes
-the new tables yet.
+2026-09-30, migration `20260930123113`, and reconciled.
+**S3 tenant-guard hotfix** — **deployed** 2026-09-30, migration `20260930184309`
+(`enqueue_jobs`' guard made NULL-safe), and reconciled.
+**P2** unified photo ingestion — **deployed** 2026-09-30, migration
+`20260930191116`, and reconciled. Every real photograph upload (gallery, site,
+journal, custom cover) now becomes one `photo_assets` row through four narrow
+definer functions; nothing READS the photo tables yet.
 
-Production: 37 tables · 549 columns · 13 functions · 56 policies · RLS on all 37
+Production: 37 tables · 549 columns · 18 functions · 56 policies · RLS on all 37
 · PostgreSQL 17.6.
 
-**The next phase is P2 — unified ingestion** (`photo-migration-plan.md`). It
-must introduce the narrowest write capability asset ingestion needs, because P1
-granted no application role any write on the photo tables. **Not started.**
+**The next phase is P3 — the extractor and `syncUsages`**
+(`photo-migration-plan.md`). **Not started.**
+
+The Supabase security advisor warns that `authenticated` may execute five
+SECURITY DEFINER functions (`enqueue_jobs`, the four `register_*`). **Intended —
+do not "fix" them**; the narrow definer function is the approved boundary
+(`db/schema-verified.md`).
 
 ## Not without explicit approval
 
-- **Starting P2**, or any other phase, or more than one phase at a time.
+- **Starting P3**, or any other phase, or more than one phase at a time.
 - **Applying anything to the production database.**
 - **Committing or pushing.**
 - Dropping, renaming or repurposing a column — including **Phase D** (the

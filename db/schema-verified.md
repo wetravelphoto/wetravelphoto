@@ -23,9 +23,10 @@ The full picture is in **`db/schema-2026-09.sql`**, transcribed from
 policies**, **9 functions**, one trigger (`site_draft_touch` on `site_draft`),
 and no trigger anywhere else.
 
-*That was the survey. After S3, S4 and P1, production is **37 tables, 549
-columns, 13 functions, 56 policies**, RLS on all 37 — see the deployment
-sections below, the latest of which is P1 (2026-09-30).*
+*That was the survey. After S3, S4, P1, the S3 tenant-guard hotfix and P2,
+production is **37 tables, 549 columns, 18 functions, 56 policies**, RLS on all
+37 — see the deployment sections below, the latest of which is P2
+(2026-09-30).*
 
 *The policy figure was first written here as 53, which was a counting error in
 the transcription rather than anything about the database. Corrected 2026-09-29
@@ -599,6 +600,94 @@ No S4-specific security finding. `page_views_tenant_time` and
 `page_views_post_idx` report as unused, which is expected immediately after
 creation and worth re-checking once there is real traffic — the same follow-up
 already recorded for the queue's three indexes.
+
+---
+
+## 2026-09-30 — the S3 tenant-guard hotfix and P2, DEPLOYED TO PRODUCTION
+
+Two migrations, reviewed and applied by ChatGPT, each SHA256 verified against
+the file before it was applied:
+
+| | Supabase version | name | file | sha256 |
+|---|---|---|---|---|
+| S3 hotfix | `20260930184309` | `enqueue_jobs_tenant_guard_2026_09_30` | `db/migrations/2026-09-30_enqueue_jobs_tenant_guard.sql` | `fb5e1689de95048f39c76f19a42ca2a7d18e2eecb3c0b8e69d0cbf8c7c4b1bc3` |
+| P2 | `20260930191116` | `photo_ingest_2026_09_30` | `db/migrations/2026-09-30_photo_ingest.sql` | `6b83b8176f2f669e61e828eea59f84244d3954c47e123b48965031b7af880b9d` |
+
+### What they fixed and added
+
+**The hotfix.** The deployed `enqueue_jobs` guarded the site with
+`if not (p_tenant = current_tenant_id() or is_platform_admin())`. SQL is
+three-valued: for a signed-in account with **no profiles row**,
+`current_tenant_id()` is NULL, the predicate is NULL, `not NULL` is NULL, and the
+IF did not raise — such an account could queue work on any site (found by P2's
+suite; confirmed against production). The guard is now
+`(…) is not true`. Nothing else about the function changed.
+
+**P2.** Five functions — the internal `upsert_photo_asset` and the four
+`register_*` wrappers, the one way a photograph enters `photo_assets`. P2
+changed **functions only**: no table, column, index, policy or table grant.
+
+### Verified against the live database afterwards
+
+| | |
+|---|---|
+| totals | **37 tables, 549 columns, 18 public functions, 56 public policies** (13 → 18: the five P2 functions) |
+| `enqueue_jobs` | SECURITY DEFINER, `search_path = ''`, EXECUTE: `authenticated` yes, `anon` no, `service_role` no; guard NULL-safe (`is not true`) |
+| `register_gallery_photo`, `register_site_image`, `register_journal_image`, `register_album_cover` | SECURITY DEFINER, `search_path = ''`, EXECUTE to `authenticated` only (`anon`, `service_role`: none) |
+| `upsert_photo_asset` | SECURITY **INVOKER**, `search_path = ''`, EXECUTE to **no** application role |
+| `photo_assets`, `photo_usages` table grants | unchanged from P1: `authenticated` SELECT only; `anon`, `service_role` none |
+
+### Live smoke tests, run in production and cleaned up
+
+- **Hotfix:** a normal photographer enqueueing on their own site → 1 job;
+  onto a foreign site → `42501`; an authenticated account with no profile →
+  `42501`. No smoke job remained.
+- **P2, all four routes** registered successfully: gallery, site image, journal
+  image, custom gallery cover.
+- **Canonical retry:** a gallery membership recreated after deletion took the
+  existing canonical asset's facts; a custom-cover retry kept the canonical
+  asset's display path.
+- **Boundary:** a half GPS coordinate → `22023`; a wrong tenant → `42501`; an
+  authenticated account with no profile → `42501`.
+- Cleanup complete: `photo_assets` 0, `photo_usages` 0, `jobs` 0, the temporary
+  smoke album gone.
+
+### Advisors, after deployment — the definer warnings are INTENDED
+
+The security advisor warns that `authenticated` may execute five SECURITY
+DEFINER functions: `enqueue_jobs` and the four `register_*` wrappers. **This is
+the design and must not be "fixed."** Each is a deliberately narrow door: it
+restates the tenant rule NULL-safely, validates the resource (the album, the
+photograph), the exact storage-key shape, every value it accepts, and has no
+parameter for anything the database should decide. The alternative the
+advisor's rule implies — direct INSERT/UPDATE grants to `authenticated` — would
+let a browser write any value RLS cannot see (RLS decides rows, not values: the
+S3 lesson). Revoking EXECUTE would not close a hole; it would remove the only
+validated path. All of this is proved by `db/verify-jobs.sql` and
+`db/verify-photo-ingest.sql`, as the real roles.
+
+The P1 performance notes stand, unchanged and informational: unused photo
+indexes, several composite foreign keys and `photo_assets.created_by` without a
+covering index. Not acted on (see `claude/open-items.md`).
+
+### The reconciliation
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` now carry the hardened
+`enqueue_jobs` and all five P2 functions with their exact grants — the guard
+lines and every function **copied from the migration files by a script**, not
+retyped. The reconciled fixture alone passes `db/verify-jobs.sql` (including
+the no-profile gate) and `db/verify-photo-ingest.sql`; re-applying either
+migration to it changes nothing (catalogue fingerprint identical).
+
+`scripts/fixture-matches-migration.sh` now rebuilds `jobs` from the jobs
+migration **plus the hotfix**, and P2's five functions from the P2 migration,
+comparing their definitions and EXECUTE grants — 409 `jobs` facts, 550 for
+`photo_assets` with the functions. It also now drops `enqueue_jobs` by name:
+before, `drop table jobs cascade` never removed it (it returns an integer, not
+a jobs row), so that one function had been compared against the fixture's own
+copy. Shown to bite on a reverted NULL-blind guard, a dropped check in the
+helper, an extra EXECUTE grant on the helper, a wrapper made SECURITY INVOKER,
+and a missing function.
 
 ---
 

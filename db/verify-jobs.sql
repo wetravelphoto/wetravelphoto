@@ -1195,6 +1195,114 @@ begin
 end $$;
 
 
+-- ── 13. The tenant gate — including the caller with NO profile ─────────────
+--
+-- Added with db/migrations/2026-09-30_enqueue_jobs_tenant_guard.sql. The gate
+-- used to read `if not (p_tenant = current_tenant_id() or is_platform_admin())`.
+-- SQL is three-valued: for a signed-in account with no profiles row,
+-- current_tenant_id() is NULL, the predicate is NULL, `not NULL` is NULL, and
+-- the IF did not raise — so such an account could queue work on any site. The
+-- hotfix writes it `(…) is not true`.
+--
+-- Each refusal is asserted by its MESSAGE, not just its SQLSTATE: the later
+-- ownership check also raises 42501, and "refused" by the wrong layer is how a
+-- test passes for the wrong reason (S4). Run against a database WITHOUT the
+-- hotfix, the no-profile case fails — which is the proof this block can fail.
+--
+-- The hotfix is DEPLOYED (Supabase 20260930184309) and reconciled into
+-- db/test-fixture.sql, so the fixture alone passes this block. Against a
+-- database carrying the pre-hotfix function it fails, correctly.
+
+do $$
+declare
+  v_a       uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  v_b       uuid := 'aaaaaaaa-0000-0000-0000-000000000002';
+  v_user_a  uuid := '11111111-1111-1111-1111-111111111111';
+  v_user_b  uuid := '22222222-2222-2222-2222-222222222222';
+  v_photo1  text := 'cccccccc-0000-0000-0000-000000000001';
+  v_photo2  text := 'cccccccc-0000-0000-0000-000000000002';
+  own       text;
+  foreign_  text;
+  nobody    text;
+  admin     text;
+  as_anon   text;
+  as_sr     text;
+  n_nobody  int;
+begin
+  perform set_config('jb.owner_role', session_user, true);
+  delete from public.jobs;
+  update public.profiles set is_platform_admin = false where id in (v_user_a, v_user_b);
+
+  -- A photographer with a normal profile, on their own site: allowed.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_user_a)::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    own := 'queued ' || public.enqueue_jobs(v_a, 'photo.derivatives',
+             jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('photoId', v_photo1))));
+  exception when others then own := sqlstate || ' ' || sqlerrm;
+  end;
+
+  -- The photographer of site B, asking for site A: refused BY THE GATE.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_user_b)::text, true);
+  begin
+    foreign_ := 'queued ' || public.enqueue_jobs(v_a, 'photo.derivatives',
+             jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('photoId', v_photo2))));
+  exception when others then foreign_ := sqlstate || ' ' || sqlerrm;
+  end;
+
+  -- THE CASE THE HOTFIX IS FOR: signed in, but no profiles row at all.
+  perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid())::text, true);
+  begin
+    nobody := 'queued ' || public.enqueue_jobs(v_a, 'photo.derivatives',
+             jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('photoId', v_photo2))));
+  exception when others then nobody := sqlstate || ' ' || sqlerrm;
+  end;
+  perform set_config('role', current_setting('jb.owner_role'), true);
+  select count(*) into n_nobody from public.jobs where payload ->> 'photoId' = v_photo2;
+
+  -- A platform admin, parked on site B, working on site A: intentional.
+  update public.profiles set is_platform_admin = true where id = v_user_b;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_user_b)::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    admin := 'queued ' || public.enqueue_jobs(v_a, 'photo.derivatives',
+             jsonb_build_array(jsonb_build_object('payload', jsonb_build_object('photoId', v_photo2))));
+  exception when others then admin := sqlstate || ' ' || sqlerrm;
+  end;
+  perform set_config('role', current_setting('jb.owner_role'), true);
+  update public.profiles set is_platform_admin = false where id = v_user_b;
+
+  -- anon and service_role cannot call it at all: refused by privilege.
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('role', 'anon', true);
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives', '[]'::jsonb);
+    as_anon := 'CALLED — NOT BLOCKED';
+  exception when others then as_anon := sqlstate;
+  end;
+  perform set_config('role', 'service_role', true);
+  begin
+    perform public.enqueue_jobs(v_a, 'photo.derivatives', '[]'::jsonb);
+    as_sr := 'CALLED — NOT BLOCKED';
+  exception when others then as_sr := sqlstate;
+  end;
+  perform set_config('role', current_setting('jb.owner_role'), true);
+
+  insert into job_res (step, expected, actual, pass) values
+    ('gate: own site, normal profile, is allowed',   'queued 1', own, own = 'queued 1'),
+    ('gate: another site is refused by the gate',    '42501 That is not your site.', foreign_,
+       foreign_ = '42501 That is not your site.'),
+    ('gate: NO PROFILE is refused by the gate',      '42501 That is not your site.', nobody,
+       nobody = '42501 That is not your site.'),
+    ('gate: …and nothing was queued for it',          '0', n_nobody::text, n_nobody = 0),
+    ('gate: a platform admin may act on the host',   'queued 1', admin, admin = 'queued 1'),
+    ('gate: anon cannot execute it',                 '42501', as_anon, as_anon = '42501'),
+    ('gate: service_role cannot execute it',         '42501', as_sr, as_sr = '42501');
+
+  delete from public.jobs;
+end $$;
+
+
 -- ── Report, and undo everything ─────────────────────────────────────────────
 
 do $$

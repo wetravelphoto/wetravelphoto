@@ -60,6 +60,19 @@ permanently.
       is expected immediately after creation and means something only once real
       views arrive.
 - [x] **After the P1 deployment (2026-09-30): no P1-specific security finding.**
+- [x] **After the S3 hotfix and P2 (2026-09-30): the security advisor warns
+      that `authenticated` may execute five SECURITY DEFINER functions —
+      `enqueue_jobs`, `register_gallery_photo`, `register_site_image`,
+      `register_journal_image`, `register_album_cover`.** **This is the design
+      and must not be "fixed"**, for the same reason as `enqueue_jobs` above:
+      each is the one narrow, validated door for its job — tenant restated
+      NULL-safely, resource and storage-key shape checked, every value
+      validated, nothing the database should decide accepted as a parameter,
+      all tested as the real roles (`db/verify-jobs.sql`,
+      `db/verify-photo-ingest.sql`). The alternative the advisor implies,
+      direct table writes for `authenticated`, is exactly what RLS cannot
+      police. The internal `upsert_photo_asset` is INVOKER and callable by no
+      application role, so it is not flagged.
 - [ ] **P1 performance findings — a measured index review once P2/P3 have
       written rows.** All informational, and **deliberately not acted on**: do
       not add an index merely to silence the advisor. Reported:
@@ -348,20 +361,135 @@ it is roadmap 37's templates. Build the layouts first and the five templates
 become presets over them; build the templates first and each is a fork to
 maintain separately.
 
+## 10. The photo sequence — decisions and follow-ups from the P2 design pass (2026-09-30)
+
+Decided and recorded in `claude/photo-assets-design.md` §9 (revision 7) and
+`claude/photo-migration-plan.md` P2. What is still open, or deliberately
+deferred to a later phase:
+
+- [x] **SECURITY HOTFIX DEPLOYED 2026-09-30 and reconciled** — Supabase
+      `20260930184309` (`enqueue_jobs_tenant_guard_2026_09_30`), sha256
+      `fb5e1689…`. Live: own-site enqueue 1, foreign site `42501`, no-profile
+      account `42501`, no smoke job left. The fixture carries the hardened
+      function and the drift guard rebuilds `jobs` from the jobs migration
+      plus this hotfix. `db/migrations/2026-09-30_enqueue_jobs_tenant_guard.sql`,
+      confirmed against live production by ChatGPT. The migration changes only the gate
+      to `(…) is not true`; its body is otherwise a scripted byte-copy of the
+      deployed function, and a catalogue fingerprint shows every other
+      attribute and object identical. `db/verify-jobs.sql` gained a tenant-gate
+      block (own site; foreign site refused by the gate; **no profile refused by
+      the gate**; platform admin; anon; service_role) — it FAILS against the old
+      function, which is the proof it can. After deployment: reconcile the
+      fixture and snapshot, and extend `scripts/fixture-matches-migration.sh`
+      so `jobs` is rebuilt from the jobs migration **plus** this hotfix.
+
+      **The audit of every `public` SECURITY DEFINER function (2026-09-30):**
+      | function | EXECUTE | NULL-blind guard? |
+      |---|---|---|
+      | `enqueue_jobs` | authenticated | **yes — the hotfix** |
+      | `record_page_view` | service_role | **yes** — `if not (p_tenant = current_tenant_id() or is_platform_admin() or current_setting('role') = 'service_role' or session_user = current_user)`. Not exposed today: only `service_role` may call it, and for that role the `service_role` clause is true. It becomes exposed the day anybody grants it to `authenticated`. **Reported, not changed — needs approval.** |
+      | `register_gallery_photo`, `register_site_image`, `register_journal_image`, `register_album_cover` (P2) | authenticated | no — written `is not true` |
+      | `claim_jobs`, `finish_job` | service_role | no tenant guard (the worker's) |
+      | `current_tenant_id`, `is_platform_admin`, `default_tenant_id`, `tenant_for_insert`, `tenant_of` | public, anon, authenticated, service_role | none — these are the helpers the guards call; `is_platform_admin` coalesces to false |
+
+- [x] **SECURITY — S3's deployed `enqueue_jobs` passes its tenant check for
+      a caller with no profile.** Found by P2's suite (2026-09-30). Its gate
+      is `if not (p_tenant = public.current_tenant_id() or
+      public.is_platform_admin())`. For a signed-in account that has **no
+      `profiles` row**, `current_tenant_id()` is NULL, the comparison is NULL,
+      `NULL or false` is NULL, and `if not (NULL)` **does not raise**.
+      Measured against the fixture: such an account queued a
+      `photo.derivatives` job on site A for one of site A's photographs, and
+      the row was written. The photograph-ownership check still binds the
+      *work* to that site's own photographs, and the job only rebuilds sizes
+      (a no-op when they exist), so the practical impact is small — but it is
+      a tenant-boundary bypass in production. The fix is one line (`(…) is
+      not true`, as the P2 wrappers use) in **its own reviewed migration**;
+      deliberately not folded into P2. Worth checking the other definer
+      functions for the same shape in the same sitting.
+- [x] **`photos.original_bytes` — RULED 2026-09-30:** the server-observed
+      byte count everywhere, the gallery row included. The browser's
+      `file.size` argument to `registerPhoto` is kept for the uploader's call
+      but no longer used.
+- [ ] **Accepted transitional state (P2 → P6): unused assets after
+      `deletePhoto`.** `deletePhoto` is unchanged in P2: it deletes the R2
+      files and the `photos` row, the `gallery` usage cascades away, and the
+      `photo_assets` row **survives, unused, pointing at deleted files**.
+      Harmless while nothing reads `photo_assets`. P6 owns archive,
+      soft-delete, delayed deletion and the sweeper.
+- [ ] **`derivePhoto` is a named, temporary exemption (P2 → P4).** The
+      pre-ladder derivative job calls `processPhoto` and writes
+      `photos.derivatives` without an asset. P2's call-site scan exempts it
+      by name; **P4** brings it under assets or retires it and removes the
+      exemption.
+- [ ] **For P3: the hero's `video_path` is `kind: 'image'`** in the registry
+      and must be excluded from the extractor **by key**.
+- [ ] **For P3: the page share image has no usage kind.** A P3 decision; P2
+      adds no kind.
+- [x] **The accent mark is not a photograph** — excluded from P2, P3, P4 and
+      `photo_assets` (branding furniture, may be SVG).
+- [x] **P4's sample invariant corrected**: every **non-sample** `photos` row
+      gets an `asset_id`; built-in samples never produce an asset and keep
+      `asset_id = NULL`.
+- [x] **RESOLVED 2026-09-30 — the stuck cover spinner fixed in
+      `AlbumSettingsEditor.tsx`** (authorised): `handleCustomUpload` restores
+      the uploading state in a `finally`; the picker closes and the page
+      refreshes only on success; the error is not swallowed (there is no error
+      display to show it in). `.mk/ingest.ts` guards it. Dead `CoverEditor.tsx`
+      left alone.
+- [ ] **HEIF/HEIC cannot be decoded by the prebuilt sharp** (measured
+      2026-09-30: its `heif` input covers `.avif` only; HEVC is neither
+      decoded nor encoded). An iPhone HEIC uploaded as a cover therefore fails
+      at decode today, before and after P2 — P2's "a cover may be HEIF" rule
+      only matters on a sharp build with HEVC support. `/api/upload-url`
+      already refuses HEIC for the signed routes. Worth knowing before anybody
+      promises HEIC support.
+- [ ] **Same stuck-state pattern, not P2's and left alone:**
+      `AlbumSettingsEditor`'s `handleVideoUpload` (cover video) has the identical
+      `await`-then-`setUploading(null)` shape.
+- [x] *(history)* **The stuck cover spinner is in the component that
+      is actually used, which is not the one the ruling named.** The P2
+      ruling allowed a minimal `try/catch/finally` in `CoverEditor` if a
+      thrown `uploadCustomCover` failure really leaves the spinner stuck. It
+      does — but **`components/admin/CoverEditor.tsx` is not imported
+      anywhere**; it is dead code. The mounted editor is
+      `components/admin/AlbumSettingsEditor.tsx` (via
+      `app/admin/trips/[id]/settings/page.tsx`), whose `handleCustomUpload`
+      has the identical bug: a throw skips `setUploading(null)`, the label
+      stays "Uploading…" and the buttons stay disabled. Neither component has
+      an error display to reuse. P2 therefore changed **neither**; it needs a
+      one-line ruling (fix `AlbumSettingsEditor` the same minimal way, and
+      whether to delete the dead `CoverEditor`). The failure was already
+      possible before P2 on a database error; P2 adds more ways to reach it.
+- [ ] **A thrown server-action error reaches the photographer redacted** in
+      production, so a `registerJournalImage` failure shows a generic message
+      in `ImagePickerModal`. Accepted by the P2 ruling.
+- [x] **`check:tenants` and `.rpc(` — RULED 2026-09-30:** the scanner stays a
+      direct-table check. P2's suites prove the rest: every wrapper restates
+      the tenant rule (checked in the catalogue), wrong-tenant, missing-tenant,
+      no-profile and signed-out calls are refused, a platform admin's
+      cross-site upload is explicit and audited, and `.mk/ingest.ts` asserts
+      each of the four call sites takes the site from `requireEditor()`.
+- [ ] **Small normalisations P2 introduced on the pre-existing rows**, each
+      affecting only pathological input: `site_images.filename` now drops
+      control characters and any path prefix (it was only cut to 120); a
+      keyword over 200 characters is cut and control characters are removed
+      before it reaches `photos.tags`. Recorded so nobody mistakes them for
+      accidents.
+
 ---
 
 ## Where to pick up
 
-**Gonzalo:** commit P1 (the migration, its suites and this reconciliation) —
-production already has it, so the repository is what lags. Then the four
-Sentry variables in Vercel, and confirm `CRON_SECRET` is set so the nightly
-drain actually runs.
+**Gonzalo:** commit the S3 hotfix and P2 (both migrations, the application
+code, their suites and this reconciliation) — production already has them, so
+the repository is what lags. Then the four Sentry variables in Vercel, and
+confirm `CRON_SECRET` is set so the nightly drain actually runs.
 
-**Next build:** **P2 — unified ingestion**, in `claude/photo-migration-plan.md`.
-**Not started.** P1 is deployed and reconciled, so nothing is in front of it —
-but P1 granted no application role any write on the photo tables, so P2 must
-begin by deciding, and putting through its own reviewed migration, the
-narrowest write capability asset ingestion needs.
+**Next build:** **P3 — the extractor and `syncUsages`**, in
+`claude/photo-migration-plan.md`. **Not started.** P2 is deployed, reconciled
+and complete; its recorded P3 findings (hero `video_path` by key, the share
+image's missing kind, the accent mark excluded) are in §10.
 
 **The alternative**, if testers get restless: 12a, the carousel arrows. Small,
 asked for, and visible. Or **21 — visitor stats**, which after S4 is a screen
@@ -370,6 +498,46 @@ over data rather than a build.
 ---
 
 ## What shipped, most recent first
+
+### 2026-09-30 (later) — the S3 tenant-guard hotfix, and P2 unified ingestion, DEPLOYED
+
+S3 hotfix `20260930184309`, sha256 `fb5e1689…`; P2 `20260930191116`, sha256
+`6b83b817…`. Both reviewed and applied by ChatGPT. Full record:
+`db/schema-verified.md`.
+
+**Every real photograph that enters a site is now one canonical asset.** The
+four routes — a gallery upload, a photograph from the editor's picker, a
+journal image, a custom gallery cover — each register it through their own
+narrow database function, in the same transaction as the route's own row
+(the gallery membership and its usage, the Uploads row, the album's cover).
+Nothing READS the photo tables yet, so no photographer sees a difference on
+success; a failed upload now fails cleanly instead of leaving a file no table
+mentions.
+
+What was settled, each proved against a real database and then live:
+
+- **The write boundary is four narrow doors**, not table grants: tenant
+  restated NULL-safely, the album checked, the exact storage-key shape each
+  route mints, every value validated, and no parameter for anything the
+  database decides (`state`, alt text, lifecycle, `created_by`).
+- **One upload, one asset, however it is retried or raced** — the asset row is
+  locked before the relationship is looked up; proved with two connections.
+- **A recreated relationship takes the canonical asset's facts**, never the
+  retry's — proved live on a gallery membership and a cover.
+- **The server measures the file**: hash, byte count and type from the bytes
+  it read; the three signed routes accept exactly the five upload types.
+- **EXIF is normalised everywhere, geolocation is not** — kept only for gallery
+  uploads, both-or-neither, enforced in the database too.
+
+**And a security fix found on the way.** P2's suite tests its own tenant guard
+for a caller with no profile, which caught a NULL-blind guard in its first
+draft — and then the same shape live in S3's `enqueue_jobs`, where a signed-in
+account with no profile could queue work on any site. Hotfixed separately, one
+line, byte-identical otherwise.
+
+246 SQL checks and 175 TypeScript assertions for P2; 114 for the queue; the
+drift guard now rebuilds the hardened `enqueue_jobs` and all five P2 functions
+from their migration files.
 
 ### 2026-09-30 — P1, the photo-asset tables, DEPLOYED
 

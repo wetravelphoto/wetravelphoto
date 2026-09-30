@@ -3,21 +3,27 @@
 import { requireEditor } from '@/lib/auth'
 import { ownsKey } from '@/lib/storage-keys'
 import { r2Client } from '@/lib/r2'
-import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createClient } from '@/lib/supabase/server'
-import { processExistingOriginal } from '@/lib/derivatives'
+import { fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
 import { syncProductsForPhoto } from '@/lib/products'
-import exifr from 'exifr'
 import { revalidatePath } from 'next/cache'
 
 /**
  * Called once the browser has uploaded the original straight to R2. Reads it
- * back, pulls its metadata, builds the display sizes and records the photo.
+ * back, pulls its metadata, builds the display sizes and records the photo —
+ * since P2 through lib/photos/ingest.ts, which writes the photograph's asset,
+ * its `photos` row and its gallery usage in one database transaction.
+ *
+ * `originalBytes` is the browser's `file.size`. It is no longer used: the
+ * byte count stored is the one the server measured from the bytes it read
+ * back (P2). The parameter stays so the uploader's call does not change.
  */
 export async function registerPhoto(
   albumId: string,
   key: string,
   base: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   originalBytes: number
 ) {
   // A server action is a public endpoint: check who is asking before anything else.
@@ -29,78 +35,11 @@ export async function registerPhoto(
     throw new Error('That upload does not belong to this site.')
   }
 
-  const object = await r2Client.send(
-    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key })
-  )
-
-  if (!object.Body) throw new Error('Uploaded file could not be read back')
-
-  const buffer = Buffer.from(await object.Body.transformToByteArray())
-
-  // Lightroom keywords, capture date and GPS, straight from the file
-  let tags: string[] = []
-  let takenAt: string | null = null
-  let latitude: number | null = null
-  let longitude: number | null = null
-
-  try {
-    const meta = await exifr.parse(buffer, {
-      iptc: true,
-      xmp: true,
-      gps: true,
-      pick: ['Keywords', 'subject', 'DateTimeOriginal', 'CreateDate', 'latitude', 'longitude'],
-    })
-
-    if (meta) {
-      const raw = meta.Keywords ?? meta.subject ?? []
-      const list = Array.isArray(raw) ? raw : [raw]
-      tags = list
-        .filter((k: unknown) => typeof k === 'string')
-        .map((k: string) => k.trim().toLowerCase())
-        .filter(Boolean)
-        .slice(0, 25)
-
-      const date = meta.DateTimeOriginal ?? meta.CreateDate
-      if (date instanceof Date && !isNaN(date.getTime())) takenAt = date.toISOString()
-
-      if (typeof meta.latitude === 'number') latitude = meta.latitude
-      if (typeof meta.longitude === 'number') longitude = meta.longitude
-    }
-  } catch {
-    // Metadata is a bonus — a file without it still uploads fine
-  }
-
-  const processed = await processExistingOriginal(buffer, base, key)
-
   const supabase = await createClient()
-
-  const { data: existing } = await supabase
-    .from('photos')
-    .select('sort_order')
-    .eq('tenant_id', tenantId)
-    .eq('album_id', albumId)
-    .order('sort_order', { ascending: false })
-    .limit(1)
-
-  const nextSortOrder = (existing?.[0]?.sort_order ?? -1) + 1
-
-  const { error } = await supabase.from('photos').insert({
-    tenant_id: tenantId,
-    album_id: albumId,
-    storage_path: processed.displayPath,
-    original_path: processed.originalPath,
-    original_bytes: originalBytes || processed.originalBytes,
-    derivatives: processed.derivatives,
-    width: processed.width,
-    height: processed.height,
-    sort_order: nextSortOrder,
-    tags,
-    taken_at: takenAt,
-    latitude,
-    longitude,
-  })
-
-  if (error) throw new Error(error.message)
+  await ingestPhoto(
+    { route: 'gallery', tenantId, albumId, keyBase: base, sourceKey: key },
+    { db: fromSupabase(supabase) }
+  )
 
   revalidatePath(`/admin/trips/${albumId}`)
 }

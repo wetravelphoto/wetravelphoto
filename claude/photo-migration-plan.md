@@ -32,7 +32,8 @@ document to work against phase by phase.
 | prerequisite | **S3** jobs infrastructure | **DEPLOYED TO PRODUCTION 2026-09-29** — migration `20260929212635` |
 | parallel | **S4** analytics instrumentation | **DEPLOYED TO PRODUCTION 2026-09-29** — migration `20260929231653`; application code committed 2026-09-29 (commit `2af178b`) |
 | | **P1** tables and constraints | **DEPLOYED TO PRODUCTION 2026-09-30** — migration `20260930123113`; reconciled |
-| | **P2–P6** the rest of the photo migration | this document; **P2 is next, not started** |
+| | **P2** unified ingestion | **DEPLOYED TO PRODUCTION 2026-09-30** — migration `20260930191116`; reconciled |
+| | **P3–P6** the rest of the photo migration | this document; **P3 is next, not started** |
 | after | **S5** AI foundation + alt text | needs P5 |
 
 S4 did not block anything here and was not made to wait behind it: every day
@@ -491,61 +492,236 @@ queries are **not** changed in P1 merely to hide it.
 
 # P2 — Unified ingestion
 
-**Purpose.** Every upload produces an asset. Do this *before* the backfill, so
-the moment the backfill finishes there is no new stream of un-asseted files.
+**Status: DEPLOYED TO PRODUCTION 2026-09-30 and reconciled — COMPLETE.**
+Supabase migration `20260930191116` (`photo_ingest_2026_09_30`), sha256
+`6b83b8176f2f669e61e828eea59f84244d3954c47e123b48965031b7af880b9d`, from
+`db/migrations/2026-09-30_photo_ingest.sql`; deployed after, and separately
+from, the S3 tenant-guard hotfix (`20260930184309`). Verified live: 37 / 549 /
+18 / 56; the five functions with exactly the designed security and grants; all
+four routes, the canonical-retry proofs and the boundary refusals smoke-tested
+and cleaned up (`db/schema-verified.md`). The Supabase advisor's warnings about
+authenticated-executable definer functions are the intended design. The
+reconciled fixture alone now passes `db/verify-photo-ingest.sql`, and the drift
+guard rebuilds all five functions from the migration file.
 
-**Files.** `lib/photos/key-base.ts` (new), `lib/photos/ingest.ts` (new),
-`app/actions/photos.ts` (`registerPhoto`), `app/actions/images.ts`
+The decisions below are Gonzalo's
+(P2 design pass, then four final rulings: the server's byte count everywhere,
+`photos.original_bytes` included; `width`/`height` must be > 0 or ingestion
+fails; `check:tenants` is not broadened to `.rpc(` — the suites prove the
+tenant rule instead; a minimal cover-UI fix only if the stuck spinner is
+confirmed). The design's §9 (`claude/photo-assets-design.md`, revision 7) is
+the schema-side authority.
+
+**Hardening pass (2026-09-30), before review:** content type now route-specific
+(gallery/site/journal must be a recognised image type; only a custom cover may
+be NULL); the live cover editor (`AlbumSettingsEditor`) no longer sticks on
+"Uploading…" after a failure. **Deploy order:** the separate S3 hotfix
+`2026-09-30_enqueue_jobs_tenant_guard.sql` is independent of P2 and can go
+first; P2 does not depend on it. Rehearsed as fixture → hotfix → P2 → P2.
+
+**Integrity pass (2026-09-30), after ChatGPT's exact-file review:** a
+relationship row (the `photos` membership, the `site_images` row) and the
+album's cover path are built from the **canonical asset**, never from a
+retry's arguments — proved on the accepted "asset exists, relationship gone"
+state; latitude/longitude both-or-neither enforced in SQL; the signed routes
+accept **exactly** the five upload types (HEIF refused; a cover may still be
+HEIF or unrecognised); an unreadable source now goes through the same checked
+cleanup as every other failure. The S3 hotfix was approved as written and is
+unchanged.
+
+**Purpose.** Every photograph upload produces an asset. Do this *before* the
+backfill, so the moment the backfill finishes there is no new stream of
+un-asseted files.
+
+## The four routes in scope — as they exist today (verified 2026-09-30)
+
+| | route | entry | bytes come from | objects that exist after success | row written today |
+|---|---|---|---|---|---|
+| **A** | gallery photograph | `PhotoUploader` → `/api/upload-url {albumId}` → `registerPhoto(albumId, key, base, originalBytes): Promise<void>` | the browser PUTs the original to R2; the action reads it back | `<base>/original.<ext>` + the WebP ladder | `photos` |
+| **B** | site / editor photograph | `PhotoPicker` → `/api/upload-url {folder:'site'}` → `registerSiteImage(key, base, filename?)` → `{ok:true, path, id:string\|null} \| {ok:false, message}` | same | same | `site_images` (a failed insert still returns `ok:true`, `id:null` — hardened below) |
+| **C** | journal / story photograph | `ImagePickerModal` (story blocks, featured image) → `/api/upload-url {folder:'journal'}` → `registerJournalImage(key, base): Promise<string\|null>` | same | same | **nothing** |
+| **D** | custom gallery cover | `CoverEditor` / `AlbumSettingsEditor` → `uploadCustomCover(albumId, formData): Promise<void>` | the file arrives **in the server-action body** (`next.config` `bodySizeLimit: '25mb'`) | **the WebP ladder only** — no original is ever written | `albums.cover_custom_path` (+ `cover_photo_id = null`) |
+
+**Custom covers, exactly.** `uploadCustomCover` reads the form file into a
+buffer, mints `keyBase = t/<tenant>/covers/<album>/<uuid>`, and calls
+`processExistingOriginal(buffer, keyBase, keyBase)`. That function **never reads
+storage** — despite its name it only resizes the bytes it is handed and PUTs
+`<keyBase>/400.webp` (always) and `800`/`1600`/`2400.webp` (each only when the
+long edge reaches it). Its returned `originalPath` is the string it was given —
+`keyBase` itself, **not an object** — and `uploadCustomCover` discards it,
+writing only `displayPath`. **P2 preserves this: no original is retained for a
+cover; the asset records `original_path = NULL`.** (In A–C it is the *caller*
+that reads the browser-uploaded original back from R2 before calling
+`processExistingOriginal`.)
+
+**Out of scope, deliberately:** the cover video, logos, favicon, **the accent
+mark** (branding furniture, may be SVG — excluded from P2, P3 and
+`photo_assets`), shop wall texture and frames, room scenes, Instagram URLs, and
+the built-in sample photographs.
+
+## Database changes
+
+No photo **schema-shape** change. One reviewed migration adds the narrow write
+boundary — P1 granted no application role any write on `photo_assets` or
+`photo_usages`, and that stays true: **no direct table grant is added for
+`authenticated` or `service_role`, and no upload route moves to the service-role
+client.** Routes A–D keep running as the signed-in photographer.
+
+Four route-specific SECURITY DEFINER wrappers, EXECUTE to `authenticated` only,
+over one internal helper nobody can call. Exact proposed shapes, naming checks
+and rules: design §9. In outline —
+
+| wrapper | does, in ONE transaction | returns |
+|---|---|---|
+| `register_gallery_photo(…)` | asset upsert/reuse → reuse or insert the album's `photos` row (columns as today) with `asset_id` → the `gallery` usage | `(photo_id, asset_id)` |
+| `register_site_image(…)` | asset upsert/reuse → reuse or insert `site_images` with `asset_id` | `(site_image_id, asset_id)` |
+| `register_journal_image(…)` | asset upsert/reuse; **no usage** — the post owns placement, P3 projects it | `asset_id` |
+| `register_album_cover(…)` | asset upsert/reuse → `albums.cover_custom_path` / `cover_photo_id = null`, as today | `asset_id` |
+
+## What the application does (per route)
+
+1. `requireEditor()` → the host tenant. `ownsKey` + the route's key shape,
+   unchanged.
+2. Bytes: A–C read the original back from storage (as today); D takes the form
+   bytes (as today).
+3. **Server-computed facts:** `content_sha256` of those bytes, `original_bytes`
+   = their length (not the browser's `file.size`), `content_type` from the
+   format `sharp` detects (not the browser's claim), `filename` normalised where
+   the route has one (B: `f.name` as today; D: the form `File.name`; A and C
+   have none → NULL — no client contract changes).
+4. **Normalised EXIF** (one module, all four routes) — design §9.5. Latitude
+   and longitude are kept **only for route A**, which stores them today; B, C
+   and D pass none.
+5. The WebP ladder through the existing `processExistingOriginal`, via a
+   narrow injectable storage seam (real R2 by default); the keys this attempt
+   wrote are tracked.
+6. The route's RPC, through the photographer's own client.
+7. **Success → the existing successful return, unchanged.**
+8. **Failure → the action fails and returns no usable path**, after
+   best-effort cleanup (below).
+
+## Failure policy — an intentional hardening of failure behaviour only
+
+A successful upload now *includes* a successful asset registration. If the
+RPC fails:
+
+- **Check before deleting.** Read `photo_assets` for `(tenant, key_base)`
+  through the photographer's own client (`authenticated` holds SELECT). If a
+  committed asset exists — the RPC committed but its reply was lost, or a
+  concurrent retry won — **delete nothing**: those objects belong to a real
+  asset.
+- Otherwise delete, best-effort, **only the objects this attempt created**: the
+  derivatives it wrote and, for A–C, the original the browser uploaded for this
+  attempt's key (D created no original).
+- A cleanup failure is logged with `console.error`, naming the tenant, the
+  route and every key left behind — never swallowed.
+- Then fail in the route's existing failure shape: A and D **throw** (as they
+  do today on a database error); B returns `{ ok: false, message }` (today it
+  returned `ok: true` with `id: null` — this is the hardening); C **throws**
+  (today it throws on a bad key and returns `null` on an empty object; it must
+  no longer return a path whose asset does not exist).
+
+No sweeper is built in P2 — orphan files from a failed cleanup are P6's.
+
+## Idempotency and concurrency
+
+- One asset per `(tenant_id, key_base)` — the P1 unique index.
+- Inside each wrapper: `insert … on conflict (tenant_id, key_base) do nothing`,
+  then **`select … for update` on the asset row**. Two concurrent registrations
+  of one upload serialise on that lock; the second then finds the first's
+  relationship row (a new statement under READ COMMITTED sees the commit) and
+  **reuses** it: one `photos` row per (album, asset), one `site_images` row per
+  asset, the same cover state, the same journal asset.
+- A retry whose bytes hash differently from the asset already at that key is
+  **refused** (the key is one upload; different bytes are not a retry).
+- **No new uniqueness constraint** on `photos` or `site_images`: the asset lock
+  serialises, and new rows are found by `asset_id`.
+
+## Accepted transitional states (recorded, not fixed in P2)
+
+- **Deleting a gallery photograph** (`deletePhoto`, unchanged) removes its R2
+  files and its `photos` row; the `gallery` usage cascades away; **the
+  `photo_assets` row survives, unused, pointing at deleted files.** Accepted:
+  nothing reads `photo_assets` yet. Archive, soft-delete, delayed deletion and
+  the sweeper are **P6**.
+- **`derivePhoto()`** (`lib/jobs/derive.ts`, the pre-ladder backfill job) calls
+  `processPhoto` and writes `photos.derivatives` **without** an asset. A named,
+  temporary exemption — it must not become an ingestion route. **P4** owns
+  bringing it under assets (or retiring it) and removing the exemption from the
+  call-site scan.
+- No P2 job kind: ingestion stays synchronous, as registration is today.
+
+## Files (pre-deployment) — as implemented
+
+New: `lib/photos/storage.ts` (the seam, plus a `recording` wrapper that
+remembers every key written — the cleanup list does not depend on processing
+finishing), `lib/photos/exif.ts` (normalisation), `lib/photos/key-base.ts`
+(new-upload key shapes; legacy shapes are P4's), `lib/photos/ingest.ts`
+(facts, ladder, the route's RPC, checked cleanup; `fromSupabase` adapts the
+photographer's client to the two calls ingestion makes),
+`db/migrations/2026-09-30_photo_ingest.sql`, `db/verify-photo-ingest.sql`,
+`.mk/ingest.ts` (also the two-connection concurrency proof — the SQL suite runs
+in one transaction and cannot race itself).
+Changed: `app/actions/photos.ts` (`registerPhoto`), `app/actions/images.ts`
 (`registerSiteImage`), `app/actions/blog.ts` (`registerJournalImage`),
-`.mk/ingest.ts` (new).
+`app/actions/albums.ts` (`uploadCustomCover`), `lib/derivatives.ts` (both
+ladder functions accept the storage seam, defaulting to R2 — `derive.ts`'s call
+is unchanged).
+Not changed: the upload components (see the cover-UI note in
+`claude/open-items.md` §10), `app/api/upload-url`, `lib/jobs/*`, branding,
+`deletePhoto`, `seedSamples`, `scripts/check-tenant-scoping.mjs`.
+After deployment, as for P1: the schema snapshot, fixture, `schema-verified.md`,
+the drift guard (extended to the five new functions), and the isolation suite.
 
-**Database changes.** No photo schema-shape changes. This phase may introduce
-a separately reviewed narrow write interface/privilege required by its writer.
-P1 grants no application role any write on `photo_assets` or `photo_usages`
-(design §3.7), so P2 must deliberately introduce the narrowest write capability
-asset ingestion requires; its shape is decided when P2 starts, not before. P2
-writes rows into the P1 tables and sets `photos.asset_id` /
-`site_images.asset_id` on new uploads.
+## Tests
 
-**What `ingest()` does.** Fetch from R2 → `sharp` for dimensions and the
-derivative ladder → `exifr` for capture metadata → `upsert photo_assets on
-(tenant_id, key_base)` → return `{ assetId, displayPath }`. The caller then
-creates its relationship row in one transaction. `registerPhoto` additionally
-inserts the `gallery` usage beside the `photos` row.
+- **Idempotency:** the same registration twice → one asset, one `photos` row
+  (A), one `site_images` row (B), the same cover (D), the same asset (C) — and
+  **concurrently**, from two connections, in the `scripts/jobs-concurrency.sh`
+  manner.
+- **Every route produces its asset**, and the row and asset agree on display
+  path, derivatives, width and height; `asset_id` is set; route A's `gallery`
+  usage exists; D's asset has `original_path = NULL`.
+- **The boundary, as the real roles:** `authenticated` may call the four
+  wrappers and still cannot write either table directly; `anon` and
+  `service_role` can call none; nobody can call the internal helper. Wrong
+  tenant, another site's album, a key outside the route's prefix, a derivative
+  path outside the key base, a malformed hash, an out-of-allowlist EXIF key or
+  an oversized EXIF object are each refused **by the database, with the
+  SQLSTATE/constraint named**. A platform admin acting on the host tenant
+  succeeds and is recorded as `created_by`; a retry never rewrites
+  `created_by`. The function `search_path` decoy test, as for S3.
+- **Nothing the routes may not set is settable:** the wrappers have no
+  parameter for `state`, `alt_*`, lifecycle or `created_by` — asserted from the
+  catalogue, not by reading the SQL.
+- **Privacy:** B, C and D can never store a latitude/longitude (no parameter);
+  A stores what it stores today.
+- **The call-site scan:** no `processExistingOriginal(` or `processPhoto(` call
+  without `ingest`, except the one named exemption (`lib/jobs/derive.ts`, P4).
+  Shown to fail by reinstating a bare call.
+- **Through the storage seam, with no real R2:** reads, writes, the hash of the
+  exact bytes, the short ladder for a small photograph (long edge < 1600) in
+  both the asset and the `photos` row, and **cleanup** — a failed RPC deletes
+  exactly this attempt's objects; a "failed" RPC whose asset in fact committed
+  deletes nothing; a cleanup that itself fails is logged with its keys.
+- **Samples** never reach `ingest()`; a `/samples/…` path is refused by
+  `ownsKey` before any byte is read.
+- **Unchanged success:** return values of all four routes; `photos` columns as
+  today (see the one open question in `claude/open-items.md` on
+  `photos.original_bytes`); rendered output byte-identical.
+- **Mutations**, each shown to fail the suites: a direct table grant, a dropped
+  prefix check, a dropped platform-admin clause, a caller-settable `state`, a
+  missing asset lock (duplicate rows under concurrency), cleanup that ignores
+  a committed asset.
 
-Three consequences worth stating:
-- **EXIF becomes universal.** Today only gallery uploads are parsed; journal and
-  editor uploads will carry capture date and keywords too.
-- **Journal images finally exist as records.** `registerJournalImage` returns a
-  path and writes nothing today.
-- **The failure mode improves.** A crash between the asset and the relationship
-  leaves an asset with no usage — findable with one query and re-runnable.
-  Today it leaves a file in R2 that no table mentions.
+**Rollback.** Revert the code, then drop the four wrappers and the helper.
+Assets created meanwhile are harmless and the P4 backfill is idempotent over
+them.
 
-**Tests.**
-- `ingest()` is idempotent: running it twice on the same key produces one asset
-  and identical columns.
-- All three ingestion paths produce an asset; the `photos` row and its asset
-  agree on `display_path`, `width`, `height`, `derivatives`.
-- A `.mk` scan finds **no** `processExistingOriginal(` call site that does not
-  also call `ingest(` — a source scan. Shown to fail by reinstating a bare
-  call. *(Earlier text cited `.mk/blockable.ts` as the model; that file has
-  never existed in this repository — see `claude/open-items.md` §5.)*
-- `ownsKey()` is enforced on every mint, including inside `ingest`.
-- An upload of a photograph whose long edge is under 1600 produces the correct
-  short derivative ladder in both the asset and the `photos` row.
-
-**Rollback.** Revert the code. Assets created in the meantime are harmless
-orphans; the backfill would recreate them idempotently.
-
-**Must remain unchanged.**
-- `registerPhoto` returns nothing and revalidates the same paths; the uploader
-  UI is untouched.
-- `registerSiteImage` returns the same `{ id, path }` shape the picker expects.
-- `registerJournalImage` **still returns the display path** — its signature
-  gains an object return only in P5, not here.
-- The `photos` row's own columns are written exactly as today.
-- Galleries, the journal and the editor picker render identically.
+**Must remain unchanged on success.** Every successful return; the uploader,
+picker and cover UIs; the `photos` row's columns; what galleries, the journal
+and the editor render; storage layout (A–C keep their original, D still keeps
+none). **Only failure behaviour changes**, as stated above.
 
 ---
 
@@ -576,6 +752,21 @@ as the backfill will; the two share one code path so they cannot disagree.
 
 `gallery` never participates: it is created beside the `photos` row in P2 and
 destroyed by the production cascade (`db/schema-verified.md`).
+
+**Recorded for P3 during the P2 design pass (2026-09-30), not solved in P2:**
+- **The hero's `video_path` must be excluded BY KEY.** It is declared
+  `kind: 'image'` in the registry (and edited through the photo picker), so
+  "every `kind: 'image'` field" would wrongly include a video. Videos stay out
+  of V1 (design §4).
+- **The page share image has no usage kind.** `PageSettings` sets a per-page
+  share image through the same photo picker; none of the seven kinds covers it.
+  Whether it becomes a kind (a registry/schema change) or stays unprojected is
+  a P3 decision.
+- **The accent mark is excluded**: `mark.image_path` is branding furniture
+  (uploaded raw, may be SVG), not a photograph — decided in the P2 design pass.
+  The extractor must skip it by section type and key.
+- **Journal and custom-cover assets exist from P2 onwards** (routes C and D);
+  P3 projects their `story_*` and `gallery_cover` usages from the documents.
 
 **Tests.**
 - **The invariant:** drop every row from `photo_usages`, re-run `syncUsages`
@@ -622,9 +813,17 @@ registered), `db/migrations/<date>_photo_assets_fk.sql` (new),
 costs an entry in `JOB_KINDS`, a handler, **and a line in `enqueue_jobs`'
 allow-list** — which means a migration somebody reads, on purpose.
 
-**Database changes.** Rows only, until the final step: once every `photos` and
-`site_images` row has an `asset_id`, add the foreign keys that were deliberately
-left off in P1.
+**Database changes.** Rows only, until the final step: once every **non-sample**
+`photos` row and every `site_images` row has an `asset_id`, add the foreign keys
+that were deliberately left off in P1. (Built-in sample photographs keep
+`asset_id = NULL` for good; a composite foreign key with a NULL in it is not
+checked under MATCH SIMPLE, so they do not stand in the keys' way.)
+
+**`derivePhoto` is P4's.** The pre-ladder derivative job (`lib/jobs/derive.ts`)
+is the one ingestion-shaped code path P2 deliberately leaves without an asset —
+a named exemption in P2's call-site scan. P4 brings it under assets (or retires
+it, once pass 1 has given every legacy photograph its asset) **and removes the
+exemption from the scan.**
 
 ```sql
 alter table photos      add constraint photos_asset_fk
@@ -648,13 +847,20 @@ alter table site_images add constraint site_images_asset_fk
    `blog_posts.featured_custom_path`, and the four legacy `site_settings` image
    columns.
 
-**Excluded, deliberately:** logos, favicon, `shop_wall_texture`, `shop_frames`,
+**Excluded, deliberately:** logos, favicon, **the accent mark
+(`mark.image_path`)**, `shop_wall_texture`, `shop_frames`,
 `room_scenes.image_path` (site furniture); `site_versions` / `site_template`
 snapshots (frozen history); `cover_video_path` and `video_path` (videos are out
-of V1); sample photographs (`isSamplePhoto()`).
+of V1 — the hero's `video_path` by key, since its registry kind says `image`);
+sample photographs (`isSamplePhoto()`).
 
 **Tests.**
-- Every `photos` row has an `asset_id`; every `site_images` row has one.
+- Every **non-sample** `photos` row has an `asset_id`; every `site_images` row
+  has one. *(Corrected 2026-09-30: this used to read "every `photos` row",
+  which contradicted the exclusion of samples below.)* Built-in sample
+  photographs — recognised by `isSamplePhoto()` — **never** produce a
+  `photo_assets` row, keep `asset_id = NULL`, and stay outside tenant-owned
+  storage ingestion; asserted by count, both ways.
 - Every path in the 14 scalar columns and 4 live blobs resolves to **exactly
   one** asset; every excluded furniture and video path resolves to **none**.
 - Asset and photo agree on `display_path`, `width`, `height`.
@@ -662,8 +868,9 @@ of V1); sample photographs (`isSamplePhoto()`).
   and the queue expects it, because a retry is ordinary.
 - `keyBaseFor` is idempotent for every shape, including the two legacy
   exceptions (`backfill.ts`'s extensionless base, and pre-derivative files).
-- No asset has zero usages except ones uploaded through the editor picker and
-  never placed.
+- No asset has zero usages except ones uploaded through the editor picker or
+  the journal picker and never placed, and assets left unused by a
+  `deletePhoto` since P2 (an accepted transitional state that P6 resolves).
 - Sample photographs produced no assets.
 - The two foreign keys apply without violation — which is itself the proof that
   passes 1 and 2 were complete.
@@ -832,7 +1039,7 @@ at all** today, stops being able to break a homepage.
 | S2 value validation | yes — **done** | none | yes |
 | S3 jobs | yes — **DEPLOYED** `20260929212635` | none | yes — drop cascade |
 | **P1** tables | yes — **DEPLOYED** `20260930123113` | none | yes — drop |
-| **P2** ingestion | yes | none | yes |
+| **P2** ingestion | yes — **DEPLOYED** `20260930191116` | none on success; failures now fail cleanly | yes |
 | **P3** projection | yes | none | yes |
 | **P4** backfill | yes | none | yes — idempotent |
 | **P5a** picker identity | yes | none | yes |

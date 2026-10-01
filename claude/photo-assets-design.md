@@ -485,14 +485,19 @@ needs, deliberately and in its own migration — P2 (ingestion) is the first.
 
 # 4. Usage kinds, parents and fields
 
+*P3 deployed 2026-10-01 (Supabase `20261001005946`, `20261001010021`): the
+eight kinds below are live, with `page_share` the eighth. Built-in sample
+photographs (`isSamplePhoto()`) are never usages and never unresolved.*
+
 | kind | parent | fields (V1) | maintained by |
 |---|---|---|---|
 | `gallery` | `photo_id` → `photos` | `'photo'` | created with the `photos` row; **removed by cascade** |
-| `gallery_cover` | `album_id` → `albums` | `cover_photo_id`, `cover_custom_path` | `syncUsages` on album save |
-| `page_section` | `page_key` | `image_path`, `image_path_mobile`, `video_poster`, `bg_image` | `syncUsages` from `replaceSections`, `writeDraftPage`, `restoreDraftFrom`, `discard` |
-| `page_legacy` | `page_key` | `hero_image_path`, `intro_image_path`, `contact_image_path`, `about_image_path` | `syncUsages` from `patchSiteSettings` |
+| `gallery_cover` | `album_id` → `albums` | `cover_photo_id`, `cover_custom_path` | `syncUsages` on album save; the CHOSEN cover only — the implicit first photograph is not a usage |
+| `page_section` | `page_key` | `image_path`, `image_path_mobile`, `video_poster`, `video_poster_mobile`, `bg_image` | `syncUsages` after `replaceSections`, `materializeSections`, and every draft write (`upsertDraft`, `deleteDraft`) |
+| `page_legacy` | `page_key` | `hero_image_path`, `intro_image_path`, `contact_image_path` (home), `about_image_path` (about) — **only while the live page has zero section rows**; with rows they are mirrors and never projected | `syncUsages` after `patchSiteSettings` |
+| `page_share` (P3) | `page_key` | `page_seo.image` — the EXPLICITLY stored share image; the automatic fallback in `lib/seo.ts` is never a usage. Live and draft. | `syncUsages` after `patchSiteSettings` (`page_seo`) and every draft write |
 | `story_cover` | `post_id` → `blog_posts` | `featured_custom_path` | `syncUsages` on post save |
-| `story_block` | `post_id` → `blog_posts` | `block:<blockId>` | `syncUsages` on post save |
+| `story_block` | `post_id` → `blog_posts` | `block:<zero-based block index>` — **never the block id** (ids are browser-generated and can repeat); position 0 (image), 0/1 (pair), array index (gallery, masonry) | `syncUsages` on post save |
 | `shop_listing` | `product_id` → `catalog_items` | `'photo'` | `syncUsages` on catalog save |
 
 **Not in the projection or the backfill:** `albums.cover_video_path` and the
@@ -509,24 +514,33 @@ ladder. It is site furniture like the logos: excluded from ingestion (P2), from
 the projection (P3), from the backfill (P4), and from `photo_assets`. The
 `decorative` role §4.1 lists for it therefore never reaches a usage.
 
-**The page share image has no kind yet (rev 7, for P3).** `PageSettings` sets a
-per-page share image through the photo picker; none of the seven kinds covers
-it. Whether it becomes a kind is a P3 decision; P2 adds no kind.
+**The page share image is the eighth kind, `page_share` (P3, 2026-09-30).**
+`PageSettings` sets a per-page share image through the photo picker. Only the
+explicitly stored value is a usage; a page with no stored image and a
+photograph on it has no page_share, whatever `lib/seo.ts` would show.
+
+**`live` for a story means the saved story**, whatever its status: every saved
+`blog_posts` row projects `scope = 'live'`. It is not visitor visibility.
 
 ## 4.1 Accessibility roles
 
 ```ts
 /** What this image slot IS, for a screen reader. */
-accessibilityRole?: 'content' | 'decorative' | 'user-selectable'
+accessibilityRole?: 'content' | 'decorative'
 ```
+
+*As built in P3 (2026-09-30):* two values, not three — `'user-selectable'` is a
+Scene-era idea, below, and nothing needs it yet. Metadata only: the projection
+mirrors it to `photo_usages.decorative`; no panel and no renderer reads it
+before P5. A `device` field's phone twin inherits it.
 
 Default for `kind: 'image'` is `'content'`.
 
 | field | section | role |
 |---|---|---|
 | `image_path` | `hero` | **`content`** — a photographer's primary hero image is meaningful and must not vanish from the screen-reader experience |
-| `video_poster` | `hero` | `decorative` |
-| `image_path` | `mark` | `decorative` — an accent mark, not a photograph |
+| `video_poster` (and `video_poster_mobile`) | `hero` | `decorative` |
+| `image_path` | `mark` | *(no role: the accent mark is a custom field, excluded from assets and usages — rev 7)* |
 | `image_path` | `intro` / `about` / `contact` | `content` |
 | `bg_image` | shared, every section | `decorative` |
 

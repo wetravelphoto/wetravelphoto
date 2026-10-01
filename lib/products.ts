@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { syncCatalogItem } from '@/lib/photos/usages'
 
 /**
  * Brings a photograph's buyable options in line with its for-sale flag.
@@ -46,6 +47,8 @@ export async function syncProductsForPhoto(
         { tenant_id: tenantId, photo_id: photoId },
         { onConflict: 'photo_id', ignoreDuplicates: true }
       )
+    // The entry, if this created it, lists the photograph (P3).
+    await syncCatalogItem(tenantId, photoId)
   }
 
   const { data: existingRows } = await supabase

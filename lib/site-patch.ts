@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireEditor } from '@/lib/auth'
+import { syncAfterSettings } from '@/lib/photos/usages'
 
 /**
  * Pulls the column name out of a Postgres "column ... does not exist" error.
@@ -34,7 +35,11 @@ export async function patchSiteSettings(values: Record<string, unknown>): Promis
 
   for (let attempt = 0; attempt < 12; attempt++) {
     const { error } = await supabase.from('site_settings').update(payload).eq('tenant_id', tenantId)
-    if (!error) return
+    if (!error) {
+      // Legacy page photographs and share images live in these columns (P3).
+      await syncAfterSettings(tenantId, payload)
+      return
+    }
 
     const column = missingColumn(error.message)
     if (!column || !(column in payload)) throw new Error(error.message)

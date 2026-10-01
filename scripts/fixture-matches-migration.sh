@@ -84,6 +84,27 @@
 # NULL-blind form, a changed check in upsert_photo_asset, an extra EXECUTE
 # grant on the helper, a wrapper made SECURITY INVOKER, and a missing function.
 #
+# ── P3 (deployed 2026-10-01) ────────────────────────────────────────────────
+#
+# Production's photo tables are now P1 + P2 + P3's Migration A + Migration B,
+# applied in that order, and so is the rebuild here. Migration A makes
+# albums_cover_photo_fk tenant-aware; it depends on photos_id_tenant, so the P1
+# strip first puts the cover key back to its pre-P3 single-column form (as P1
+# found it) before removing that target — Migration A then has to recreate it.
+# Migration B restates three photo_usages CHECKs, adds the share-slot CHECK and
+# the page_share slot index (all compared with photo_usages' facts), creates
+# seven functions, and re-creates register_gallery_photo and
+# register_album_cover with the album lock. All seven are dropped by name in
+# the strip, and every one of the twelve photo functions is compared —
+# definition (security, search_path, body) and EXECUTE grants — with
+# photo_assets' facts. The cover key is compared with albums' facts.
+#
+# Proved to bite on: the fixture's cover key reverted to single-column, the
+# share-slot CHECK weakened, the share slot index missing a column, an
+# authenticated EXECUTE grant on sync_photo_usages, register_gallery_photo
+# without its lock, the resolver without its same-site filter, and a missing
+# P3 function.
+#
 # Wants psql on PATH and a server it may create a scratch database on:
 #
 #   PGHOST=/tmp PGPORT=5433 PGUSER=postgres
@@ -109,14 +130,18 @@ PHOTOS="$ROOT/db/migrations/2026-09-29_photo_assets.sql"
 # P2's five functions.
 HOTFIX="$ROOT/db/migrations/2026-09-30_enqueue_jobs_tenant_guard.sql"
 INGEST="$ROOT/db/migrations/2026-09-30_photo_ingest.sql"
+# Deployed 2026-10-01 (P3): Migration A, then Migration B.
+COVER_FK="$ROOT/db/migrations/2026-09-30_album_cover_tenant_fk.sql"
+USAGES="$ROOT/db/migrations/2026-09-30_photo_usages_sync.sql"
 
 # Every table P1 created or altered. Compared whole — see the note at the top.
 P1_TABLES="photo_assets photo_usages photos albums blog_posts catalog_items site_images"
-# P2's functions, compared with photo_assets' facts: definition (which carries
-# SECURITY, search_path and body) and EXECUTE grants.
-P2_FNS="'upsert_photo_asset','register_gallery_photo','register_site_image','register_journal_image','register_album_cover'"
+# P2's and P3's functions, compared with photo_assets' facts: definition (which
+# carries SECURITY, search_path and body) and EXECUTE grants. Two of P2's —
+# register_gallery_photo and register_album_cover — are as P3 re-created them.
+P2_FNS="'upsert_photo_asset','register_gallery_photo','register_site_image','register_journal_image','register_album_cover','photo_usage_lock','photo_usage_parent_key','photo_usage_source','photo_usage_resolve_path','read_photo_usage_source','list_photo_usage_parents','sync_photo_usages'"
 
-for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST"; do
+for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST" "$COVER_FK" "$USAGES"; do
   [ -r "$f" ] || { echo "cannot read $f" >&2; exit 1; }
 done
 
@@ -250,8 +275,16 @@ fi
 # new tables first: photo_usages' foreign keys depend on the four parent unique
 # constraints, which cannot be dropped while those keys exist.
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-p1.log 2>&1 <<'SQL'
+-- P3's seven functions, by name, so Migration B has to create them.
+drop function public.sync_photo_usages(uuid, text, text, text, jsonb);
+drop function public.list_photo_usage_parents(uuid);
+drop function public.read_photo_usage_source(uuid, text, text);
+drop function public.photo_usage_resolve_path(uuid, text);
+drop function public.photo_usage_source(uuid, text, text);
+drop function public.photo_usage_parent_key(uuid, text, text);
+drop function public.photo_usage_lock(uuid, text, text);
 -- P2's five functions, by name (a missing one is a failure, not a skip), so
--- the P2 migration has to create them.
+-- the P2 migration has to create them (and Migration B to re-lock two).
 drop function public.register_gallery_photo(uuid, uuid, text, text, text, jsonb, integer, integer, bigint, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb, double precision, double precision);
 drop function public.register_site_image(uuid, text, text, text, jsonb, integer, integer, bigint, text, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb);
 drop function public.register_journal_image(uuid, text, text, text, jsonb, integer, integer, bigint, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb);
@@ -259,6 +292,12 @@ drop function public.register_album_cover(uuid, uuid, text, text, jsonb, integer
 drop function public.upsert_photo_asset(uuid, text, text, text, jsonb, integer, integer, bigint, text, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], jsonb, double precision, double precision, uuid);
 drop table public.photo_usages;
 drop table public.photo_assets;
+-- The cover key as P1 found it (pre-P3, single column), so Migration A has to
+-- make it tenant-aware — and so photos_id_tenant, which it would otherwise
+-- depend on, can be removed below.
+alter table public.albums drop constraint albums_cover_photo_fk;
+alter table public.albums add constraint albums_cover_photo_fk
+  foreign key (cover_photo_id) references public.photos (id) on delete set null;
 alter table public.photos        drop column asset_id;
 alter table public.site_images   drop column asset_id;
 alter table public.photos        drop constraint photos_id_tenant;
@@ -288,6 +327,14 @@ fi
 
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$INGEST" >/tmp/fmm-ingest.log 2>&1; then
   echo "FAIL  the P2 migration does not rebuild its functions:"; tail -8 /tmp/fmm-ingest.log; exit 1
+fi
+
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$COVER_FK" >/tmp/fmm-coverfk.log 2>&1; then
+  echo "FAIL  P3 Migration A does not apply:"; tail -8 /tmp/fmm-coverfk.log; exit 1
+fi
+
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$USAGES" >/tmp/fmm-usages.log 2>&1; then
+  echo "FAIL  P3 Migration B does not apply:"; tail -8 /tmp/fmm-usages.log; exit 1
 fi
 
 JOBS_AFTER=$(psql -X -q -t -A -d "$DB" -c "$JOBS_FACTS")
@@ -326,7 +373,9 @@ done
 for table in $P1_TABLES; do
   before="${P1_BEFORE[$table]}"; after="${P1_AFTER[$table]}"
   file=2026-09-29_photo_assets.sql
-  [ "$table" = photo_assets ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_ingest.sql (5 functions)"
+  [ "$table" = photo_assets ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_ingest.sql + 2026-09-30_photo_usages_sync.sql (12 functions)"
+  [ "$table" = photo_usages ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_usages_sync.sql"
+  [ "$table" = albums ] && file="2026-09-29_photo_assets.sql + 2026-09-30_album_cover_tenant_fk.sql"
 
   if [ -z "$before" ]; then
     echo "FAIL  the fixture built no $table at all."

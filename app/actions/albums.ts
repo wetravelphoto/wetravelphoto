@@ -8,6 +8,7 @@ import { r2Client } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
 import { fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
+import { syncAlbum } from '@/lib/photos/usages'
 import { randomUUID } from 'crypto'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -104,6 +105,27 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
     allow_downloads: formData.get('allow_downloads') === 'on',
   }
 
+  /*
+   * THE CHOSEN COVER IS ONE OF THIS GALLERY'S OWN PHOTOGRAPHS.
+   *
+   * The picker only offers them, but the id arrives from a form, and a server
+   * action is a public endpoint. The database refuses a cover on another site
+   * (albums_cover_photo_fk, P3); the narrower rule — this album, not merely
+   * this site — is the application's. Anything else keeps the cover the album
+   * already has, the way every other field of a form falls back rather than
+   * failing. Empty still means "no chosen cover".
+   */
+  if (updates.cover_photo_id) {
+    const { data: own } = await supabase
+      .from('photos')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('album_id', albumId)
+      .eq('id', updates.cover_photo_id as string)
+      .maybeSingle()
+    if (!own) delete updates.cover_photo_id
+  }
+
   const password = get('password')
   if (updates.privacy_type === 'password' && password) {
     updates.password_hash = hashPassword(password)
@@ -135,6 +157,9 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
   }
 
   if (error) throw new Error(error.message)
+
+  // The chosen cover may have changed (P3).
+  await syncAlbum(tenantId, albumId)
 
   revalidatePath('/admin')
   revalidatePath('/')
@@ -181,6 +206,10 @@ export async function uploadCustomCover(albumId: string, formData: FormData) {
     { db: fromSupabase(supabase) }
   )
 
+  // register_album_cover changed the album's cover; project it (P3). Taken
+  // after that transaction committed, under the same album lock it held.
+  await syncAlbum(tenantId, albumId)
+
   revalidatePath('/admin')
   revalidatePath(`/admin/trips/${albumId}/settings`)
   revalidatePath('/')
@@ -197,6 +226,7 @@ export async function clearCustomCover(albumId: string) {
     .eq('tenant_id', tenantId)
     .eq('id', albumId)
   if (error) throw new Error(error.message)
+  await syncAlbum(tenantId, albumId)
   revalidatePath('/admin')
   revalidatePath(`/admin/trips/${albumId}/settings`)
 }

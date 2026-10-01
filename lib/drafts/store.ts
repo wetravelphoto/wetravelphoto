@@ -10,6 +10,7 @@ import {
   type StoredSection,
 } from '@/lib/sections/load'
 import { replaceSections, mirrorPage } from '@/lib/sections/store'
+import { syncDraft } from '@/lib/photos/usages'
 import { recordHistory } from '@/lib/templates/history'
 import { TOKENS_VERSION } from '@/lib/styles/tokens'
 import { sanitizePageSeo, sanitizeSeoMap, type PageSeo, type PageSeoMap } from '@/lib/seo'
@@ -389,6 +390,11 @@ async function upsertDraft(draft: SiteDraft, how: WriteKind): Promise<void> {
   }
 
   if (error) throw new Error(`Could not save the draft. (${error.message})`)
+
+  // Every draft write comes through here — edits, undo and redo, restoring a
+  // version, pages and their search settings — so the draft's photographs are
+  // projected here, from the row just saved (P3).
+  await syncDraft(editor.tenantId)
 }
 
 /**
@@ -736,6 +742,9 @@ async function deleteDraft(): Promise<void> {
     .delete()
     .eq('tenant_id', editor.tenantId)
   if (error) throw new Error(error.message)
+
+  // No draft, no draft usages (P3).
+  await syncDraft(editor.tenantId)
 }
 
 function describeDraft(pages: string[], styles: boolean, seo: boolean, site: boolean): string {

@@ -731,59 +731,131 @@ none). **Only failure behaviour changes**, as stated above.
 Deliberately **before** the backfill, so there is never a window in which a live
 edit goes unprojected.
 
-**Files.** `lib/photos/extract.ts` (new — one function per document shape),
-`lib/photos/usages.ts` (new — `syncUsages`), `lib/sections/store.ts`
-(`replaceSections`), `lib/drafts/store.ts` (`writeDraftPage`, `publishDraft`,
-`restoreDraftFrom`, `discard`), `lib/site-patch.ts` (`patchSiteSettings`),
-`app/actions/templates.ts` (`install`, `revertTo`), `app/actions/albums.ts`,
-`app/actions/blog.ts`, `app/actions/catalog.ts`, `.mk/usages.ts` (new).
+**Status: DEPLOYED 2026-10-01 and reconciled — COMPLETE (database).** Migration
+A Supabase `20261001005946` (`album_cover_tenant_fk_2026_09_30`, sha256
+`fad895dc3b16c4ac2bf5859a77bfb6b8d361be2a240351402ff1aad5a93f93ed`); Migration B
+`20261001010021` (`photo_usages_sync_2026_09_30`, sha256
+`cad8cabf96345c288964f81fcebab953e1947a744e5aff4b7806b76dd82e642d`). Live
+verification and smoke tests: `db/schema-verified.md`.
+`SUPABASE_SERVICE_ROLE_KEY` is confirmed in Vercel Production. The application
+half is operational once its deployment is confirmed running
+(`open-items.md` §11); then run `scripts/rebuild-photo-usages.ts --all` once. **P4 is next, not started.**
+Two migrations, applied in this order — database first, application after:
 
-**Database changes.** No photo schema-shape changes. This phase may introduce
-a separately reviewed narrow write interface/privilege required by its writer:
-the narrowest capability needed for `syncUsages` to rebuild usages, decided
-when P3 starts (design §3.7).
+- **A — `db/migrations/2026-09-30_album_cover_tenant_fk.sql`**, the prerequisite:
+  `albums (cover_photo_id, tenant_id) → photos (id, tenant_id) ON DELETE SET
+  NULL (cover_photo_id)`, with a preflight that refuses (and changes nothing)
+  while any album names a cover on another site. The database boundary is the
+  SITE; "one of this album's own photographs" is `updateAlbumSettings`' rule.
+- **B — `db/migrations/2026-09-30_photo_usages_sync.sql`**: the eighth kind,
+  `page_share`; `sync_photo_usages`, `read_photo_usage_source` and
+  `list_photo_usage_parents` (SECURITY DEFINER, `search_path = ''`, EXECUTE
+  to `service_role` ONLY, and a run-time role check on top); four internal
+  helpers nobody may call; and `register_gallery_photo` /
+  `register_album_cover` replaced ONLY to take the album's projection lock.
+  No table grant changes.
 
-**The shape.** `syncUsages(scope, kind, ref, found)` deletes every usage for
-that narrow scope and re-inserts the extracted set — delete-and-reinsert for one
-(tenant, scope, kind, parent), mirroring `replaceSections`' own strategy, which
-is why it composes with it cleanly. A path with no asset **mints one** in
-`state = 'pending'` and queues a derive job **through `enqueue_jobs`**, exactly
-as the backfill will; the two share one code path so they cannot disagree.
+**Files.** `lib/photos/extract.ts` (pure: which settings and blocks hold a
+photograph, from the registry at runtime), `lib/photos/usages.ts`
+(`syncUsages` — the one writer — the per-parent helpers and
+`rebuildUsages`), `lib/photos/usage-kinds.ts` (+ `page_share`),
+`lib/sections/registry.ts` (`Field.accessibilityRole`, metadata only), and the
+hooks: `lib/sections/store.ts`, `lib/site-patch.ts`, `lib/drafts/store.ts`,
+`lib/products.ts`, `app/actions/{albums,photos,blog,catalog,sites}.ts`.
+Suites: `db/verify-photo-usages.sql`, `db/verify-album-cover-fk.sql`,
+`scripts/album-cover-fk.sh`, `.mk/usages.ts`.
 
-`gallery` never participates: it is created beside the `photos` row in P2 and
-destroyed by the production cascade (`db/schema-verified.md`).
+**The shape.** A PARENT is replaced at once: `live_page` (one page's
+page_section, page_legacy and page_share), `draft` (the whole site's draft —
+one document), `album` (gallery rows of its photographs, both cover slots),
+`post` (story_cover, story_blocks), `catalog_item` (keyed by its photograph's
+id). `syncUsages`:
 
-**Recorded for P3 during the P2 design pass (2026-09-30), not solved in P2:**
-- **The hero's `video_path` must be excluded BY KEY.** It is declared
-  `kind: 'image'` in the registry (and edited through the photo picker), so
-  "every `kind: 'image'` field" would wrongly include a video. Videos stay out
-  of V1 (design §4).
-- **The page share image has no usage kind.** `PageSettings` sets a per-page
-  share image through the same photo picker; none of the seven kinds covers it.
-  Whether it becomes a kind (a registry/schema change) or stays unprojected is
-  a P3 decision.
-- **The accent mark is excluded**: `mark.image_path` is branding furniture
-  (uploaded raw, may be SVG), not a photograph — decided in the P2 design pass.
-  The extractor must skip it by section type and key.
-- **Journal and custom-cover assets exist from P2 onwards** (routes C and D);
-  P3 projects their `story_*` and `gallery_cover` usages from the documents.
+1. reads the SAVED source (`read_photo_usage_source`) — never the caller's
+   object — as the canonical text of one jsonb value;
+2. extracts the document-shaped references from it (section image settings,
+   story blocks); everything relational (gallery membership, covers, featured
+   image, catalogue photograph, legacy columns, explicit share images) is read
+   by the database itself, under the lock, and never accepted from a caller;
+3. calls `sync_photo_usages`, which takes the parent's advisory lock, rebuilds
+   the source and compares: **different → it writes nothing and answers
+   `stale`**, and syncUsages re-reads (at most 3 attempts, no sleep). An older
+   snapshot never overwrites a newer document. Otherwise it deletes the
+   parent's rows and inserts the current set — each document reference BOUND
+   to the saved source (the slot holds exactly that path) and resolved only to
+   an asset of the SAME site.
 
-**Tests.**
-- **The invariant:** drop every row from `photo_usages`, re-run `syncUsages`
-  over every document, and the table comes back identical. This is the test that
-  justifies the whole projection design.
-- **publish → undo → redo → discard** leaves `photo_usages` exactly matching the
-  documents at every step. Shown to fail against a picker-written usage row —
-  the design defect this phase exists to avoid.
-- `applyLook` followed by `revertTo` leaves no stale usages.
-- Deleting an album cascades its cover usage to zero; deleting a story cascades
-  its block usages; deleting one gallery photograph cascades its membership
-  usage. Each verified by count, not by inspection.
-- A section moved from position 2 to position 0 re-projects under the new
-  ordinal with no duplicate.
-- Two `intro` sections on one page, both with an `image_path`, produce two
-  distinct usages — the case the slot key exists for.
-- `check:tenants` passes with the new queries.
+**Unresolved references are SKIPPED** — counted and logged with site, scope,
+parent and field — and produce no row. P3 mints no asset, writes no
+placeholder, queues no job and adds no job kind. P4 mints; a rebuild projects.
+
+**Resolution.** A photograph id resolves only through a same-site
+`photos.asset_id`; a path only to a same-site asset whose `key_base` is the
+path's directory and whose original, display file or one of its sizes IS the
+path. Nothing fuzzy.
+
+**Slots.** page_section: the section's ordinal, the settings key (`_mobile`
+twins included; the hero video excluded by key; the accent mark is a custom
+field and never a slot). story_block: `block:<zero-based index>` — never the
+browser's block id — at position 0 (image), 0/1 (pair), or the array index
+(gallery, masonry). page_share: `page_seo.image` at 0, the EXPLICIT stored
+image only; lib/seo.ts' automatic fallback is never a usage. page_legacy: a
+live page's legacy column ONLY while it has zero section rows — once rows
+exist the columns are mirrors, and both are never projected.
+
+**Stored means referenced.** Hidden sections, a hero photograph kept while it
+shows a video, a background kept while it shows a colour — all projected.
+Versions, history, templates and undo steps are frozen and excluded. Every
+saved story is `live` whatever its status: for story kinds `live` means the
+canonical saved story, not visitor visibility.
+
+**Failure.** Source write → saved state read back → sync. A failed or
+non-converging sync never rolls the save back and never reports it failed; it
+is logged. `rebuildUsages(tenant)` is the repair path — replace per parent, all
+eight kinds, gallery rows from `photos.asset_id`, safe on a live site.
+
+**The album lock.** `register_gallery_photo` and `register_album_cover` take
+the same advisory lock as an album sync, so neither interleaves with it. P2's
+immediate gallery row stays; an album sync writes the identical row. After
+`register_album_cover` commits, `uploadCustomCover` syncs the album (the
+wrapper changes the cover but writes no cover usage). `registerPhoto` needs no
+application sync: its wrapper wrote the only row that changed, under the lock.
+
+**Tests.** (Rehearsed 2026-09-30 against the fixture + A + B, B again.)
+- `db/verify-photo-usages.sql` — 159: privileges from the catalogue (EXECUTE,
+  PUBLIC, search_path, security) for all seven new functions; WHICH LAYER refuses
+  (the grant for authenticated/anon; the role check for an owner with no role and
+  for a MISTAKEN grant); no direct write for anybody; page_share's slot,
+  parent and scope rules; the resolver (own files only, never another site);
+  binding (a path the slot does not hold, a slot that does not exist, another
+  page, an extra key, page_share / page_legacy / gallery from the caller — each
+  refused, nothing changed); the two ceilings; an OLD snapshot after a newer save
+  is stale and writes nothing; the legacy rule both ways and never both;
+  explicit share image only; the draft; album, story and catalogue projections.
+- `db/verify-album-cover-fk.sql` — 17, and `scripts/album-cover-fk.sh` — 15 (14 before reconciliation):
+  the preflight refuses and changes nothing, A twice, the exact rollback, and
+  the suite FAILING (6 of 17) against the original key.
+- `.mk/usages.ts` — 176 (with the rebuild command's tests): the pinned slot map and exclusions; stored means
+  referenced; blocks by index; every writer of a photographic source hooked
+  (or listed with its reason, the list itself checked for staleness); nothing
+  else writes photo_usages; the real syncUsages end to end; the stale retry and
+  a source that will not settle; failures logged, never thrown; two intro
+  sections are two usages and a move re-projects; P2's gallery row reproduced;
+  **THE INVARIANT** — all eight kinds, deleted and rebuilt identical, the other
+  site untouched; the P2 wrappers are P2's bodies plus the lock; and the album
+  lock with two connections — upload vs sync and cover vs sync, both orders.
+- Nineteen mutation proofs, each caught (P3 reports), including the built-in
+  sample rule (every P3 source: `isSamplePhoto()` declared to the database,
+  proved against the saved slot or the canonical `photos` row) and the rebuild
+  command's argument rules.
+- After deployment the fixture alone passes all of these, and the drift guard
+  rebuilds the photo tables P1 → P2 → A → B (1616 facts).
+- **Not covered by an automated end-to-end test:** publish → undo → redo →
+  discard and applyLook → revertTo *through the server actions* (they need a
+  request context). Each is covered by construction — every one of those paths
+  writes through `replaceSections`, `patchSiteSettings`, `upsertDraft` or
+  `deleteDraft`, whose hooks are asserted — and by the rebuild invariant. The
+  markup-diff render check was not run; no rendering code changed.
 
 **Rollback.** Revert the code. `photo_usages` becomes stale, which matters to
 nothing, because nothing reads it until P5.

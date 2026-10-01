@@ -422,10 +422,10 @@ deferred to a later phase:
       `photos.derivatives` without an asset. P2's call-site scan exempts it
       by name; **P4** brings it under assets or retires it and removes the
       exemption.
-- [ ] **For P3: the hero's `video_path` is `kind: 'image'`** in the registry
-      and must be excluded from the extractor **by key**.
-- [ ] **For P3: the page share image has no usage kind.** A P3 decision; P2
-      adds no kind.
+- [x] **For P3: the hero's `video_path` is `kind: 'image'`** — excluded from
+      the extractor by key (`EXCLUDED_IMAGE_KEYS`), desktop and phone. See §11.
+- [x] **For P3: the page share image has no usage kind** — it is now the
+      eighth kind, `page_share` (explicit stored image only). See §11.
 - [x] **The accent mark is not a photograph** — excluded from P2, P3, P4 and
       `photo_assets` (branding furniture, may be SVG).
 - [x] **P4's sample invariant corrected**: every **non-sample** `photos` row
@@ -477,6 +477,85 @@ deferred to a later phase:
       before it reaches `photos.tags`. Recorded so nobody mistakes them for
       accidents.
 
+## 11. P3 — the projection (DEPLOYED 2026-10-01, database; application awaiting push)
+
+Two migrations, in order: `2026-09-30_album_cover_tenant_fk.sql` (A, Supabase
+`20261001005946`), then `2026-09-30_photo_usages_sync.sql` (B,
+`20261001010021`). Design as built: `claude/photo-migration-plan.md`, P3.
+Live verification and smoke tests: `db/schema-verified.md`.
+
+- [x] **Deployed A, then B** (ChatGPT reviewed and applied; 0 cross-site
+      covers; smoke rows cleaned up — photo_assets, photo_usages and jobs at 0).
+- [x] **After deployment — bookkeeping (2026-10-01):** `db/schema-2026-09.sql`
+      and `db/test-fixture.sql` carry both migrations, copied from the files;
+      `db/schema-verified.md` records the deployment; the drift guard rebuilds
+      P1 → P2 → A → B (1616 photo facts) and was shown to bite. The fixture
+      alone now passes every P3 suite; totals 37 / 549 / **25** / 56.
+- [x] **`SUPABASE_SERVICE_ROLE_KEY` confirmed in Vercel Production**
+      (2026-10-01, checked manually by Gonzalo). Without it every hooked save
+      would log and skip its projection (the save itself unaffected).
+- [ ] **DEPLOYMENT PREREQUISITE — P3 is not operational in production yet.**
+      The database half is live; nothing projects until P3's application code
+      is pushed AND its production deployment is independently confirmed
+      running. Only then: run `scripts/rebuild-photo-usages.ts --all` once, so
+      sites edited before the deploy are projected.
+- [x] **`rebuildUsages` can be run:** `scripts/rebuild-photo-usages.ts`
+      (`--tenant <uuid>` or, explicitly, `--all`; never a default), the internal
+      repair command and the step P4 runs after its backfill. Needs
+      `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; no page, route
+      or action reaches it.
+- [x] **Built-in sample photographs are IGNORED, not unresolved** (sections,
+      story blocks, live legacy columns, live and draft share images) — by
+      `isSamplePhoto()`, declared to the database rather than restated in SQL.
+- [x] **The universal sample rule** also covers the sample story's featured
+      image and sample `photos` rows — gallery membership, a chosen cover, and
+      a catalogue entry made from one (the album grid's for-sale toggle has no
+      sample guard, so that state is reachable). Each is declared by the
+      extractor and proved by the database against the canonical row (site,
+      album or entry, exact `storage_path`); the database never decides what a
+      sample is. Note the album snapshot now names its photographs, so an
+      upload landing mid-sync makes that sync stale and it re-reads.
+- [ ] **`app/actions/sites.ts` is a second writer** of `page_sections`,
+      `site_settings`' legacy image columns, `albums`' cover and `site_draft`
+      (sample seeding and removal, `fillSections`, `addSamples`). P3 follows
+      every such write with its projection (amendment 2); the direct-writer
+      architecture itself is unchanged and remains open.
+- [ ] **The cost of a save.** Every hooked save now makes two service-role
+      calls per parent (read the source, sync), and a write of `page_seo` re-syncs
+      every live page that could hold a usage. Publish therefore makes
+      2 × (pages published + 1 for the draft) calls plus one pass over the pages
+      when search settings changed. Fine at today's sizes; worth measuring before
+      sites have forty pages.
+- [ ] **Without `SUPABASE_SERVICE_ROLE_KEY` the projection silently stops**
+      (logged to the console per save; Sentry is still inert — §1). Saves keep
+      working, as ruled. A rebuild after the key is set repairs it.
+- [ ] **Recorded only (ruling 18): `lib/seo.ts` `firstPhoto()` can choose the
+      hero's `video_path`** as the automatic share image, because it walks every
+      `kind: 'image'` field. Not changed; P3 never projects the fallback.
+- [ ] **Story block ids are browser-generated and can repeat** (a duplicated
+      block keeps its id's shape, and `blocks` is stored unvalidated). P3 keys
+      story slots by INDEX, so projection is unaffected; the JSON is not
+      repaired.
+- [ ] **Publish is sequential, not one transaction** (pre-existing). A publish
+      that fails half-way leaves the live pages half-published, and the
+      projection follows whatever was actually written — which is correct for a
+      projection, and is why the rebuild exists.
+- [ ] **Keep the snapshot text verbatim.** The stale check compares the
+      canonical jsonb text. A number that does not survive `JSON.parse` →
+      `JSON.stringify` (one written by something other than JavaScript) would
+      never match if the text were re-serialised, and that parent would be
+      "stale" forever. `syncUsages` passes the text back exactly as read, so it
+      always matches; noted in case anybody changes that.
+- [ ] **The resolver has no lifecycle filter** — an archived or deleted asset
+      still resolves. Nothing sets those before P6, which owns them.
+- [ ] **`createPost` is not hooked**: a new story has no blocks and no featured
+      image, so there is nothing to project; its first `updatePost` projects it.
+- [ ] **Pre-existing lint warning:** `app/actions/albums.ts` imports `sharp` and
+      never uses it (since P2's commit). Left alone.
+- [ ] **Performance advisors after B**, expected and informational: the new
+      composite `albums_cover_photo_fk` has no covering index on
+      `albums (cover_photo_id, tenant_id)` (the old key had none either).
+
 ---
 
 ## Where to pick up
@@ -498,6 +577,26 @@ over data rather than a build.
 ---
 
 ## What shipped, most recent first
+
+### 2026-10-01 — P3, the photo-usage projection, DEPLOYED (database)
+
+Migration A `20261001005946` (`album_cover_tenant_fk_2026_09_30`, sha256
+`fad895dc…`) and Migration B `20261001010021` (`photo_usages_sync_2026_09_30`,
+sha256 `cad8cabf…`), reviewed and applied by ChatGPT. Full record:
+`db/schema-verified.md`.
+
+**Where every photograph is used can now be known, and kept true.** Every
+saved document — a page, the draft, a gallery, a story, a catalogue entry —
+can be projected into `photo_usages` by one writer that reads the saved state,
+refuses an out-of-date snapshot, binds each reference to the source, and
+resolves only to the site's own photographs; built-in samples are ignored, and
+anything unresolved is counted for P4. A chosen gallery cover can no longer
+point at another site's photograph. Live smoke tests: service role allowed,
+authenticated and a role-less owner refused; a sample and canonical album
+projected 1 / 0 / 0 with 0 unresolved and a forged declaration refused; the
+cover key nulls only the cover; an old snapshot was refused as stale and the
+fresh one projected. **Operational once the application is pushed and the
+service-role key is confirmed** (§11).
 
 ### 2026-09-30 (later) — the S3 tenant-guard hotfix, and P2 unified ingestion, DEPLOYED
 

@@ -5,6 +5,7 @@ import { ownsKey } from '@/lib/storage-keys'
 import { createClient } from '@/lib/supabase/server'
 import { IngestError, fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
 import { estimateReadMinutes, type Block } from '@/lib/blocks'
+import { syncPost } from '@/lib/photos/usages'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -105,6 +106,10 @@ export async function updatePost(postId: string, formData: FormData) {
     .eq('tenant_id', tenantId)
     .eq('id', postId)
   if (error) throw new Error(error.message)
+
+  // The story's photographs — its featured image and its blocks — projected
+  // from the row just saved (P3).
+  await syncPost(tenantId, postId)
 
   revalidatePath('/admin/blog')
   revalidatePath(`/admin/blog/${postId}`)
@@ -244,7 +249,13 @@ export async function duplicatePosts(ids: string[]) {
     delete (copy as Record<string, unknown>).created_at
     delete (copy as Record<string, unknown>).updated_at
 
-    await supabase.from('blog_posts').insert({ ...copy, tenant_id: tenantId })
+    // The copy carries the original's photographs, so it is projected too (P3).
+    const { data: made } = await supabase
+      .from('blog_posts')
+      .insert({ ...copy, tenant_id: tenantId })
+      .select('id')
+      .maybeSingle()
+    if (made?.id) await syncPost(tenantId, made.id as string)
   }
 
   revalidatePath('/admin/blog')

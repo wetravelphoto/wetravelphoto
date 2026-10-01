@@ -3,6 +3,7 @@
 import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { parseMoneyToCents } from '@/lib/shop'
+import { syncCatalogItem } from '@/lib/photos/usages'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -43,6 +44,9 @@ export async function saveCatalogItem(photoId: string, formData: FormData) {
   )
 
   if (itemError) throw new Error(itemError.message)
+
+  // The entry's photograph, projected as its shop listing (P3).
+  await syncCatalogItem(tenantId, photoId)
 
   // ── Categories ────────────────────────────────────────────────────────────
   // Replace wholesale: simpler and safer than diffing, and the set is tiny.
@@ -137,6 +141,9 @@ export async function setCatalogPublished(photoId: string, publish: boolean) {
     )
 
   if (error) throw new Error(error.message)
+
+  // An upsert: this may have created the entry (P3).
+  await syncCatalogItem(tenantId, photoId)
 
   revalidatePath('/admin/shop/catalog')
   revalidatePath('/shop')

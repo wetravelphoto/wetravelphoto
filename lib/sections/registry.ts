@@ -95,6 +95,18 @@ type FieldBase = {
    * that should have changed is a click to fix, losing one is not.
    */
   content?: boolean
+  /**
+   * WHAT AN IMAGE IN THIS SLOT IS, for a screen reader. Absent means
+   * 'content': the photograph is part of what the page says. 'decorative'
+   * means it is atmosphere — a section's background, a video's stand-in —
+   * and would be read as nothing.
+   *
+   * Metadata only, for now: the photo-usage projection (P3,
+   * lib/photos/extract.ts) mirrors it into `photo_usages.decorative`. No panel
+   * and no renderer reads it yet (P5). A `device` field's phone twin inherits
+   * it. photo-assets-design.md §4.1.
+   */
+  accessibilityRole?: 'content' | 'decorative'
   /** Shown on the page instantly while it changes. See LiveSpec. */
   live?: LiveSpec
   /**
@@ -440,6 +452,7 @@ export const SECTIONS: Record<string, SectionDef> = {
         kind: 'image',
         content: true,
         device: true,
+        accessibilityRole: 'decorative',
         when: { key: 'backdrop', equals: 'video' },
         help: 'Shown while the video loads, and instead of it for anyone who has asked for less motion.',
       },
@@ -1234,6 +1247,7 @@ const SPACING_FIELDS: Field[] = [
     label: 'Photograph',
     kind: 'image',
     group: 'Section',
+    accessibilityRole: 'decorative',
     // The photographer's own picture, so switching to a different look carries
     // it across rather than replacing it. See `content` on FieldBase.
     content: true,

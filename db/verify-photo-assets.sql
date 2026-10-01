@@ -11,6 +11,14 @@
 -- is idempotent) but no longer needed. Before deployment the fixture did not
 -- have these tables and the migration had to be applied first.
 --
+-- ── Since P3 ────────────────────────────────────────────────────────────────
+--
+-- db/migrations/2026-09-30_photo_usages_sync.sql adds the eighth kind,
+-- page_share: three CHECKs are restated with it (kind_known, scope_by_kind,
+-- one_parent), one CHECK is added (share_slot) and one slot index is added. The exact definitions below are
+-- the P3 ones, and every per-kind proof now covers eight kinds. P3 is DEPLOYED
+-- (Supabase 20261001010021) and reconciled, so the fixture alone carries them.
+--
 -- The core isolation assertions now ALSO live in db/verify-tenant-isolation.sql,
 -- beside every other table's; this file keeps the complete P1 proof.
 --
@@ -316,11 +324,12 @@ insert into want_cons values
   ('photo_usages','photo_usages_album_fk','FOREIGN KEY (album_id, tenant_id) REFERENCES albums(id, tenant_id) ON DELETE CASCADE'),
   ('photo_usages','photo_usages_post_fk','FOREIGN KEY (post_id, tenant_id) REFERENCES blog_posts(id, tenant_id) ON DELETE CASCADE'),
   ('photo_usages','photo_usages_product_fk','FOREIGN KEY (product_id, tenant_id) REFERENCES catalog_items(id, tenant_id) ON DELETE CASCADE'),
-  ('photo_usages','photo_usages_kind_known','CHECK ((kind = ANY (ARRAY[''gallery''::text, ''gallery_cover''::text, ''page_section''::text, ''page_legacy''::text, ''story_cover''::text, ''story_block''::text, ''shop_listing''::text])))'),
+  ('photo_usages','photo_usages_kind_known','CHECK ((kind = ANY (ARRAY[''gallery''::text, ''gallery_cover''::text, ''page_section''::text, ''page_legacy''::text, ''page_share''::text, ''story_cover''::text, ''story_block''::text, ''shop_listing''::text])))'),
   ('photo_usages','photo_usages_scope_known','CHECK ((scope = ANY (ARRAY[''live''::text, ''draft''::text])))'),
-  ('photo_usages','photo_usages_scope_by_kind','CHECK (((scope = ''live''::text) OR (kind = ANY (ARRAY[''page_section''::text, ''page_legacy''::text]))))'),
+  ('photo_usages','photo_usages_share_slot','CHECK (((kind <> ''page_share''::text) OR ((field = ''page_seo.image''::text) AND ("position" = 0))))'),
+  ('photo_usages','photo_usages_scope_by_kind','CHECK (((scope = ''live''::text) OR (kind = ANY (ARRAY[''page_section''::text, ''page_legacy''::text, ''page_share''::text]))))'),
   ('photo_usages','photo_usages_page_key_shape','CHECK (((page_key IS NULL) OR (page_key = ANY (ARRAY[''home''::text, ''about''::text, ''contact''::text, ''journal''::text, ''galleries''::text, ''shop''::text, ''notfound''::text])) OR (page_key ~ ''^p_[a-z0-9]{8}$''::text)))'),
-  ('photo_usages','photo_usages_one_parent','CHECK ((((kind = ''gallery''::text) AND (photo_id IS NOT NULL) AND (album_id IS NULL) AND (post_id IS NULL) AND (product_id IS NULL) AND (page_key IS NULL)) OR ((kind = ''gallery_cover''::text) AND (album_id IS NOT NULL) AND (photo_id IS NULL) AND (post_id IS NULL) AND (product_id IS NULL) AND (page_key IS NULL)) OR ((kind = ANY (ARRAY[''story_cover''::text, ''story_block''::text])) AND (post_id IS NOT NULL) AND (photo_id IS NULL) AND (album_id IS NULL) AND (product_id IS NULL) AND (page_key IS NULL)) OR ((kind = ''shop_listing''::text) AND (product_id IS NOT NULL) AND (photo_id IS NULL) AND (album_id IS NULL) AND (post_id IS NULL) AND (page_key IS NULL)) OR ((kind = ANY (ARRAY[''page_section''::text, ''page_legacy''::text])) AND (page_key IS NOT NULL) AND (photo_id IS NULL) AND (album_id IS NULL) AND (post_id IS NULL) AND (product_id IS NULL))))');
+  ('photo_usages','photo_usages_one_parent','CHECK ((((kind = ''gallery''::text) AND (photo_id IS NOT NULL) AND (album_id IS NULL) AND (post_id IS NULL) AND (product_id IS NULL) AND (page_key IS NULL)) OR ((kind = ''gallery_cover''::text) AND (album_id IS NOT NULL) AND (photo_id IS NULL) AND (post_id IS NULL) AND (product_id IS NULL) AND (page_key IS NULL)) OR ((kind = ANY (ARRAY[''story_cover''::text, ''story_block''::text])) AND (post_id IS NOT NULL) AND (photo_id IS NULL) AND (album_id IS NULL) AND (product_id IS NULL) AND (page_key IS NULL)) OR ((kind = ''shop_listing''::text) AND (product_id IS NOT NULL) AND (photo_id IS NULL) AND (album_id IS NULL) AND (post_id IS NULL) AND (page_key IS NULL)) OR ((kind = ANY (ARRAY[''page_section''::text, ''page_legacy''::text, ''page_share''::text])) AND (page_key IS NOT NULL) AND (photo_id IS NULL) AND (album_id IS NULL) AND (post_id IS NULL) AND (product_id IS NULL))))');
 
 do $$
 declare v_diff text; v_fk text;
@@ -371,6 +380,7 @@ insert into want_idx values
   ('photo_usages_slot_story_cover', 'CREATE UNIQUE INDEX photo_usages_slot_story_cover ON public.photo_usages USING btree (post_id) WHERE (kind = ''story_cover''::text)'),
   ('photo_usages_slot_story_block', 'CREATE UNIQUE INDEX photo_usages_slot_story_block ON public.photo_usages USING btree (post_id, field, "position") WHERE (kind = ''story_block''::text)'),
   ('photo_usages_slot_shop',        'CREATE UNIQUE INDEX photo_usages_slot_shop ON public.photo_usages USING btree (product_id) WHERE (kind = ''shop_listing''::text)'),
+  ('photo_usages_slot_share',       'CREATE UNIQUE INDEX photo_usages_slot_share ON public.photo_usages USING btree (tenant_id, scope, page_key) WHERE (kind = ''page_share''::text)'),
   ('photo_usages_asset',      'CREATE INDEX photo_usages_asset ON public.photo_usages USING btree (asset_id)'),
   ('photo_usages_needs_alt',  'CREATE INDEX photo_usages_needs_alt ON public.photo_usages USING btree (tenant_id, asset_id) WHERE ((scope = ''live''::text) AND (decorative = false) AND (alt_override IS NULL))'),
   -- The four parent targets are indexes too.
@@ -393,7 +403,7 @@ begin
     into v_diff
     from want_idx w full join have h on h.idx = w.idx
    where w.def is distinct from h.def;
-  perform pg_temp.ok('every index matches the design (incl. 7 partial slot indexes)',
+  perform pg_temp.ok('every index matches the design (incl. 8 partial slot indexes)',
                      'no differences', coalesce(v_diff, 'no differences'));
 end $$;
 
@@ -450,7 +460,7 @@ begin
 end $$;
 
 
--- ── 5. Uniqueness — one logical slot, one row, for each of the seven kinds ──
+-- ── 5. Uniqueness — one logical slot, one row, for each of the eight kinds ──
 --
 -- For each kind: the slot is filled; the SAME SLOT pointing at a DIFFERENT
 -- photograph is refused by that kind's own index (named); and a neighbouring
@@ -498,7 +508,15 @@ begin
       ('shop_listing',  'photo_usages_slot_shop',
          format($q$'live','shop_listing',null,null,null,%L,null,'photo',0$q$, pg_temp.k('itemA')),
          format($q$'live','shop_listing',null,null,null,%L,null,'photo',0$q$, pg_temp.k('itemA2')),
-         'another catalog listing')
+         'another catalog listing'),
+      ('page_share',    'photo_usages_slot_share',
+         $q$'live','page_share',null,null,null,null,'home','page_seo.image',0$q$,
+         $q$'live','page_share',null,null,null,null,'about','page_seo.image',0$q$,
+         'another page''s share image'),
+      ('page_share (draft beside live)', 'photo_usages_slot_share',
+         $q$'draft','page_share',null,null,null,null,'home','page_seo.image',0$q$,
+         $q$'draft','page_share',null,null,null,null,'about','page_seo.image',0$q$,
+         'the draft''s share image of another page')
     ) as v(kind, idx, slot, neighbour, neighbour_is)
   loop
     perform pg_temp.ok(r.kind || ': the slot takes a photograph', 'accepted',
@@ -526,7 +544,7 @@ end $$;
  * instead the single wide UNIQUE the design rejected: every descriptive column
  * at once. Every kind leaves at least three of the four parent columns NULL,
  * and a unique constraint is NULLS DISTINCT, so the byte-identical duplicate is
- * accepted for ALL SEVEN kinds. It looked like protection and provided none.
+ * accepted for ALL EIGHT kinds. It looked like protection and provided none.
  */
 create temp table wide_demo (like photo_usages including defaults including constraints);
 alter table wide_demo add constraint wide_demo_one_unique
@@ -549,7 +567,8 @@ begin
       ('page_legacy',   $q$'page_legacy',null,null,null,null,'home','hero_image_path'$q$),
       ('story_cover',   format($q$'story_cover',null,null,%L,null,null,'featured_custom_path'$q$, pg_temp.k('postA'))),
       ('story_block',   format($q$'story_block',null,null,%L,null,null,'block:b1'$q$, pg_temp.k('postA'))),
-      ('shop_listing',  format($q$'shop_listing',null,null,null,%L,null,'photo'$q$, pg_temp.k('itemA')))
+      ('shop_listing',  format($q$'shop_listing',null,null,null,%L,null,'photo'$q$, pg_temp.k('itemA'))),
+      ('page_share',    $q$'page_share',null,null,null,null,'home','page_seo.image'$q$)
     ) as v(kind, rest)
   loop
     first_try  := pg_temp.try(format('insert into wide_demo (tenant_id, asset_id, kind, photo_id, album_id, post_id, product_id, page_key, field) values (%L,%L,', v_a, a1) || r.rest || ')');

@@ -7,6 +7,7 @@ import { DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createClient } from '@/lib/supabase/server'
 import { fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
 import { syncProductsForPhoto } from '@/lib/products'
+import { syncAlbum } from '@/lib/photos/usages'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -52,7 +53,7 @@ export async function deletePhoto(albumId: string, photoId: string, storagePath:
   // A photo is now several files — the original plus each display size
   const { data: photo } = await supabase
     .from('photos')
-    .select('original_path, derivatives')
+    .select('original_path, derivatives, album_id')
     .eq('tenant_id', tenantId)
     .eq('id', photoId)
     .maybeSingle()
@@ -79,6 +80,11 @@ export async function deletePhoto(albumId: string, photoId: string, storagePath:
     .eq('tenant_id', tenantId)
     .eq('id', photoId)
   if (error) throw new Error(error.message)
+
+  // Its gallery and shop usages went with the row, by cascade; its cover
+  // usage, if it was the chosen cover, did not (P3). The album is the one the
+  // row said it was in, not the one the browser named.
+  await syncAlbum(tenantId, (photo?.album_id as string | undefined) ?? albumId)
 
   revalidatePath(`/admin/trips/${albumId}`)
 }

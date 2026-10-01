@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireEditor } from '@/lib/auth'
 import { getSiteSettings } from '@/lib/site'
 import { patchSiteSettings } from '@/lib/site-patch'
+import { syncLivePage } from '@/lib/photos/usages'
 import { MIRRORED, legacyColumns, legacyPageSections } from '@/lib/sections/legacy'
 import { resolveSettings, type SectionSettings } from '@/lib/sections/registry'
 import type { StoredSection } from '@/lib/sections/load'
@@ -73,6 +74,10 @@ export async function materializeSections(page = 'home'): Promise<Map<string, st
 
     if (insertError) throw new Error(insertError.message)
 
+    // The page now draws from rows, not from its legacy columns: its
+    // photographs are page_section usages from here on (P3).
+    await syncLivePage(tenantId, page)
+
     return new Map((inserted ?? []).map((r) => [`legacy-${r.type}`, r.id as string]))
   }
 
@@ -118,7 +123,11 @@ export async function replaceSections(
     .eq('page', page)
   if (deleteError) throw new Error(deleteError.message)
 
-  if (sections.length === 0) return
+  if (sections.length === 0) {
+    // The page's photographs are projected from what was just saved (P3).
+    await syncLivePage(tenantId, page)
+    return
+  }
 
   const { error } = await supabase.from('page_sections').insert(
     sections.map((s, position) => ({
@@ -131,6 +140,10 @@ export async function replaceSections(
       settings: s.settings,
     }))
   )
+
+  // Projected whether or not the insert worked: the delete above already
+  // changed what the page holds.
+  await syncLivePage(tenantId, page)
 
   if (error) throw new Error(error.message)
 }

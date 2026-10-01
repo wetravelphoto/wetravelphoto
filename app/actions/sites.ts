@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { PLATFORM } from '@/lib/platform'
 import { SAMPLE_ALBUM_SLUG, SAMPLE_ALBUM_TITLE, SAMPLE_PHOTOS } from '@/lib/samples'
 import { EMAIL_PATTERN } from '@/lib/email'
+import { syncAfterSettings, syncAlbum, syncDraft, syncLivePage, syncPost } from '@/lib/photos/usages'
 
 /**
  * MAKING A SITE
@@ -150,6 +151,11 @@ export async function createSite(formData: FormData): Promise<NewSite> {
         : `The site's settings could not be saved: ${settingsError.message}`
     )
   }
+
+  // The starter settings name the sample photographs in the legacy homepage
+  // columns. Nothing resolves (samples are not assets), but every direct write
+  // of a photographic source here is followed by its projection (P3).
+  await syncAfterSettings(tenantId, starterSettings(name))
 
   // ── 4. a look ─────────────────────────────────────────────────────────────
   await applyDefaultLook(db, tenantId)
@@ -374,6 +380,8 @@ async function seedSamples(db: SupabaseClient, tenantId: string): Promise<string
       .eq('tenant_id', tenantId)
       .eq('id', album.id)
   }
+  // Its photographs and its cover, projected (P3).
+  await syncAlbum(tenantId, album.id)
 
   // ── One story ─────────────────────────────────────────────────────────────
   // Not fatal either. A site without a sample story is a working site.
@@ -385,7 +393,12 @@ async function seedSamples(db: SupabaseClient, tenantId: string): Promise<string
     .maybeSingle()
 
   if (!story) {
-    await db.from('blog_posts').insert({ tenant_id: tenantId, ...sampleStory() })
+    const { data: made } = await db
+      .from('blog_posts')
+      .insert({ tenant_id: tenantId, ...sampleStory() })
+      .select('id')
+      .maybeSingle()
+    if (made?.id) await syncPost(tenantId, made.id as string)
   }
 
   return null
@@ -440,6 +453,8 @@ async function fillHomepage(db: SupabaseClient, tenantId: string): Promise<void>
       async (row) => await db.from('site_settings').update(row).eq('tenant_id', tenantId).select('tenant_id'),
       patch
     )
+    // The legacy homepage columns may now name a sample (P3).
+    await syncAfterSettings(tenantId, patch)
   }
 }
 
@@ -486,6 +501,9 @@ export async function removeSamples(): Promise<{ ok: boolean; message: string }>
 
   await supabase.from('photos').delete().eq('tenant_id', tenantId).eq('album_id', album.id)
   await supabase.from('albums').delete().eq('tenant_id', tenantId).eq('id', album.id)
+  // Normally the cascade has already taken its usages; if either delete
+  // failed, this re-projects whatever is left (P3).
+  await syncAlbum(tenantId, album.id)
 
   // ── And the ones on the homepage ──────────────────────────────────────────
   // Only where they are still a sample. Anything the photographer has already
@@ -510,6 +528,7 @@ export async function removeSamples(): Promise<{ ok: boolean; message: string }>
   const cleared = Object.keys(clear).length > 0
   if (cleared) {
     await supabase.from('site_settings').update(clear).eq('tenant_id', tenantId)
+    await syncAfterSettings(tenantId, clear)
   }
 
   revalidatePath('/admin/trips')
@@ -741,6 +760,8 @@ export async function addSamples(): Promise<{ ok: boolean; message: string }> {
   // Safe here because this button only appears on a site with no galleries of
   // its own: there is no work in that draft to lose.
   await db.from('site_draft').delete().eq('tenant_id', tenantId)
+  // No draft, no draft usages (P3).
+  await syncDraft(tenantId)
 
   revalidatePath('/admin/trips')
   revalidatePath('/admin')
@@ -947,6 +968,9 @@ async function fillSections(db: SupabaseClient, tenantId: string): Promise<void>
       .eq('tenant_id', tenantId)
       .eq('id', row.id)
   }
+
+  // A section's photograph may have changed on either page (P3).
+  for (const page of ['home', 'about']) await syncLivePage(tenantId, page)
 }
 
 

@@ -1,5 +1,5 @@
 import { Client } from 'pg'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { CUSTOM_KEY, PAGES, isPageKey } from '../lib/sections/pages'
@@ -38,7 +38,7 @@ import { DRAFT_KINDS, USAGE_KINDS, USAGE_PARENT, USAGE_SCOPES } from '../lib/pho
 // Resolved from this file rather than a fixed sandbox path, so it runs from
 // any checkout.
 const ROOT = resolve(__dirname, '..')
-const MIGRATION = `${ROOT}/db/migrations/2026-09-29_photo_assets.sql`
+const MIGRATIONS = `${ROOT}/db/migrations`
 
 const TENANT_A = 'aaaaaaaa-0000-0000-0000-000000000001'
 const PHOTO_A = 'cccccccc-0000-0000-0000-000000000001'
@@ -67,7 +67,23 @@ const sorted = (xs: readonly string[]) => [...xs].sort()
 // Read from the file so that it holds with no database at all. The database
 // half below asks the live constraint the same questions.
 
-const migration = readFileSync(MIGRATION, 'utf8')
+/**
+ * The text of the LATEST migration that declares `constraint <name>`. P1
+ * declared every one of these; P3 (2026-09-30_photo_usages_sync.sql) restates
+ * the kind, scope and parent CHECKs with the eighth kind, page_share. Reading
+ * only P1's file would hold the TypeScript to a contract the database no longer
+ * has. Files are applied in name order, so the last to declare it is the truth.
+ */
+function declaring(name: string): string {
+  const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()
+  let text = ''
+  for (const file of files) {
+    const src = readFileSync(`${MIGRATIONS}/${file}`, 'utf8')
+    if (src.includes(`constraint ${name} `) || src.includes(`constraint ${name}
+`)) text = src
+  }
+  return text
+}
 
 /** The quoted strings inside the first `<column> in ( … )` after `name`. */
 function listIn(src: string, name: string, column: string): string[] | null {
@@ -78,21 +94,22 @@ function listIn(src: string, name: string, column: string): string[] | null {
 }
 
 {
-  const kinds = listIn(migration, 'photo_usages_kind_known', 'kind')
+  const kinds = listIn(declaring('photo_usages_kind_known'), 'photo_usages_kind_known', 'kind')
   ok('the migration still declares its kinds', kinds !== null)
   if (kinds) is('its kinds are USAGE_KINDS', sorted(kinds), sorted(USAGE_KINDS))
 
-  const scopes = listIn(migration, 'photo_usages_scope_known', 'scope')
+  const scopes = listIn(declaring('photo_usages_scope_known'), 'photo_usages_scope_known', 'scope')
   ok('the migration still declares its scopes', scopes !== null)
   if (scopes) is('its scopes are USAGE_SCOPES', sorted(scopes), sorted(USAGE_SCOPES))
 
-  const draft = listIn(migration, 'photo_usages_scope_by_kind', 'kind')
+  const draft = listIn(declaring('photo_usages_scope_by_kind'), 'photo_usages_scope_by_kind', 'kind')
   ok('the migration still declares its draft-capable kinds', draft !== null)
   if (draft) is('they are DRAFT_KINDS', sorted(draft), sorted(DRAFT_KINDS))
 
   // THE PAGE LIST. Written out in SQL because a CHECK cannot import TypeScript.
   // This is the assertion that fails first when a built-in page is added to
   // PAGES and not to the CHECK.
+  const migration = declaring('photo_usages_page_key_shape')
   const builtins = listIn(migration, 'photo_usages_page_key_shape', 'page_key')
   ok('the migration still lists its built-in pages', builtins !== null)
   if (builtins) is('its built-in pages are exactly the keys of PAGES', sorted(builtins), sorted(Object.keys(PAGES)))
@@ -268,8 +285,10 @@ async function main() {
       await db.query('savepoint s')
       try {
         await db.query(
-          `insert into photo_usages (tenant_id, asset_id, scope, kind, ${parent}, field) values ($1, $2, $3, $4, $5, 'f')`,
-          [TENANT_A, assetId, scope, kind, parentValue[parent]]
+          `insert into photo_usages (tenant_id, asset_id, scope, kind, ${parent}, field) values ($1, $2, $3, $4, $5, $6)`,
+          // A page_share has exactly one legal field (photo_usages_share_slot, P3);
+          // every other kind takes any.
+          [TENANT_A, assetId, scope, kind, parentValue[parent], kind === 'page_share' ? 'page_seo.image' : 'f']
         )
         await db.query('rollback to savepoint s')
         return 'accepted'

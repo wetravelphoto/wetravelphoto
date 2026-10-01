@@ -106,7 +106,9 @@ bash scripts/sandbox-build.sh           # expect: BUILD EXIT: 0
 
 Database suites — need a local Postgres carrying the fixture, which already
 contains `jobs` (with the hardened `enqueue_jobs`), `page_views`, the P1 photo
-tables and the P2 ingestion functions in their deployed shape:
+tables, the P2 ingestion functions and P3's projection (the tenant-aware cover
+key, `page_share`, seven functions, the re-locked wrappers) in their deployed
+shape:
 
 ```bash
 createdb wtp && psql -d wtp -f db/test-fixture.sql
@@ -114,10 +116,13 @@ createdb wtp && psql -d wtp -f db/test-fixture.sql
 psql -d wtp -f db/verify-analytics.sql         # 76 assertions
 psql -d wtp -f db/verify-jobs.sql              # 114 (incl. the no-profile tenant gate)
 psql -d wtp -f db/verify-tenant-isolation.sql  # 25
-psql -d wtp -f db/verify-photo-assets.sql      # 137
+psql -d wtp -f db/verify-photo-assets.sql      # 146
 psql -d wtp -f db/verify-photo-ingest.sql      # 246
-bash scripts/fixture-matches-migration.sh      # 409 jobs + 175 page_views + 912 P1/P2 facts
+psql -d wtp -f db/verify-photo-usages.sql      # 159
+psql -d wtp -f db/verify-album-cover-fk.sql    # 17
+bash scripts/fixture-matches-migration.sh      # 409 jobs + 175 page_views + 1616 P1/P2/P3 facts
 bash scripts/jobs-concurrency.sh               # 17, needs two connections
+bash scripts/album-cover-fk.sh                 # 15, its own scratch database
 ```
 
 TypeScript suites live in `.mk/` and are run directly:
@@ -125,8 +130,9 @@ TypeScript suites live in `.mk/` and are run directly:
 ```bash
 npx tsx .mk/analytics.ts       # 295  (needs the database)
 npx tsx .mk/jobs.ts            #  64  (needs the database)
-npx tsx .mk/photo-assets.ts    #  55  (needs the database)
+npx tsx .mk/photo-assets.ts    #  58  (needs the database)
 npx tsx .mk/ingest.ts          # 175  (needs the database; two-connection concurrency)
+npx tsx .mk/usages.ts          # 176  (needs the database; two-connection concurrency)
 npx tsx .mk/section-values.ts  # 1557
 npx tsx .mk/settings.ts        #  408
 ```
@@ -177,12 +183,19 @@ unrelated — do not put Scene code there.
 `20260930191116`, and reconciled. Every real photograph upload (gallery, site,
 journal, custom cover) now becomes one `photo_assets` row through four narrow
 definer functions; nothing READS the photo tables yet.
+**P3** the photo-usage projection — **deployed** 2026-10-01, migrations
+`20261001005946` (A: tenant-aware album cover key) and `20261001010021`
+(B: `page_share`, `sync_photo_usages` and its reads, service_role only), and
+reconciled. `SUPABASE_SERVICE_ROLE_KEY` is confirmed in Vercel Production
+(2026-10-01). Production projects nothing until the application code is
+deployed and confirmed running; then `scripts/rebuild-photo-usages.ts --all`
+runs once (`open-items.md` §11).
 
-Production: 37 tables · 549 columns · 18 functions · 56 policies · RLS on all 37
+Production: 37 tables · 549 columns · 25 functions · 56 policies · RLS on all 37
 · PostgreSQL 17.6.
 
-**The next phase is P3 — the extractor and `syncUsages`**
-(`photo-migration-plan.md`). **Not started.**
+**The next phase is P4 — the backfill** (`photo-migration-plan.md`).
+**Not started.**
 
 The Supabase security advisor warns that `authenticated` may execute five
 SECURITY DEFINER functions (`enqueue_jobs`, the four `register_*`). **Intended —
@@ -191,7 +204,7 @@ do not "fix" them**; the narrow definer function is the approved boundary
 
 ## Not without explicit approval
 
-- **Starting P3**, or any other phase, or more than one phase at a time.
+- **Starting P4**, or any other phase, or more than one phase at a time.
 - **Applying anything to the production database.**
 - **Committing or pushing.**
 - Dropping, renaming or repurposing a column — including **Phase D** (the

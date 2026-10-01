@@ -23,10 +23,10 @@ The full picture is in **`db/schema-2026-09.sql`**, transcribed from
 policies**, **9 functions**, one trigger (`site_draft_touch` on `site_draft`),
 and no trigger anywhere else.
 
-*That was the survey. After S3, S4, P1, the S3 tenant-guard hotfix and P2,
-production is **37 tables, 549 columns, 18 functions, 56 policies**, RLS on all
-37 — see the deployment sections below, the latest of which is P2
-(2026-09-30).*
+*That was the survey. After S3, S4, P1, the S3 tenant-guard hotfix, P2 and
+P3, production is **37 tables, 549 columns, 25 functions, 56 policies**, RLS on
+all 37 — see the deployment sections below, the latest of which is P3
+(2026-10-01).*
 
 *The policy figure was first written here as 53, which was a counting error in
 the transcription rather than anything about the database. Corrected 2026-09-29
@@ -600,6 +600,86 @@ No S4-specific security finding. `page_views_tenant_time` and
 `page_views_post_idx` report as unused, which is expected immediately after
 creation and worth re-checking once there is real traffic — the same follow-up
 already recorded for the queue's three indexes.
+
+---
+
+## 2026-10-01 — P3, the photo-usage projection, DEPLOYED TO PRODUCTION
+
+Two migrations, reviewed and applied by ChatGPT, each SHA256 verified against
+the file before it was applied:
+
+| | Supabase version | name | file | sha256 |
+|---|---|---|---|---|
+| A | `20261001005946` | `album_cover_tenant_fk_2026_09_30` | `db/migrations/2026-09-30_album_cover_tenant_fk.sql` | `fad895dc3b16c4ac2bf5859a77bfb6b8d361be2a240351402ff1aad5a93f93ed` |
+| B | `20261001010021` | `photo_usages_sync_2026_09_30` | `db/migrations/2026-09-30_photo_usages_sync.sql` | `cad8cabf96345c288964f81fcebab953e1947a744e5aff4b7806b76dd82e642d` |
+
+### Verified against the live database afterwards
+
+| | |
+|---|---|
+| totals | **37 tables, 549 columns, 25 public functions, 56 public policies** (18 → 25: B's seven) |
+| `albums_cover_photo_fk` | `FOREIGN KEY (cover_photo_id, tenant_id) REFERENCES photos(id, tenant_id) ON DELETE SET NULL (cover_photo_id)` |
+| cross-site chosen covers | **0** (A's preflight and an independent check) |
+| `page_share` | in `photo_usages_kind_known`, `_scope_by_kind` and `_one_parent`; `photo_usages_slot_share (tenant_id, scope, page_key) where kind = 'page_share'`; `photo_usages_share_slot`: `kind <> 'page_share' or (field = 'page_seo.image' and position = 0)` |
+| the seven P3 functions | `photo_usage_lock`, `photo_usage_parent_key`, `photo_usage_source`, `photo_usage_resolve_path` (internal: executable by no application role), `read_photo_usage_source`, `list_photo_usage_parents`, `sync_photo_usages`; all `search_path = ''` |
+| the three service functions | SECURITY DEFINER; EXECUTE to `service_role` ONLY (authenticated, anon: none); a run-time role check also refuses an owner connection that has not SET ROLE service_role |
+| `photo_usages` table grants | unchanged: `authenticated` SELECT only; `service_role` no SELECT, INSERT, UPDATE or DELETE |
+| `register_gallery_photo`, `register_album_cover` | SECURITY DEFINER, `search_path = ''`, EXECUTE to `authenticated` only, exactly one `photo_usage_lock` call each; no other P2 behaviour or grant changed |
+
+### Live smoke tests, run in production and cleaned up
+
+- **Security:** `service_role` allowed; `authenticated` `42501`; an owner
+  connection without the service role `42501`.
+- **A sample and canonical album:** the canonical gallery photograph → 1
+  gallery usage; the sample gallery photograph → 0; the sample chosen cover →
+  0 `gallery_cover`; unresolved **0**; a forged sample declaration → `22023`.
+- **Cover key:** deleting the chosen photograph set `cover_photo_id` to NULL
+  and left `albums.tenant_id` unchanged.
+- **Stale snapshot:** an old snapshot synced after a newer album state →
+  `stale = true`, `written = 0`; the fresh sync → `stale = false`,
+  `written = 2`; the final projection held the 2 canonical gallery usages.
+- Cleanup complete: `photo_assets` 0, `photo_usages` 0, `jobs` 0.
+
+### Not yet operational
+
+The database half is live. No save in production projects anything until the
+P3 application code is deployed and confirmed running.
+`SUPABASE_SERVICE_ROLE_KEY` was confirmed in Vercel Production on 2026-10-01
+(manually); without it every projection call would be skipped and logged
+(`claude/open-items.md` §11).
+
+### The reconciliation
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` carry both migrations, every
+P3 statement **copied from the migration files by a script**: the cover key,
+the three restated CHECKs and the share-slot CHECK, the slot index, the seven
+functions with their grants, and the two re-locked wrappers. The reconciled
+fixture alone produces the **same catalogue fingerprint** (constraints,
+indexes, policies, table ACLs, columns, and every function's signature,
+security, search_path, ACL and body) as the pre-P3 fixture plus A plus B, and
+re-applying either migration to it changes nothing.
+
+**One thing the reconciliation found: creation ORDER is observable.** The
+first reconciled fixture declared the new cover key with albums' other keys,
+i.e. before photo_usages' — and `db/verify-photo-assets.sql` then failed one
+check: moving a photograph that is a chosen cover to another site was refused
+by `albums_cover_photo_fk` instead of `photo_usages_photo_fk`. Both keys
+refuse it; PostgreSQL fires foreign-key triggers in creation order, and in
+production Migration A created the cover key AFTER P1's keys. No catalogue
+definition differed, so the fingerprint could not see it. The fixture and the
+snapshot now create the cover key after photo_usages' keys, as production did,
+and the check passes; a comment there says why it must not move back.
+
+`scripts/fixture-matches-migration.sh` now rebuilds the photo tables as
+production reached them — P1, P2, then A, then B — after restoring the cover key
+to its pre-P3 form in the strip. It compares the twelve photo functions
+(P2's five, two re-locked by B, and B's seven) with `photo_assets`' facts, the
+page_share constraints and index with `photo_usages`', and the cover key with
+`albums`': 1616 P1/P2/P3 facts. Shown to bite on: the cover key reverted to one
+column, the share-slot CHECK weakened, the share slot index missing `scope`, an
+authenticated EXECUTE grant on `sync_photo_usages`, `register_gallery_photo`
+without its lock, the resolver without its same-site filter, and a missing
+P3 function (refused at the strip, which drops every function by name).
 
 ---
 

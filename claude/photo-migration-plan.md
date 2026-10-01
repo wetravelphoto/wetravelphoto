@@ -737,9 +737,13 @@ A Supabase `20261001005946` (`album_cover_tenant_fk_2026_09_30`, sha256
 `20261001010021` (`photo_usages_sync_2026_09_30`, sha256
 `cad8cabf96345c288964f81fcebab953e1947a744e5aff4b7806b76dd82e642d`). Live
 verification and smoke tests: `db/schema-verified.md`.
-`SUPABASE_SERVICE_ROLE_KEY` is confirmed in Vercel Production. The application
-half is operational once its deployment is confirmed running
-(`open-items.md` §11); then run `scripts/rebuild-photo-usages.ts --all` once. **P4 is next, not started.**
+**Activated 2026-10-01 — P3 COMPLETE / CLOSED.** Application commit
+`cd018bd` deployed by Vercel, `SUPABASE_SERVICE_ROLE_KEY` confirmed in
+Production, and the one-time `scripts/rebuild-photo-usages.ts --all` run twice:
+both passes 38 parents, 0 failed, 0 written, 102 unresolved (all
+`photo_has_no_asset` / `no_asset` — pre-P2 references), 0 malformed, the second
+identical to the first (`open-items.md` §11). P4's backfill owns those 102;
+re-run the rebuild after it. **P4 is next, not started.**
 Two migrations, applied in this order — database first, application after:
 
 - **A — `db/migrations/2026-09-30_album_cover_tenant_fk.sql`**, the prerequisite:

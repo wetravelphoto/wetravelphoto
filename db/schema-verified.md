@@ -640,13 +640,38 @@ the file before it was applied:
   `written = 2`; the final projection held the 2 canonical gallery usages.
 - Cleanup complete: `photo_assets` 0, `photo_usages` 0, `jobs` 0.
 
-### Not yet operational
+### Activation — the one-time production rebuild (2026-10-01)
 
-The database half is live. No save in production projects anything until the
-P3 application code is deployed and confirmed running.
-`SUPABASE_SERVICE_ROLE_KEY` was confirmed in Vercel Production on 2026-10-01
-(manually); without it every projection call would be skipped and logged
-(`claude/open-items.md` §11).
+The P3 application, commit `cd018bdaca5c504c573304511bea17f6f2be8c41`, was
+deployed by Vercel ("success — Deployment has completed");
+`SUPABASE_SERVICE_ROLE_KEY` was confirmed present in Vercel Production. Then
+`scripts/rebuild-photo-usages.ts --all` ran against production — under a
+one-time, explicitly authorised override of CLAUDE.md deployment rule 7, data
+only, through the canonical projector — **twice**:
+
+| | pass 1 | pass 2 |
+|---|---|---|
+| exit code | 0 | 0 |
+| sites / failed sites | 4 / 0 | 4 / 0 |
+| parents / failed parents | 38 / 0 | 38 / 0 |
+| written | 0 | 0 |
+| unresolved | 102 | 102 |
+| malformed | 0 | 0 |
+
+The second pass was identical to the first, report and log: the projection
+converged. Unresolved by site:
+
+| site | unresolved | where |
+|---|---|---|
+| `0f48b91a-dae4-4341-9c81-ab44d2ed14c5` | **74** | albums 52 · stories 12 · catalogue entries 5 · live pages 5 |
+| `6a7350e3-2fca-4d3f-adb7-10d69bc1f8f7` | **28** | album 24 · live pages 4 |
+| the other two sites | **0** | |
+
+All unresolved reasons are `photo_has_no_asset` and `no_asset` (files from
+before P2); no sample path was counted; no errors; no stale or non-converging
+parent. Production therefore still holds `photo_assets` 0, `photo_usages` 0,
+`jobs` 0 — **expected**: nothing can resolve until P4's backfill mints assets
+for those 102 references.
 
 ### The reconciliation
 

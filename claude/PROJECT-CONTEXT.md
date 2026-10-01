@@ -810,15 +810,15 @@ to the real role and reset it immediately.
 | **P1** | `photo_assets` / `photo_usages` tables and constraints | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled** |
 | **S3 hotfix** | `enqueue_jobs` tenant guard made NULL-safe | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled** |
 | **P2** | Unified photo ingestion | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled — COMPLETE** |
-| **P3** | The photo-usage projection (`syncUsages`) | **DEPLOYED TO PRODUCTION 2026-10-01 (database), reconciled — COMPLETE**; application code awaiting commit |
+| **P3** | The photo-usage projection (`syncUsages`) | **DEPLOYED TO PRODUCTION 2026-10-01, reconciled, activated — COMPLETE / CLOSED** |
 
 S1 and S2 are complete; S3, S4, P1, the S3 hotfix, P2 and P3 are deployed,
 verified and reconciled into the schema-truth files. Application code through
 P2 is committed (P1's as `284876c`, P2's and the hotfix's as `1177869`); P3's
-is committed with this reconciliation; `SUPABASE_SERVICE_ROLE_KEY` is confirmed
-in Vercel Production (2026-10-01). It is operational once that deployment is
-confirmed running, after which `scripts/rebuild-photo-usages.ts --all` runs
-once. **P4 is next and has not been started.**
+as `cd018bd`, deployed by Vercel with `SUPABASE_SERVICE_ROLE_KEY` confirmed in
+Production, and activated by the one-time rebuild (2026-10-01: 38 parents, 0
+failed, 102 unresolved pre-P2 references for P4). **P4 is next and has not been
+started.**
 
 ## Production migration identifiers
 
@@ -928,9 +928,9 @@ itself. Unresolved references are skipped and counted; built-in samples are
 ignored. `rebuildUsages` / `scripts/rebuild-photo-usages.ts` is the repair
 path. Proved by `db/verify-photo-usages.sql` (159), `.mk/usages.ts` (176),
 `db/verify-album-cover-fk.sql` (17) and `scripts/album-cover-fk.sh` (15), and
-smoke-tested live (`db/schema-verified.md`). `SUPABASE_SERVICE_ROLE_KEY` is
-confirmed in Vercel Production; the application half is operational once its
-deployment is confirmed running.
+smoke-tested live (`db/schema-verified.md`). Application commit `cd018bd`,
+deployed by Vercel; activated by the one-time `rebuild-photo-usages --all`,
+which converged on two identical passes. **COMPLETE / CLOSED.**
 
 ## P2 — unified ingestion — DEPLOYED 2026-09-30
 
@@ -973,7 +973,7 @@ Authority: `claude/photo-assets-design.md` §9 (revision 7) and
 |---|---|---|
 | **P1** | Tables, constraints, indexes, policies. Pure DDL. **DEPLOYED 2026-09-30** (`20260930123113`) and reconciled. | none |
 | **P2** | **Unified ingestion.** One `ingest()`, four routes (gallery, site, journal, custom cover), idempotent on `key_base`. Done *before* the backfill so there is no new stream of un-asseted files. EXIF normalisation becomes universal (geolocation does not); journal images finally exist as records. **DEPLOYED 2026-09-30** (`20260930191116`) and reconciled. | none on success; failed uploads now fail cleanly |
-| **P3** | **The extractor and `syncUsages`.** Every document edit projects its usages. Deliberately before the backfill, so no live edit goes unprojected. The invariant test: drop every usage row, re-run over every document, and the table comes back identical. **DEPLOYED 2026-10-01** (`20261001005946`, `20261001010021`) and reconciled; application code awaiting push. | none |
+| **P3** | **The extractor and `syncUsages`.** Every document edit projects its usages. Deliberately before the backfill, so no live edit goes unprojected. The invariant test: drop every usage row, re-run over every document, and the table comes back identical. **DEPLOYED 2026-10-01** (`20261001005946`, `20261001010021`), reconciled, application `cd018bd` live, rebuilt — **COMPLETE**. | none |
 | **P4** | **Backfill**, in idempotent passes through the queue, then the two deferred foreign keys — which applying without violation is itself the proof the passes were complete. | none |
 | **P5** | **Asset-aware pickers, the resolver and alt semantics.** P5a: identity travels through `onPick`. P5b: `resolveImage` prefers the asset's real derivatives and falls back to the stored path. | correct srcsets for small photographs; alt semantics |
 | **P6** | **Deletion and the sweeper.** Referential integrity replaces reference-scanning; storage deletion becomes deferred with a 30-day grace and a final live-and-draft re-check. | **the one deliberate behaviour change: storage deletion deferred 30 days** |

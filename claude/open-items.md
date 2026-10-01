@@ -477,7 +477,7 @@ deferred to a later phase:
       before it reaches `photos.tags`. Recorded so nobody mistakes them for
       accidents.
 
-## 11. P3 — the projection (DEPLOYED 2026-10-01, database; application awaiting push)
+## 11. P3 — the projection (COMPLETE / CLOSED 2026-10-01)
 
 Two migrations, in order: `2026-09-30_album_cover_tenant_fk.sql` (A, Supabase
 `20261001005946`), then `2026-09-30_photo_usages_sync.sql` (B,
@@ -494,11 +494,33 @@ Live verification and smoke tests: `db/schema-verified.md`.
 - [x] **`SUPABASE_SERVICE_ROLE_KEY` confirmed in Vercel Production**
       (2026-10-01, checked manually by Gonzalo). Without it every hooked save
       would log and skip its projection (the save itself unaffected).
-- [ ] **DEPLOYMENT PREREQUISITE — P3 is not operational in production yet.**
-      The database half is live; nothing projects until P3's application code
-      is pushed AND its production deployment is independently confirmed
-      running. Only then: run `scripts/rebuild-photo-usages.ts --all` once, so
-      sites edited before the deploy are projected.
+- [x] **Application deployed:** commit `cd018bdaca5c504c573304511bea17f6f2be8c41`
+      pushed to main; Vercel "success — Deployment has completed".
+- [x] **One-time production rebuild — DONE 2026-10-01.**
+      `npx tsx --env-file=.env.local scripts/rebuild-photo-usages.ts --all`,
+      run by Claude under a **one-time, explicitly authorised override of
+      CLAUDE.md deployment rule 7** (Claude does not change the live database),
+      granted by Gonzalo for this data-only projection; completed successfully.
+      Preflight: clean tree at `cd018bd`; `.env.local` pointed at the
+      production project `qlwitnycswsyouzzogxm`; the service-role key present
+      (no value printed). Run TWICE; both passes exit 0 — **4 sites, 0 failed
+      sites, 38 parents, 0 failed parents, 0 written, 102 unresolved, 0
+      malformed**, no errors, no stale or non-converging parent — and the second
+      pass was identical to the first (report and log): converged.
+
+      | site | unresolved | where |
+      |---|---|---|
+      | `0f48b91a-dae4-4341-9c81-ab44d2ed14c5` | **74** | albums 52 · stories 12 · catalogue entries 5 · live pages 5 |
+      | `6a7350e3-2fca-4d3f-adb7-10d69bc1f8f7` | **28** | album 24 · live pages 4 |
+      | the other two sites | **0** | |
+
+      Every unresolved reason is `photo_has_no_asset` or `no_asset` — gallery
+      photographs, story blocks and featured images, catalogue entries, section
+      images and one share image whose files predate P2. No sample path was
+      counted. **Written 0 is expected:** production holds `photo_assets` 0,
+      `photo_usages` 0, `jobs` 0, so nothing can resolve until **P4's backfill**
+      mints the assets for these 102 references; then run the rebuild again.
+      The override is not standing: rule 7 applies again in full.
 - [x] **`rebuildUsages` can be run:** `scripts/rebuild-photo-usages.ts`
       (`--tenant <uuid>` or, explicitly, `--all`; never a default), the internal
       repair command and the step P4 runs after its backfill. Needs
@@ -595,8 +617,9 @@ point at another site's photograph. Live smoke tests: service role allowed,
 authenticated and a role-less owner refused; a sample and canonical album
 projected 1 / 0 / 0 with 0 unresolved and a forged declaration refused; the
 cover key nulls only the cover; an old snapshot was refused as stale and the
-fresh one projected. **Operational once the application is pushed and the
-service-role key is confirmed** (§11).
+fresh one projected. Application `cd018bd` deployed by Vercel; the one-time
+rebuild ran twice and converged (38 parents, 0 failed, 102 unresolved pre-P2
+references, 0 written). **P3 COMPLETE / CLOSED; P4 next, not started** (§11).
 
 ### 2026-09-30 (later) — the S3 tenant-guard hotfix, and P2 unified ingestion, DEPLOYED
 

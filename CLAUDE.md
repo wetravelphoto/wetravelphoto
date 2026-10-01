@@ -186,10 +186,10 @@ definer functions; nothing READS the photo tables yet.
 **P3** the photo-usage projection — **deployed** 2026-10-01, migrations
 `20261001005946` (A: tenant-aware album cover key) and `20261001010021`
 (B: `page_share`, `sync_photo_usages` and its reads, service_role only), and
-reconciled. `SUPABASE_SERVICE_ROLE_KEY` is confirmed in Vercel Production
-(2026-10-01). Production projects nothing until the application code is
-deployed and confirmed running; then `scripts/rebuild-photo-usages.ts --all`
-runs once (`open-items.md` §11).
+reconciled. Application commit `cd018bd`, deployed by Vercel; the one-time
+`scripts/rebuild-photo-usages.ts --all` ran twice and converged (0 failed, 102
+unresolved pre-P2 references, 0 written — production holds no assets yet).
+**P3 is COMPLETE / CLOSED** (`open-items.md` §11).
 
 Production: 37 tables · 549 columns · 25 functions · 56 policies · RLS on all 37
 · PostgreSQL 17.6.

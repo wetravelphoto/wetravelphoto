@@ -109,11 +109,11 @@ const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
   }
   is('processExistingOriginal( is called from lib/photos/ingest.ts and NOWHERE else',
     calls.get('processExistingOriginal') ?? [], ['lib/photos/ingest.ts'])
-  // THE NAMED, TEMPORARY EXEMPTION. The pre-ladder derivative job writes sizes
-  // for photographs uploaded before the ladder existed, without an asset. P4
-  // brings it under assets or retires it, and removes it from this list.
-  is('processPhoto( is called from lib/jobs/derive.ts ONLY — the one P4 exemption',
-    calls.get('processPhoto') ?? [], ['lib/jobs/derive.ts'])
+  // The named, temporary exemption is GONE (P4): the pre-ladder derivative job
+  // (lib/jobs/derive.ts) was retired rather than brought under assets, so no
+  // code path makes sizes without an asset any more — not even that one.
+  is('processPhoto( is called from NOWHERE — P4 retired the one exemption',
+    calls.get('processPhoto') ?? [], [])
 
   // The four routes, each calling ingestPhoto with ITS route and a site taken
   // from requireEditor() — never from anything the browser sent.

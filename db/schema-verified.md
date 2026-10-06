@@ -23,10 +23,10 @@ The full picture is in **`db/schema-2026-09.sql`**, transcribed from
 policies**, **9 functions**, one trigger (`site_draft_touch` on `site_draft`),
 and no trigger anywhere else.
 
-*That was the survey. After S3, S4, P1, the S3 tenant-guard hotfix, P2 and
-P3, production is **37 tables, 549 columns, 25 functions, 56 policies**, RLS on
-all 37 — see the deployment sections below, the latest of which is P3
-(2026-10-01).*
+*That was the survey. After S3, S4, P1, the S3 tenant-guard hotfix, P2, P3
+and P4, production is **37 tables, 549 columns, 30 functions, 56 policies,
+157 constraints, 101 indexes**, RLS on all 37 — see the deployment sections
+below, the latest of which is P4 (2026-10-05 / 2026-10-06).*
 
 *The policy figure was first written here as 53, which was a counting error in
 the transcription rather than anything about the database. Corrected 2026-09-29
@@ -600,6 +600,136 @@ No S4-specific security finding. `page_views_tenant_time` and
 `page_views_post_idx` report as unused, which is expected immediately after
 creation and worth re-checking once there is real traffic — the same follow-up
 already recorded for the queue's three indexes.
+
+---
+
+## 2026-10-05 / 2026-10-06 — P4, the legacy backfill and the asset keys, DEPLOYED TO PRODUCTION
+
+Two migrations, each applied once from the reviewed file and verified against
+the live database (evidence and reviews: the ignored `.ai-handoff/` packets;
+the Unit 2 deployment was independently accepted by ChatGPT Work on
+2026-10-06 UTC). Neither file has been edited since; their hashes are the
+deployed bytes:
+
+| | Supabase version | name | file | sha256 |
+|---|---|---|---|---|
+| unit 1 | `20261005192303` | `photo_backfill_p4_unit1_2026_10_05` | `db/migrations/2026-10-05_photo_backfill.sql` | `aa46c4789f85f1280a17ab01af400d9fff5459792d334a44acfe7b351e4f3eb8` |
+| unit 2 | `20261006012958` | `photo_assets_fk_p4_unit2_2026_10_05` | `db/migrations/2026-10-05_photo_assets_fk.sql` | `1bc2276e2ba325255be44509f203cc1695f8fafa276678b5f6b315a77c1d46d5` |
+
+### The production sequence, as it ran
+
+Each step separately approved, in the plan's order
+(`claude/photo-migration-plan.md`, P4):
+
+1. **Unit 1** applied (functions only: 25 → 30). The deployed bodies of
+   `photo_backfill_foreign_claim`, `read_photo_backfill_inventory`,
+   `read_photo_backfill_claims` and the replaced `photo_usage_resolve_path`
+   were compared with the file afterwards and match.
+2. **The application deployment that retired the old derivative writer**
+   (Vercel `dpl_AwanseKzTb8wSEVjNBvcb5wN4AsX`, built from a source snapshot of
+   commit `4e262d2` plus the reviewed, then-uncommitted P4 working tree; scope
+   "application retirement only").
+3. **Legacy deployments isolated, then verified drained by read-only
+   observation** (no drain command was invoked). A Vercel firewall rule,
+   `rule_p4_legacy_deployment_isolation_Tt14RW` (firewall config version 3),
+   denies every host except the current deployment's seven aliases and its own
+   immutable hostname, so no retained older deployment — the old
+   `photo.derivatives` writer — can be reached. A 15-minute read-only
+   observation (2026-10-05 22:37–22:52 UTC) then saw zero legacy invocations,
+   `jobs` 0 with nothing running and no live lease, and every count and
+   source fingerprint unchanged. **The rule is still enabled**; removing it is
+   its own decision, not part of P4's closure.
+4. **The reviewed dry run and journal provenance manifest.**
+5. **The backfill writes** (2026-10-06 00:24–00:26 UTC,
+   `scripts/backfill-photo-assets.ts --all --apply --manifest …`, exit 0):
+   **74 assets** (52 with a verified original, 22 display-only), **71 photos
+   linked**, 3 document-only uploads, the 12 built-in samples left unlinked;
+   per site 50 assets / 47 links and 24 / 24, the other two sites none. Storage
+   was read only (375 reads compared, content unchanged). The idempotence dry
+   run straight afterwards planned nothing for all four sites.
+6. **A P3 rebuild per site** (`scripts/rebuild-photo-usages.ts --tenant <id>`,
+   00:57–00:59 UTC): 38 parents, 0 failed, **0 unresolved** (the 102 P3 left
+   for P4), 0 malformed, **102 usages** — 74 / 28 / 0 / 0 by site; by kind
+   gallery 71, gallery_cover 5 (4 chosen, 1 custom), story_block 9,
+   page_section 8, shop_listing 5, story_cover 3, page_share 1.
+7. **Unit 2** applied once (01:29:51–01:29:58 UTC, success, no retry). Its
+   preflight read zero on all five rules immediately before.
+
+### Verified against the live database afterwards
+
+| | |
+|---|---|
+| totals | **37 tables, 549 columns, 30 public functions, 56 policies, 157 constraints, 101 indexes** (constraints 155 → 157, indexes 99 → 101) |
+| data | 74 assets, 83 photos, 71 linked, 102 usages, 12 unlinked built-in samples, 0 `site_images`, 0 `jobs` (none running, no live lease) |
+| `photos_asset_fk` | `FOREIGN KEY (asset_id, tenant_id) REFERENCES photo_assets(id, tenant_id)` through `photo_assets_id_tenant`; validated, NOT DEFERRABLE, MATCH SIMPLE, NO ACTION on update and delete |
+| `site_images_asset_fk` | the same, on `site_images` |
+| `photos_asset_tenant`, `site_images_asset_tenant` | valid, ready, non-unique btree `(asset_id, tenant_id) WHERE asset_id IS NOT NULL` |
+| internal triggers | four RI triggers per key, eight in all; every other trigger unchanged |
+| completeness | all five unit-2 rules still zero; every non-NULL link tenant-bound and display-consistent |
+| unchanged | every other constraint and index definition; all 30 function bodies, owners, security modes, `search_path` and ACLs; all 56 policies, RLS flags and table/schema/default grants; all 102 usage rows (ids and timestamps included) |
+
+**Not tested in production, deliberately:** no write was attempted to watch a
+key refuse, cascade or roll back. Those behaviours are proved locally — the
+five refusals, the lock race, run-twice and the rollback by
+`scripts/photo-assets-fk.mjs`, and the keys themselves by
+`db/verify-photo-assets-fk.sql`.
+
+**MATCH SIMPLE still admits a NULL link.** The five completeness rules were the
+migration's preconditions, not permanent CHECK constraints; nothing in the
+database now stops a future writer leaving a non-sample photograph unlinked.
+P2's wrappers always link and the backfill has finished; whether a permanent
+rule is wanted is for a later phase to decide.
+
+### Advisors, after deployment
+
+**Security:** unchanged by finding identity — mutable `search_path` 3,
+anon-callable definer 5, authenticated-callable definer 10, leaked-password
+protection 1. All pre-existing; P4 added none and remediated none. (The
+"authenticated may execute five definer functions" note further down counts
+the five *application* doors; the advisor's figures count more — reconciling
+the two is part of the standing read-only advisor pass in `claude/open-items.md`.)
+**Performance:** one new INFO finding, expected — `site_images_asset_tenant` is
+unused, on an empty table (unused-index count 11 → 12). Keep it. Everything else
+unchanged.
+
+### A sentence in the unit 2 file that is wrong — corrected here, not there
+
+The migration's header says *"Deleting a SITE still works: tenants cascade to
+photos, site_images and photo_assets in one statement."* **That is not
+production's shape.** `photos_tenant_id_fkey` (like `albums_tenant_id_fkey`)
+is NO ACTION; `deleteSite()` in `app/actions/sites.ts` removes a site's photos
+and albums **explicitly**, before the tenant row. `site_images` and
+`photo_assets` do cascade from `tenants`. Unit 2's NO ACTION keys are checked at
+the end of each statement, so neither path is blocked by them. The file stays
+byte-for-byte as deployed — its hash is the deployment's identity — and this
+paragraph, the fixture's comment beside the keys, and the plan carry the
+correction.
+
+### The reconciliation
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` carry both units, every P4
+statement **copied from the migration files by a script**: unit 1's five new
+functions and its replaced resolver verbatim, its grant block verbatim, and
+unit 2's two keys and two indexes — created **after** every P1 and P3 key, as
+production created them (trigger firing order is creation order; see the P3
+note below). The fixture's seeded rows are not production's: its three seeded
+gallery photographs keep a NULL `asset_id`, which MATCH SIMPLE admits.
+
+`scripts/fixture-matches-migration.sh` now strips P4's additions by name (the
+keys and indexes first, then unit 1's five functions; the resolver goes with
+P3's), rebuilds P1 → P2 → P3 A → P3 B → unit 1 → unit 2, and compares all
+seventeen photo functions with `photo_assets`' facts and the keys and indexes
+with `photos`' and `site_images`' whole-table facts: 409 `jobs` + 175
+`page_views` + 2223 photo-table facts. Unit 2's preflight is not weakened — in
+its scratch database only, the seeded photographs are linked first.
+`node scripts/fixture-matches-migration.mjs` runs that same script's SQL where
+there is no psql, and `--mutations` shows it biting on seven fixture defects
+(a CASCADE key, a predicate-less index, an extra EXECUTE grant, an INVOKER
+writer, the LIMIT-1 resolver, a weakened foreign-claim check, and missing keys).
+
+`db/verify-photo-assets.sql` asserts the deployed keys exactly by default; its
+original "no foreign key yet" assertion is kept and runs when a harness has
+rebuilt the pre-unit-2 stage on purpose (`wtp.p4_stage`).
 
 ---
 

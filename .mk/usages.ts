@@ -308,7 +308,8 @@ function fnBody(file: string, name: string): string {
     'app/actions/scenes.ts setShopRoom site_settings.update': 'a room scene — not a placement',
     'lib/instagram.ts syncInstagram site_settings.update': 'Instagram sync state — no photograph',
     'lib/instagram.ts refreshInstagramToken site_settings.update': "the token's expiry — no photograph",
-    'lib/jobs/derive.ts derivePhoto photos.update': 'sizes and dimensions only — never asset_id, which is all a gallery usage reads',
+    // (lib/jobs/derive.ts derivePhoto's photos.update was retired in P4: the
+    // job now fails permanently and writes nothing.)
   }
   const TABLES = ['page_sections', 'site_draft', 'site_settings', 'albums', 'blog_posts', 'catalog_items', 'photos', 'photo_usages']
   const unhooked: string[] = []

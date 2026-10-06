@@ -19,6 +19,16 @@
 -- the P3 ones, and every per-kind proof now covers eight kinds. P3 is DEPLOYED
 -- (Supabase 20261001010021) and reconciled, so the fixture alone carries them.
 --
+-- ── Since P4 ────────────────────────────────────────────────────────────────
+--
+-- P4 unit 2 (db/migrations/2026-10-05_photo_assets_fk.sql, Supabase
+-- 20261006012958) gave photos.asset_id and site_images.asset_id their
+-- tenant-aware keys, and the reconciled fixture carries them. Block 2 asserts
+-- them exactly by default. The original P1 assertion — "no foreign key yet" —
+-- is kept, not deleted: it runs when a harness rebuilds the pre-unit-2 state on
+-- purpose and sets `wtp.p4_stage = 'pre_unit2'` (scripts/photo-assets-fk.mjs).
+-- With psql: PGOPTIONS='-c wtp.p4_stage=pre_unit2' psql -d <that db> -f this.
+--
 -- The core isolation assertions now ALSO live in db/verify-tenant-isolation.sql,
 -- beside every other table's; this file keeps the complete P1 proof.
 --
@@ -204,7 +214,7 @@ insert into want_cols values
   ('photo_usages','alt_override','text YES def:-'),
   ('photo_usages','decorative','boolean NO def:false'),
   ('photo_usages','created_at','timestamp with time zone NO def:now()'),
-  -- The two link columns: nullable, no default, and (block 2) no foreign key.
+  -- The two link columns: nullable, no default; their keys are block 2's.
   ('photos','asset_id','uuid YES def:-'),
   ('site_images','asset_id','uuid YES def:-');
 
@@ -348,15 +358,54 @@ begin
   perform pg_temp.ok('every constraint and foreign key matches the design',
                      'no differences', coalesce(v_diff, 'no differences'));
 
-  -- The link columns have NO foreign key yet (P4 adds them).
-  select string_agg(conrelid::regclass || '.' || conname, ', ') into v_fk
+  -- The link columns' keys. P1 deployed them with NONE, deliberately, so an
+  -- empty column could not fail one; P4 unit 2 (Supabase 20261006012958) added
+  -- them after the backfill. Two states, each asserted exactly:
+  --
+  --   default        what production IS now: the two tenant-aware keys —
+  --                  validated, NO ACTION, MATCH SIMPLE, not deferrable — and
+  --                  their two partial supporting indexes. The fixture alone.
+  --   pre_unit2 /    the historical P1 contract: no key and no supporting
+  --   pre_p4         index. Asserted only when a harness has REBUILT that state
+  --                  in its own scratch database and says so with
+  --                  `set wtp.p4_stage = 'pre_unit2'` (scripts/photo-assets-fk.mjs).
+  --
+  -- Any other value fails. Neither branch is a skip: run in the wrong state,
+  -- each reports the keys it did or did not find.
+  select string_agg(conrelid::regclass || '.' || conname || ' ' || pg_get_constraintdef(oid)
+                    || ' validated=' || convalidated::text || ' deferrable=' || condeferrable::text
+                    || ' del=' || confdeltype::text || ' upd=' || confupdtype::text || ' match=' || confmatchtype::text,
+                    '; ' order by conname) into v_fk
     from pg_constraint
    where contype = 'f'
      and conrelid in ('photos'::regclass, 'site_images'::regclass)
      and conkey @> array[(select attnum from pg_attribute
                            where attrelid = conrelid and attname = 'asset_id')];
-  perform pg_temp.ok('photos.asset_id / site_images.asset_id have no foreign key yet',
-                     'none', coalesce(v_fk, 'none'));
+  case coalesce(current_setting('wtp.p4_stage', true), '')
+    when '' then
+      perform pg_temp.ok('photos.asset_id / site_images.asset_id carry P4 unit 2''s keys, exactly',
+        'photos.photos_asset_fk FOREIGN KEY (asset_id, tenant_id) REFERENCES photo_assets(id, tenant_id) validated=true deferrable=false del=a upd=a match=s; '
+        || 'site_images.site_images_asset_fk FOREIGN KEY (asset_id, tenant_id) REFERENCES photo_assets(id, tenant_id) validated=true deferrable=false del=a upd=a match=s',
+        coalesce(v_fk, 'none'));
+      perform pg_temp.ok('…and their partial supporting indexes, valid',
+        'photos_asset_tenant CREATE INDEX photos_asset_tenant ON public.photos USING btree (asset_id, tenant_id) WHERE (asset_id IS NOT NULL) valid=true; '
+        || 'site_images_asset_tenant CREATE INDEX site_images_asset_tenant ON public.site_images USING btree (asset_id, tenant_id) WHERE (asset_id IS NOT NULL) valid=true',
+        coalesce((select string_agg(c.relname || ' ' || pg_get_indexdef(i.indexrelid) || ' valid=' || i.indisvalid::text, '; ' order by c.relname)
+                    from pg_index i join pg_class c on c.oid = i.indexrelid
+                   where i.indrelid in ('photos'::regclass, 'site_images'::regclass)
+                     and pg_get_indexdef(i.indexrelid) like '%asset_id%'), 'none'));
+    when 'pre_unit2', 'pre_p4' then
+      perform pg_temp.ok('HISTORICAL (before unit 2): photos.asset_id / site_images.asset_id have no foreign key yet',
+                         'none', coalesce(v_fk, 'none'));
+      perform pg_temp.ok('HISTORICAL (before unit 2): …and no supporting index yet', 'none',
+        coalesce((select string_agg(indexrelid::regclass::text, ', ')
+                    from pg_index
+                   where indrelid in ('photos'::regclass, 'site_images'::regclass)
+                     and pg_get_indexdef(indexrelid) like '%asset_id%'), 'none'));
+    else
+      perform pg_temp.ok('wtp.p4_stage is a known stage', 'unset, pre_unit2 or pre_p4',
+                         current_setting('wtp.p4_stage', true));
+  end case;
 end $$;
 
 

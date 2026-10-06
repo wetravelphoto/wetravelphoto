@@ -3,11 +3,17 @@
 **Status: APPROVED IN PRINCIPLE, 2026-09-29.** The tables of §1–§3 are
 **deployed** (P1, Supabase `20260930123113`) and so is the ingestion boundary of
 §9 (P2, Supabase `20260930191116`), both 2026-09-30: every real photograph
-upload now writes its asset, and nothing READS the photo tables yet. The rest —
-`syncUsages`, backfill, resolver, deletion — is P3–P6. The build
-order is in `claude/photo-migration-plan.md`.
+upload now writes its asset. **P3** (deployed 2026-10-01) READS the assets: its
+projection resolves usages through them and through `photos.asset_id`. Nothing
+that RENDERS reads them — pages, pickers and the editor still use the legacy
+paths until P5's resolver. **P4** (§10) is deployed and accepted (Supabase
+`20261005192303` and `20261006012958`, 2026-10-05/06): every legacy photograph
+has its asset, and `photos.asset_id` / `site_images.asset_id` carry their keys;
+its repository closure (final review and commit) is pending. P5–P6 (resolver,
+deletion) remain; P5 is paused, not started. The build order is in
+`claude/photo-migration-plan.md`.
 
-Revision 7. Not to be redesigned again unless implementation reveals a concrete
+Revision 8. Not to be redesigned again unless implementation reveals a concrete
 contradiction in the real codebase.
 
 ---
@@ -22,6 +28,7 @@ contradiction in the real codebase.
 | 4 | per-kind partial unique indexes; `alt_effective` removed; composite tenant-aware foreign keys; `sort_order` mirror removed; video fields removed from projection and backfill | Gonzalo's review |
 | 5 | cascade question closed against production; status raised to approved | Gonzalo ran the constraint inspection, 2026-09-29 |
 | **7** | **P2 ingestion boundary (§9)**: four route-specific SECURITY DEFINER wrappers over one uncallable internal upsert; atomic per route; idempotent and lock-serialised; failure hardening with checked cleanup; normalised EXIF with a 1 KB allowlisted `exif`; latitude/longitude only for gallery uploads; custom covers in scope with `original_path = NULL`; the accent mark excluded; §3.6's rationale corrected | the P2 orientation (2026-09-30) found four upload routes, all running as the photographer; decisions by Gonzalo |
+| **8** | **P4 backfill (§10)**: a resumable CLI over narrow service-role RPCs replaces the queue; the closed legacy key grammar; flat files keep their exact display path and record no original; files verified by decoding; P3 stays the only usage writer; the resolver learns the flat era narrowly; the two asset keys behind a separate completeness preflight. Deployed 2026-10-05/06 (`20261005192303`, `20261006012958`) and accepted. | approved rulings 2026-10-05 and a review pass the same day |
 | 6 | reconciliation before P1: no tenant default on either new table (§3.6); §3.2 corrected about the parents' defaults; the P1 privilege set stated (§3.7); a `page_key` CHECK matching `isPageKey()` (§2.2, §3.4); a tenant-deletion proof required (§3.5) | the P1 orientation compared this document with the repository, 2026-09-29; decisions by Gonzalo |
 
 ---
@@ -602,11 +609,12 @@ on `key_base`, with a `.mk` scan proving no `processExistingOriginal(` or
 **normalisation** becomes universal; geolocation does not (§9.5). The whole
 boundary is §9.
 
-**Backfill.** Idempotent passes; duplicate detection is the unique index on
-`(tenant_id, key_base)`; furniture, history snapshots and video paths excluded;
-a path with no asset mints one in `state = 'pending'` and queues a derive job.
-The backfill and `syncUsages` share **one** extractor module, so they cannot
-disagree about what a document references.
+**Backfill.** *Superseded by §10 (rev 8):* not queued, and no derive job — the
+backfill mints an asset only for files it has verified, writes nothing to
+storage, and writes no usage. Still true: duplicate detection is the unique
+index on `(tenant_id, key_base)`; furniture, history snapshots and video paths
+are excluded; the backfill and `syncUsages` share **one** extractor module, so
+they cannot disagree about what a document references.
 
 **Rendering.** Nothing changes until the resolver lands; then `resolveImage`
 prefers the asset and falls back to the path, which is never removed.
@@ -896,3 +904,60 @@ otherwise:
   history and document ids, IPTC contact fields.
 - **Ceiling: 1024 bytes serialised**, enforced in SQL along with the key
   allowlist and each key's JSON type. The largest shape above is ~420 bytes.
+
+---
+
+# 10. P4 — the legacy backfill (rev 8; DEPLOYED 2026-10-05/06, ACCEPTED)
+
+Approved rulings, 2026-10-05; the build order, files and tests are in
+`claude/photo-migration-plan.md`, P4. The schema shape does not change. Deployed
+as unit 1 `20261005192303` (sha256
+`aa46c4789f85f1280a17ab01af400d9fff5459792d334a44acfe7b351e4f3eb8`) and unit 2
+`20261006012958` (sha256
+`1bc2276e2ba325255be44509f203cc1695f8fafa276678b5f6b315a77c1d46d5`); the backfill
+wrote 74 assets and linked 71 photographs, and the P3 rebuild then resolved all
+102 references P3 had left unresolved. Record: `db/schema-verified.md`, P4.
+
+## 10.1 What a legacy asset records
+
+| era / source | `key_base` | `display_path` | `derivatives` | original fields | width/height |
+|---|---|---|---|---|---|
+| flat gallery `photos/<a>/<u>.jpg` (± an old-job ladder) | `photos/<a>/<u>` | the row's `storage_path`, exactly | the row's ladder, or `{}` | **NULL** — a resized JPEG is not an original; the old job's `<u>/original.jpg` beside it is a copy of that JPEG and is ignored | the row's |
+| folder gallery / Uploads, unprefixed or prefixed | the folder | the row's `storage_path` | the row's ladder | the row's `original_path`, or the ONE sibling found among five names; read, decoded, hashed | the row's |
+| flat cover / journal named only by a document | extensionless base | the flat file | `{}` (or found sizes) | NULL (covers never keep one) | NULL |
+| folder file named only by a document | the folder | the largest size found | the sizes found | the one sibling found, hashed | the original's, **upright** — or NULL |
+
+`state = 'derived'` (every display file was read and decoded), `derived_at`
+NULL (unknown), `created_by` NULL (nobody uploaded anything now). For a gallery
+row, `taken_at` and latitude/longitude (both or neither) are the row's, read by
+the database at the write. Its keywords follow §9.5's rule through the ONE
+normaliser, `normalizeKeywords()` — trimmed, lower-cased, control characters
+removed, each cut to 200, empties dropped, the first 25 — applied by the
+backfill to the row's tags and bound to them: the raw tags are sent too and
+must equal the locked row's, or the write is `stale`. The row's own tags are
+never rewritten; existing P2 assets are not touched. "Upright" means EXIF
+orientations 5–8 swap the axes; 1–4 and out-of-range values do not.
+
+## 10.2 Ownership of a key
+
+A prefixed key must carry the site's own id. An unprefixed gallery or cover key
+must name one of the site's albums. An unprefixed **journal** key names nothing
+it could be owned through: it is backfilled only with an operator-reviewed
+manifest entry for exactly that site and key, and only if no other site's rows,
+documents or history mention it — checked by the CLI before and by the writer
+again, under a per-key lock. A saved reference alone is never proof.
+
+## 10.3 Boundaries
+
+- One writer for assets from legacy data, `register_legacy_photo_asset`,
+  service_role only plus a run-time role check, `search_path = ''`. It binds the
+  site, the source and its snapshot (for a document: one image slot of P3's own
+  source, under P3's projection lock, legacy columns only by P3's fallback),
+  creates or reuses — never rewrites — and fills a NULL `asset_id` in the same
+  transaction. P2's helper is not weakened or reused.
+- P3 remains the only writer of `photo_usages`.
+- The resolver's flat rule is narrow (exact extensionless base, exact
+  membership), and ambiguity resolves to nothing.
+- Storage: HEAD and bounded GET only; no write, copy, move, delete or listing.
+- The two asset keys are added only behind a completeness preflight that holds
+  the tables still; their success is not taken as proof of completeness.

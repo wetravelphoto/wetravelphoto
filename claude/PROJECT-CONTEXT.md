@@ -751,16 +751,19 @@ Database suites need a local Postgres carrying the fixture:
 
 ```bash
 createdb wtp
-psql -d wtp -f db/test-fixture.sql         # jobs (hardened), page_views, the P1 tables, the P2 functions, P3
+psql -d wtp -f db/test-fixture.sql         # jobs (hardened), page_views, the P1 tables, the P2 functions, P3, P4
 
 psql -d wtp -f db/verify-analytics.sql        # 76 assertions
 psql -d wtp -f db/verify-jobs.sql             # 114 (incl. the no-profile tenant gate)
 psql -d wtp -f db/verify-tenant-isolation.sql # 25 (14 + 11 for the photo tables)
-psql -d wtp -f db/verify-photo-assets.sql     # 146
+psql -d wtp -f db/verify-photo-assets.sql     # 147 (the pre-unit-2 contract under wtp.p4_stage)
 psql -d wtp -f db/verify-photo-ingest.sql     # 246
 psql -d wtp -f db/verify-photo-usages.sql     # 159
 psql -d wtp -f db/verify-album-cover-fk.sql   # 17
-bash scripts/fixture-matches-migration.sh     # 409 jobs + 175 page_views + 1616 P1/P2/P3 facts
+psql -d wtp -f db/verify-photo-backfill.sql   # 182
+psql -d wtp -f db/verify-photo-assets-fk.sql  # 22
+bash scripts/fixture-matches-migration.sh     # 409 jobs + 175 page_views + 2223 P1–P4 facts
+# no psql: node scripts/p4-local-db.mjs sql <suites…>; node scripts/fixture-matches-migration.mjs
 bash scripts/jobs-concurrency.sh              # 17, needs two connections
 bash scripts/album-cover-fk.sh                # 15, its own scratch database
 # db/verify-draft.sql is BROKEN and deliberately not in the loop — see open-items
@@ -774,6 +777,7 @@ npx tsx .mk/jobs.ts            # 64    (needs the database)
 npx tsx .mk/photo-assets.ts    # 58    (needs the database)
 npx tsx .mk/ingest.ts          # 175   (needs the database; two-connection concurrency)
 npx tsx .mk/usages.ts          # 176   (needs the database; two-connection concurrency)
+npx tsx .mk/backfill.ts        # 355   (needs the database; --unit-only: 245)
 npx tsx .mk/section-values.ts  # 1557
 npx tsx .mk/settings.ts        # 408
 ```
@@ -811,14 +815,22 @@ to the real role and reset it immediately.
 | **S3 hotfix** | `enqueue_jobs` tenant guard made NULL-safe | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled** |
 | **P2** | Unified photo ingestion | **DEPLOYED TO PRODUCTION 2026-09-30, reconciled — COMPLETE** |
 | **P3** | The photo-usage projection (`syncUsages`) | **DEPLOYED TO PRODUCTION 2026-10-01, reconciled, activated — COMPLETE / CLOSED** |
+| **P4** | The legacy backfill + asset keys | **DEPLOYED TO PRODUCTION 2026-10-05/06 and accepted; reconciled locally — NOT CLOSED until final review and commit** |
 
 S1 and S2 are complete; S3, S4, P1, the S3 hotfix, P2 and P3 are deployed,
 verified and reconciled into the schema-truth files. Application code through
 P2 is committed (P1's as `284876c`, P2's and the hotfix's as `1177869`); P3's
 as `cd018bd`, deployed by Vercel with `SUPABASE_SERVICE_ROLE_KEY` confirmed in
 Production, and activated by the one-time rebuild (2026-10-01: 38 parents, 0
-failed, 102 unresolved pre-P2 references for P4). **P4 is next and has not been
-started.**
+failed, 102 unresolved pre-P2 references for P4). **P4's production work is
+done and accepted** — both units, the backfill and the per-site P3 rebuild
+(§11) — and the schema-truth files are reconciled locally. Its application
+code went live from the reviewed working tree and is **not yet committed**; P4
+closes when the final diff is reviewed and committed. **No further deployment
+is needed** — and the Vercel project is linked to GitHub with `main` as its
+production branch and Git deployments enabled, so a push to `main` would deploy
+by itself. The push needs its own explicitly reviewed path (`open-items.md`
+§12). **P5 is paused and has not been started.**
 
 ## Production migration identifiers
 
@@ -831,15 +843,18 @@ started.**
 | P2 | `20260930191116` | `photo_ingest_2026_09_30` | `6b83b8176f2f669e61e828eea59f84244d3954c47e123b48965031b7af880b9d` |
 | P3 A | `20261001005946` | `album_cover_tenant_fk_2026_09_30` | `fad895dc3b16c4ac2bf5859a77bfb6b8d361be2a240351402ff1aad5a93f93ed` |
 | P3 B | `20261001010021` | `photo_usages_sync_2026_09_30` | `cad8cabf96345c288964f81fcebab953e1947a744e5aff4b7806b76dd82e642d` |
+| P4 unit 1 | `20261005192303` | `photo_backfill_p4_unit1_2026_10_05` | `aa46c4789f85f1280a17ab01af400d9fff5459792d334a44acfe7b351e4f3eb8` |
+| P4 unit 2 | `20261006012958` | `photo_assets_fk_p4_unit2_2026_10_05` | `1bc2276e2ba325255be44509f203cc1695f8fafa276678b5f6b315a77c1d46d5` |
 
 (The 2026-09-30 hashes are of the files with LF line endings, as git stores
 them. A Windows checkout with `core.autocrlf=true` is CRLF and hashes
-differently.)
+differently. The two P4 hashes are of the working-tree files exactly as they
+were applied; those files are still untracked and must be committed unchanged.)
 
 ## Production shape, as reconciled
 
-**37 tables · 549 columns · 25 functions · 56 policies · RLS on all 37 ·
-PostgreSQL 17.6.**
+**37 tables · 549 columns · 30 functions · 56 policies · 157 constraints ·
+101 indexes · RLS on all 37 · PostgreSQL 17.6.**
 
 The policy sequence is 54 → 55 (the queue added one) → 54 (analytics removed
 `"Anyone can record a view"`, which was `for insert with check (true)`) → 56
@@ -849,14 +864,26 @@ columns (38 + 15 + two `asset_id`) and no function. P2 added five functions
 `enqueue_jobs`. P3 added seven functions (18 → 25), one CHECK and one index on
 `photo_usages`, restated three of its CHECKs, made `albums_cover_photo_fk`
 tenant-aware, and re-created two P2 wrappers with the album lock; no table,
-column or policy.
+column or policy. P4 unit 1 added five functions (25 → 30) — granting EXECUTE
+to `service_role` on three of them; the other two, like the resolver it
+replaced, are executable by no application role. Unit 2 added two foreign keys
+and two indexes (constraints 155 → 157, indexes 99 → 101). Neither unit added
+a table, column or policy, changed an existing function's grants, or changed
+any table grant.
 
-The Supabase security advisor warns that `authenticated` may execute five
-SECURITY DEFINER functions — `enqueue_jobs` and P2's four `register_*`. **That
-is the approved design, not a finding to fix**: each is a narrow, fully
-validated door (tenant, resource, key shape, values, privileges — tested as the
-real roles), and the alternative would be direct table grants RLS cannot
-police. Recorded in `db/schema-verified.md`.
+**The five intended application doors.** After P2 the security advisor warned
+that `authenticated` may execute five SECURITY DEFINER functions —
+`enqueue_jobs` and P2's four `register_*`. **That is the approved design, not
+a finding to fix**: each is a narrow, fully validated door (tenant, resource,
+key shape, values, privileges — tested as the real roles), and the alternative
+would be direct table grants RLS cannot police.
+
+**The advisor's current counts**, accepted after P4 and unchanged by it:
+authenticated-callable definer **10**, anon-callable definer **5**, mutable
+`search_path` **3**, leaked-password protection **1**. These count more than
+the five doors above; all are pre-existing, and reconciling the two figures
+belongs to the standing read-only advisor pass (`open-items.md` §2) — **no
+remediation is in scope**. Recorded in `db/schema-verified.md`.
 
 ## What each phase actually changed
 
@@ -904,6 +931,11 @@ police. Recorded in `db/schema-verified.md`.
   custom cover — one canonical `photo_assets` row, written in the same
   transaction as the route's own row, through four narrow definer functions.
   Details below; live smoke results in `db/schema-verified.md`.
+- **P4** gave the pre-P2 photographs their assets — 74 assets, 71 gallery
+  photographs linked, 102 usages projected with none unresolved — and then
+  the two keys P1 left off: `photos_asset_fk` and `site_images_asset_fk`,
+  tenant-aware, NO ACTION, MATCH SIMPLE (the 12 built-in samples keep a NULL).
+  Details in §11 and `db/schema-verified.md`.
 
 ---
 
@@ -911,9 +943,36 @@ police. Recorded in `db/schema-verified.md`.
 
 ## P4 — the backfill
 
-**Not started. Do not start it without being asked.** Authority:
-`claude/photo-migration-plan.md`, P4. After its passes,
-`scripts/rebuild-photo-usages.ts --all` re-projects every site.
+**DEPLOYED TO PRODUCTION 2026-10-05 / 2026-10-06 and accepted; reconciled
+locally; NOT CLOSED** until the final diff is reviewed and committed.
+Authority: `claude/photo-migration-plan.md`, P4, and
+`claude/photo-assets-design.md` §10; the deployment record is
+`db/schema-verified.md` (P4); open work in `claude/open-items.md` §12.
+A resumable internal CLI (`scripts/backfill-photo-assets.ts`, dry run unless
+`--apply`) over narrow service-role functions — not the queue — gave every
+legacy photograph its asset from verified files, never writing storage or a
+usage. Two migration units: unit 1 `2026-10-05_photo_backfill.sql` (Supabase
+`20261005192303`), then, after the backfill ran clean, unit 2
+`2026-10-05_photo_assets_fk.sql` (Supabase `20261006012958`).
+
+The production sequence ran in full, each step separately approved: unit 1
+applied and verified → the application deployment that retires the old
+derivative writer → retained legacy deployments isolated by a Vercel firewall
+rule, then verified drained by a 15-minute read-only observation (no legacy
+invocation, no job; no drain command was invoked) → the
+reviewed dry run and journal manifest → `--apply` (74 assets, 71 photos
+linked, 12 samples left NULL) → `scripts/rebuild-photo-usages.ts --tenant <id>`
+for each of the four sites (102 usages, 0 unresolved, 0 failed) → unit 2 (both
+keys validated; all five completeness rules zero). Schema-truth bookkeeping is
+done locally (`db/schema-2026-09.sql`, `db/test-fixture.sql`,
+`db/schema-verified.md`, the drift guard) and awaits the same review.
+
+Still open, and none of it is P5: reviewing and committing the P4 code that is
+already live (deployed from the reviewed working tree) — no further deployment
+is needed, and since a push to `main` deploys automatically, pushing needs its
+own reviewed path; deciding when to remove the legacy
+isolation rule, which stays enabled; the pre-existing advisor findings, left as
+they were. **P5 is paused — not started.**
 
 ## P3 — the photo-usage projection — DEPLOYED 2026-10-01
 
@@ -974,7 +1033,7 @@ Authority: `claude/photo-assets-design.md` §9 (revision 7) and
 | **P1** | Tables, constraints, indexes, policies. Pure DDL. **DEPLOYED 2026-09-30** (`20260930123113`) and reconciled. | none |
 | **P2** | **Unified ingestion.** One `ingest()`, four routes (gallery, site, journal, custom cover), idempotent on `key_base`. Done *before* the backfill so there is no new stream of un-asseted files. EXIF normalisation becomes universal (geolocation does not); journal images finally exist as records. **DEPLOYED 2026-09-30** (`20260930191116`) and reconciled. | none on success; failed uploads now fail cleanly |
 | **P3** | **The extractor and `syncUsages`.** Every document edit projects its usages. Deliberately before the backfill, so no live edit goes unprojected. The invariant test: drop every usage row, re-run over every document, and the table comes back identical. **DEPLOYED 2026-10-01** (`20261001005946`, `20261001010021`), reconciled, application `cd018bd` live, rebuilt — **COMPLETE**. | none |
-| **P4** | **Backfill**, in idempotent passes through the queue, then the two deferred foreign keys — which applying without violation is itself the proof the passes were complete. | none |
+| **P4** | **Backfill**, by a resumable CLI over narrow service-role functions (not the queue), then the two deferred foreign keys behind a separate completeness preflight — a key that applies is NOT itself proof of completeness (a NULL passes it). **DEPLOYED 2026-10-05/06** (`20261005192303`, `20261006012958`) and accepted; reconciled locally; closes with the final review and commit. | none (one admin control retired) |
 | **P5** | **Asset-aware pickers, the resolver and alt semantics.** P5a: identity travels through `onPick`. P5b: `resolveImage` prefers the asset's real derivatives and falls back to the stored path. | correct srcsets for small photographs; alt semantics |
 | **P6** | **Deletion and the sweeper.** Referential integrity replaces reference-scanning; storage deletion becomes deferred with a 30-day grace and a final live-and-draft re-check. | **the one deliberate behaviour change: storage deletion deferred 30 days** |
 | **S5** | **AI foundation + alt text**, after P5. | the first AI affordance |

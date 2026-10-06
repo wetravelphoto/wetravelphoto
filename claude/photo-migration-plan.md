@@ -33,7 +33,9 @@ document to work against phase by phase.
 | parallel | **S4** analytics instrumentation | **DEPLOYED TO PRODUCTION 2026-09-29** — migration `20260929231653`; application code committed 2026-09-29 (commit `2af178b`) |
 | | **P1** tables and constraints | **DEPLOYED TO PRODUCTION 2026-09-30** — migration `20260930123113`; reconciled |
 | | **P2** unified ingestion | **DEPLOYED TO PRODUCTION 2026-09-30** — migration `20260930191116`; reconciled |
-| | **P3–P6** the rest of the photo migration | this document; **P3 is next, not started** |
+| | **P3** the projection | **DEPLOYED 2026-10-01 — COMPLETE / CLOSED** |
+| | **P4** the backfill | **DEPLOYED TO PRODUCTION 2026-10-05/06** — unit 1 `20261005192303`, unit 2 `20261006012958`; accepted; reconciled locally — **NOT CLOSED** until the final review and commit |
+| | **P5–P6** | this document; **P5 paused, not started** |
 | after | **S5** AI foundation + alt text | needs P5 |
 
 S4 did not block anything here and was not made to wait behind it: every day
@@ -743,7 +745,8 @@ Production, and the one-time `scripts/rebuild-photo-usages.ts --all` run twice:
 both passes 38 parents, 0 failed, 0 written, 102 unresolved (all
 `photo_has_no_asset` / `no_asset` — pre-P2 references), 0 malformed, the second
 identical to the first (`open-items.md` §11). P4's backfill owns those 102;
-re-run the rebuild after it. **P4 is next, not started.**
+re-run the rebuild after it. *(P4 has since run: after its backfill, the
+per-site rebuild resolved all 102 — 0 unresolved, 102 usages; see P4.)*
 Two migrations, applied in this order — database first, application after:
 
 - **A — `db/migrations/2026-09-30_album_cover_tenant_fk.sql`**, the prerequisite:
@@ -879,85 +882,256 @@ strictest requirement:
 
 # P4 — Backfill
 
-**Purpose.** Bring existing data up to the state P2 and P3 now maintain.
+**Status: DEPLOYED TO PRODUCTION 2026-10-05 / 2026-10-06 and accepted by
+independent review; schema-truth bookkeeping reconciled locally. NOT CLOSED**
+until that reconciliation and the P4 application code — live, deployed from
+the reviewed working tree, not yet committed — pass final review and are
+committed. Unit 1: Supabase `20261005192303`
+(`photo_backfill_p4_unit1_2026_10_05`), sha256
+`aa46c4789f85f1280a17ab01af400d9fff5459792d334a44acfe7b351e4f3eb8`. Unit 2:
+Supabase `20261006012958` (`photo_assets_fk_p4_unit2_2026_10_05`), sha256
+`1bc2276e2ba325255be44509f203cc1695f8fafa276678b5f6b315a77c1d46d5`. Both files
+are kept byte-for-byte as applied. Deployment record: `db/schema-verified.md`,
+P4. Rulings approved 2026-10-05 (design §10); a second, review-driven
+correction pass the same day (below, "Corrections").
 
-**Files.** `lib/photos/backfill.ts` (new), `lib/jobs/handlers.ts` (kinds
-registered), `db/migrations/<date>_photo_assets_fk.sql` (new),
-`.mk/backfill.ts` (new).
+**Purpose.** Bring existing data up to the state P2 and P3 now maintain: every
+non-sample `photos` row, every `site_images` row, and every photograph a saved
+document names, gets its `photo_assets` row; then — separately — the two keys
+P1 left off.
 
-**Now unblocked:** the queue S3 deployed is what this runs on. A new job kind
-costs an entry in `JOB_KINDS`, a handler, **and a line in `enqueue_jobs`'
-allow-list** — which means a migration somebody reads, on purpose.
+**Not the queue (approved ruling).** The earlier text ran the passes through the
+jobs table. The approved design is a **resumable internal CLI** over narrow
+service-role RPCs instead: no new job kind, no `enqueue_jobs` change, and every
+write its own idempotent transaction, so an interrupted run is resumed by
+running it again.
 
-**Database changes.** Rows only, until the final step: once every **non-sample**
-`photos` row and every `site_images` row has an `asset_id`, add the foreign keys
-that were deliberately left off in P1. (Built-in sample photographs keep
-`asset_id = NULL` for good; a composite foreign key with a NULL in it is not
-checked under MATCH SIMPLE, so they do not stand in the keys' way.)
+## Two migration units
 
-**`derivePhoto` is P4's.** The pre-ladder derivative job (`lib/jobs/derive.ts`)
-is the one ingestion-shaped code path P2 deliberately leaves without an asset —
-a named exemption in P2's call-site scan. P4 brings it under assets (or retires
-it, once pass 1 has given every legacy photograph its asset) **and removes the
-exemption from the scan.**
+| unit | file | what |
+|---|---|---|
+| 1 | `db/migrations/2026-10-05_photo_backfill.sql` | `photo_backfill_key_base` (internal; the SQL twin of the TS grammar), `photo_backfill_foreign_claim` (internal), `read_photo_backfill_inventory` and `read_photo_backfill_claims` (service_role only), the writer `register_legacy_photo_asset` (service_role only), and `photo_usage_resolve_path` replaced narrowly. Functions only: no table, column, index, policy or table-grant change. |
+| 2 | `db/migrations/2026-10-05_photo_assets_fk.sql` | after the backfill ran clean: a completeness preflight under a deliberate lock, then `photos_asset_fk` / `site_images_asset_fk` (`(asset_id, tenant_id) → photo_assets (id, tenant_id)`, NO ACTION) and one supporting index each, every existing object checked against its exact definition. |
 
-```sql
-alter table photos      add constraint photos_asset_fk
-  foreign key (asset_id, tenant_id) references photo_assets (id, tenant_id);
-alter table site_images add constraint site_images_asset_fk
-  foreign key (asset_id, tenant_id) references photo_assets (id, tenant_id);
-```
+## The production sequence — staged, each step separately approved
 
-**The passes**, each idempotent, each batched through the jobs table:
+**All seven steps have been done**, each its own approval by Gonzalo, in this
+order, each verified before the next (the outcome follows the list; the
+written plan is kept as it was approved):
 
-0. `keyBaseFor()` — the resolver. Duplicate detection *is* the unique index on
-   `(tenant_id, key_base)`; there is no comparison logic.
-1. Assets from `photos`. Sets `photos.asset_id`, `state = 'derived'`.
-2. Assets from `site_images`. Same key, so a file in both tables collapses to
-   one asset automatically.
-3. Usages from real relationships: `photos.album_id` → `gallery`;
-   `albums.cover_photo_id` / `cover_custom_path` → `gallery_cover`;
-   `catalog_items` → `shop_listing`.
-4. Usages from documents, using **the P3 extractor** — `page_sections` (live),
-   `site_draft.pages` (draft), `blog_posts.blocks`,
-   `blog_posts.featured_custom_path`, and the four legacy `site_settings` image
-   columns.
+1. **Unit 1** (`2026-10-05_photo_backfill.sql`): independent review, then
+   applied and verified (ChatGPT). Functions only; the database goes first.
+2. **The application deployment** that retires the old storage writer
+   (`derivePhoto` fails permanently and writes nothing; the admin "Photograph
+   sizes" control and `app/actions/backfill.ts` are removed) and ships the CLI.
+3. **Let in-flight old workers finish.** Until every instance running the OLD
+   code is gone and no `photo.derivatives` job is `running` under a live lease,
+   the old handler can still write `photos.derivatives`, `width` and `height`
+   (and ladder files). **The backfill must not run alongside it** — the
+   writer's stale check would refuse a row changed under it, but that is a
+   safety net, not the plan. After the deployment, a queued old job is claimed
+   by the new code and fails permanently.
+4. **The dry run** (`scripts/backfill-photo-assets.ts --all`, or `--tenant`
+   per site) and the **journal provenance manifest**, both reviewed.
+5. **The backfill writes** (`--apply`, with the reviewed manifest).
+6. **The P3 rebuild for every processed site** —
+   `scripts/rebuild-photo-usages.ts --tenant <id>`, one per site the apply
+   names at its end (including any whose run ended early, after it is rerun).
+   The rebuild's own `--all` reads the site list in one query (§12 of
+   `open-items.md`); `--tenant` per site avoids relying on it.
+7. **Reconciliation**: the apply report clean, the rebuild reports reviewed.
+   Then **unit 2** (`2026-10-05_photo_assets_fk.sql`), separately reviewed and
+   applied; then the schema-truth bookkeeping.
 
-**Excluded, deliberately:** logos, favicon, **the accent mark
-(`mark.image_path`)**, `shop_wall_texture`, `shop_frames`,
-`room_scenes.image_path` (site furniture); `site_versions` / `site_template`
-snapshots (frozen history); `cover_video_path` and `video_path` (videos are out
-of V1 — the hero's `video_path` by key, since its registry kind says `image`);
-sample photographs (`isSamplePhoto()`).
+**What happened** (full record in `db/schema-verified.md`, P4):
 
-**Tests.**
-- Every **non-sample** `photos` row has an `asset_id`; every `site_images` row
-  has one. *(Corrected 2026-09-30: this used to read "every `photos` row",
-  which contradicted the exclusion of samples below.)* Built-in sample
-  photographs — recognised by `isSamplePhoto()` — **never** produce a
-  `photo_assets` row, keep `asset_id = NULL`, and stay outside tenant-owned
-  storage ingestion; asserted by count, both ways.
-- Every path in the 14 scalar columns and 4 live blobs resolves to **exactly
-  one** asset; every excluded furniture and video path resolves to **none**.
-- Asset and photo agree on `display_path`, `width`, `height`.
-- **Re-running passes 1–4 changes zero rows.** The definition of idempotent —
-  and the queue expects it, because a retry is ordinary.
-- `keyBaseFor` is idempotent for every shape, including the two legacy
-  exceptions (`backfill.ts`'s extensionless base, and pre-derivative files).
-- No asset has zero usages except ones uploaded through the editor picker or
-  the journal picker and never placed, and assets left unused by a
-  `deletePhoto` since P2 (an accepted transitional state that P6 resolves).
-- Sample photographs produced no assets.
-- The two foreign keys apply without violation — which is itself the proof that
-  passes 1 and 2 were complete.
+1. Unit 1 applied (functions 25 → 30); deployed bodies match the file.
+2. The retirement deployment went live (Vercel
+   `dpl_AwanseKzTb8wSEVjNBvcb5wN4AsX`), built from the reviewed working tree.
+3. Older deployments were **isolated** — a Vercel firewall rule
+   (`rule_p4_legacy_deployment_isolation_Tt14RW`) admits only the current
+   deployment's hosts — and then **verified drained**: a 15-minute read-only
+   observation (no drain command was invoked) saw no legacy invocation and no
+   job. The rule is **still
+   enabled**; removing it is a separate decision.
+4. The dry run and journal manifest were reviewed.
+5. `--apply` (2026-10-06 UTC): 74 assets (52 with an original, 22
+   display-only), 71 photographs linked, 3 document-only uploads, 12 built-in
+   samples left NULL; storage read only. A dry run straight afterwards planned
+   nothing.
+6. `rebuild-photo-usages --tenant` for each of the four sites: 38 parents, 0
+   failed, 0 unresolved, 102 usages (74 / 28 / 0 / 0).
+7. Unit 2 applied once, its five preflight rules all zero; both keys
+   validated; constraints 155 → 157, indexes 99 → 101. No data-writing
+   refusal was attempted in production; the refusals are proved locally.
+   Then the bookkeeping — done locally, awaiting the final review.
 
-**Rollback.** `delete from photo_usages; delete from photo_assets; update photos
-set asset_id = null; update site_images set asset_id = null;` and drop the two
-new foreign keys. The passes are idempotent, so re-running after a revert
-reproduces the result exactly.
+**One sentence in unit 2's header is wrong**, and the file is deliberately not
+edited (its bytes are the deployment's identity): *"tenants cascade to photos,
+site_images and photo_assets."* `photos` (and `albums`) do NOT cascade from
+`tenants` — their tenant keys are NO ACTION — and `deleteSite()`
+(`app/actions/sites.ts`, `TENANT_TABLES`) deletes them explicitly before the
+tenant row. `site_images` and `photo_assets` do cascade with the tenant. Either
+way unit 2's NO ACTION keys, checked at the end of each statement, block
+neither.
 
-**Must remain unchanged.** Nothing in the application reads any of this yet. The
-site, the admin and the editor are byte-identical throughout.
+**A foreign key that applies is not proof of completeness** — a NULL
+`asset_id` passes any key — so unit 2's preflight proves completeness itself
+(below). The backfill's `--all` lists sites by id cursor, page by page until an
+empty page, so a server row cap cannot silently drop a site.
+
+## The CLI — `scripts/backfill-photo-assets.ts` → `lib/photos/backfill-cli.ts`
+
+`--tenant <uuid>` or `--all` (never a default); **dry run unless `--apply`**;
+`--manifest <file>` for unprefixed journal keys. Exit 0 clean, 1 anything
+refused / failed / stale / malformed, 2 a bad command (nothing done). The dry
+run performs **the same reads and decoding as apply** and calls no writer.
+Planning and writing are `lib/photos/backfill.ts`; the grammar is
+`lib/photos/legacy-key.ts`; storage is `lib/photos/backfill-storage.ts`.
+
+1. **Inventory** (one service-role read per site): every `photos` and
+   `site_images` row (used or not), each album's custom cover, the assets
+   already there, and P3's own saved source of every live page, the draft and
+   every story. Validated, never cast: a malformed inventory fails the site.
+2. **Claims**, by **P3's extractor** (`lib/photos/extract.ts`) for section and
+   block slots — hidden sections, phone twins, backgrounds, video posters —
+   plus the slots P3 reads itself: a live page's legacy columns **only while it
+   has no section rows** (P3's fallback; with rows they are mirrors), share
+   images, a story's featured image. Each document claim carries its exact
+   **slot**. Samples counted and skipped; furniture, videos, frozen history and
+   Instagram never reach it. An existing `asset_id` is **checked** — an asset of
+   this site whose display file is the row's — and a bad one reported
+   (`invalid_link`, `link_disagrees`, `sample_has_asset`), never rewritten or
+   counted as migrated.
+3. **Grammar** (`keyBaseFor`): `photos/<album>/<upload>`, `covers/<album>/
+   <upload>`, `journal/<upload>`, each optionally under `t/<site>/`, and
+   `t/<site>/site-images/<upload>`; files `<base>`, `<base>/original.<jpg|png|
+   webp|tif|avif>`, `<base>/<400|800|1600|2400>.webp`, and — unprefixed
+   photos/covers/journal only — the flat `<base>.jpg`. Refused with a reason:
+   URLs, traversal, encoded or upper-case ids, unknown shapes, another site's
+   prefix, an unprefixed album of another site, an unprefixed journal key with
+   no reviewed provenance for **this** site, or one another site claims (asked
+   in batches of 1000). A saved reference alone is never proof; nothing is ever
+   assigned to the oldest site.
+4. **Facts, verified.** Every file that makes the asset usable — the display
+   file and each size — is **read (bounded GET) and decoded in full**: a
+   photograph, of the format its name says, not truncated. A true original is
+   read, decoded and hashed. A document-only upload's files are found among a
+   bounded set of known siblings (flat file, four sizes, five original names) —
+   HEAD/GET only, never a listing, never a write. **No invented facts:**
+   `photos.storage_path` is the display path exactly, even a flat JPEG with an
+   old-job ladder; a flat-era file is not an original and the old job's
+   `original.jpg` beside it is ignored; covers keep no original; a row keeps its
+   own dimensions; an upload with no row takes its original's **upright** size
+   (EXIF orientation applied), or none.
+5. **Write** through `register_legacy_photo_asset`, which binds the site, the
+   source (a `photos` row, a `site_images` row, an album's cover, or one slot of
+   a saved document — under the album or parent projection lock P3 uses) and its
+   snapshot, validates every path (the display path on its own) and fact, then
+   `insert … on conflict do nothing`, compares with any asset already at the key
+   (never rewrites it, its lifecycle or timestamps), and fills the source row's
+   NULL `asset_id` in the same transaction. A P2 row is `already_linked` and
+   untouched. A `photo` source's date and place are read from the row under its
+   lock at the write; its keywords are `normalizeKeywords()` (the one
+   normaliser, `lib/photos/exif.ts`) of the row's tags, sent with the raw tags
+   they came from, which the database compares with the locked row — different
+   tags are `stale`. The row's tags are never rewritten. State `derived`;
+   `derived_at` and `created_by` NULL. **Stale** (changed since the read) and
+   **gone** (vanished since the read) sources write nothing, and both are
+   PROVISIONAL: the site is re-read and re-planned from a fresh inventory (at
+   most 3 passes). The planner binds each upload to ONE source, so this is what
+   lets a surviving source of the same upload — a story naming a deleted gallery
+   photograph — still get its asset. An attempt the fresh plan no longer
+   contains is settled (a gone one counted as `gone`); one it contains again is
+   retried; anything still stale or gone when the passes run out is an explicit
+   failure and the site is not clean.
+6. **Failures.** A writer call that *returns* an error is that item's failure —
+   logged, and the run goes on. One that *throws* (connection or process gone)
+   ends the site's run; a rerun resumes, because every write is idempotent.
+
+**The resolver**, narrowly: P3's folder rule unchanged; a `.jpg` path also
+resolves to the asset whose key base is exactly the path without `.jpg` and
+which lists the path; two candidates resolve to **nothing** (not `LIMIT 1`).
+
+**P3 stays the only usage writer.** The backfill writes no usage; the rebuild
+projects what the new assets make resolvable.
+
+**`derivePhoto` retired.** The `photo.derivatives` handler fails permanently and
+writes nothing (the kind stays in `JOB_KINDS` because `enqueue_jobs`' SQL
+allow-list still names it); the admin "Photograph sizes" control and
+`app/actions/backfill.ts` are gone; P2's call-site exemption is removed.
+
+**Excluded, deliberately:** logos, favicon, the accent mark, shop wall
+texture/frames, room scenes (furniture); `site_versions`, `site_template` and
+draft-step snapshots (frozen history — read only by the foreign-claim check);
+`cover_video_path` and the hero's `video_path`; built-in samples.
+
+## Unit 2's preflight — completeness, proved separately
+
+Under `LOCK photo_assets, photos, site_images IN SHARE ROW EXCLUSIVE MODE`
+(fixed order; held to COMMIT, so a concurrent writer cannot slip a row past the
+check), the migration refuses — changing nothing — unless all are zero:
+non-sample `photos` with no asset; `site_images` with no asset; links to no
+asset of the row's own site; samples with an asset; linked rows whose
+`storage_path` is not their asset's `display_path`. Existing keys and indexes of
+the same name must match exactly (definition, validity) or it refuses.
+
+The fixed lock order matches the P2 wrappers and the backfill; it does **not**
+rule out a deadlock with a transaction that takes these tables in another order
+(`deleteSite` deletes `photos` before the site's assets cascade). PostgreSQL
+then aborts one side (`40P01`); if it is the migration, it rolls back whole and
+changes nothing. Apply it in a quiet window — no site deletion, no backfill
+running — and re-run it if it is refused.
+
+## Corrections (review pass, 2026-10-05)
+
+Each with a regression test and, where practical, a mutation proof
+(`scripts/p4-mutations.mjs`): NULL-safe source membership; the display path
+checked by the grammar on its own; corrupt / truncated / misnamed / unsupported
+files refused by decoding (not by HEAD); P3's legacy fallback honoured in the
+planner and the writer; upright dimensions; a JSON-null ladder treated as `{}`
+by both sides; stale attempts reconciled against the refreshed plan; claims
+batched; existing links validated; malformed sources unclean; unit 2's lock and
+exact index checks; document sources bound to one image slot under the
+projection lock; keywords read from the row at the write.
+
+## Tests (local, PostgreSQL 17.6 on loopback; scratch databases)
+
+Since the reconciliation `db/test-fixture.sql` IS the post-P4 state. A test of a
+migration's preconditions asks for the state before it by name —
+`scripts/p4-local-db.mjs`'s `pre_unit2` (unit 2's own footer rollback) or
+`pre_p4` (that, plus unit 1's footer drops and P3's resolver restored from its
+file) — and the stage checks it was reached.
+
+| | |
+|---|---|
+| `db/verify-photo-backfill.sql` | 182 |
+| `.mk/backfill.ts` (real DB as service_role; fake bucket of real images; incl. the `gone` re-plan cases and a real-DB deletion race) | 355 (unit-only half: 245) |
+| `scripts/photo-assets-fk.mjs` (from the rebuilt `pre_p4` stage: unit 1 twice, P1's historical "no key yet" contract, the five preflight refusals, race, lock-removal mutation, run-twice, rollback, no-keys mutation; then, on the untouched post-P4 fixture: P1's deployed contract and its historical-stage mutation, and the P1/P2/P3/P4/tenant/jobs/analytics SQL and TS suites with the real validated keys) | 51 |
+| `node scripts/fixture-matches-migration.mjs` (the `.sh` drift guard's own SQL: strip P1–P4, rebuild from the migration files through unit 2) / `--mutations` | 409 + 175 + 2223 facts / 7 fixture mutants caught |
+| `scripts/p4-mutations.mjs` (SQL mutants now built over the `pre_p4` stage) | 24/24 mutants caught (baseline green; independently verified; re-run after the reconciliation). Includes the `gone` regression proof: the original gone-clean behaviour (a `gone` settled at once, no re-read) is caught by both A (a surviving story still gets its asset) and C (only a fresh read settles a gone); the exhaustion mutant (an unconfirmed `gone` reported clean) is caught by D |
+| `db/verify-photo-assets-fk.sql` | 22 |
+
+**Rollback.** Unit 2: its footer drops exactly the two keys and two indexes.
+Unit 1: **do not revert the application** — no web runtime calls the P4
+functions (only the operator CLI does), and the deployment that retired the old
+derivative writer and its admin control stays deployed; re-enabling that writer
+is never a rollback step. Stop any backfill CLI run, then restore P3's resolver
+from its file and drop the five functions (footer). **Rows the backfill wrote are NOT part of either
+rollback, and are kept:** P3 already resolves through them — `photo_usages`
+rows point at them (`ON DELETE RESTRICT`) and gallery usages read
+`photos.asset_id` — so removing them would change P3's projection; once unit
+2's keys exist a linked asset cannot be deleted at all. The earlier "delete
+every usage and asset" rollback is withdrawn (it would also have destroyed P2's
+assets and P3's projection).
+
+**Must remain unchanged.** What visitors and photographers see: the renderers,
+pickers and editor still read the legacy paths (`photos`, `site_images`,
+settings keys) — nothing that renders reads `photo_assets` before P5. P3's
+projection DOES read the assets (it resolves usages through them, and through
+`photos.asset_id`), which is why the rebuild follows the backfill and why the
+backfilled rows are kept. The site, the admin (except the retired control) and
+the editor are otherwise unchanged.
 
 ---
 
@@ -1117,7 +1291,7 @@ at all** today, stops being able to break a homepage.
 | **P1** tables | yes — **DEPLOYED** `20260930123113` | none | yes — drop |
 | **P2** ingestion | yes — **DEPLOYED** `20260930191116` | none on success; failures now fail cleanly | yes |
 | **P3** projection | yes | none | yes |
-| **P4** backfill | yes | none | yes — idempotent |
+| **P4** backfill | yes — **DEPLOYED** `20261005192303`, `20261006012958` | none (one admin control retired) | units roll back; backfilled rows are kept |
 | **P5a** picker identity | yes | none | yes |
 | **P5b** resolver | yes | correct srcsets for small photographs; alt semantics | yes — path fallback |
 | **P6** deletion | yes | **storage deletion deferred 30 days** | yes |

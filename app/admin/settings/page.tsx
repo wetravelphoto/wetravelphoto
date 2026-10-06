@@ -13,8 +13,6 @@ import { providerInfo } from '@/lib/newsletter/providers'
 import { readConnection } from '@/lib/newsletter/connection'
 import SaveBar from '@/components/admin/SaveBar'
 import Toggle from '@/components/admin/Toggle'
-import BackfillPanel from '@/components/admin/BackfillPanel'
-import { countUnprocessed, derivativeQueue } from '@/app/actions/backfill'
 import { currentEditor, requireEditor } from '@/lib/auth'
 import { hasInstagramToken } from '@/lib/instagram'
 import { currentSite } from '@/lib/tenant'
@@ -29,11 +27,11 @@ export const dynamic = 'force-dynamic'
 /*
  * A SERVER ACTION INHERITS THIS PAGE'S LIMIT, not one of its own — `maxDuration`
  * cannot be exported from a 'use server' file at all. The expensive things
- * reached from this screen are the photograph backfill (which now spends a
- * bounded 30 seconds inside the queue) and the newsletter sync (up to 300
- * serial HTTP calls). Both used to run at whatever the platform happened to
- * default to; this says what they may have. 300 seconds is the maximum on
- * every plan, so it is also a declaration that these are the long ones.
+ * reached from this screen is the newsletter sync (up to 300 serial HTTP
+ * calls); the photograph backfill that used to be here was retired in P4. It
+ * used to run at whatever the platform happened to default to; this says what
+ * it may have. 300 seconds is the maximum on every plan, so it is also a
+ * declaration that this is the long one.
  */
 export const maxDuration = 300
 
@@ -141,18 +139,6 @@ export default async function SettingsPage({
             .eq('tenant_id', tenantId)
         ).data
       : null
-
-  const unprocessed = section.id === 'advanced' ? await countUnprocessed() : 0
-  /*
-   * What the queue looks like, so the panel can say what FAILED as well as
-   * what is left. A photograph that cannot be processed used to be
-   * indistinguishable from one not yet reached; it now stops after five tries,
-   * and this is what puts that on the screen.
-   */
-  const derivatives =
-    section.id === 'advanced'
-      ? await derivativeQueue()
-      : { queued: 0, running: 0, failed: 0 }
 
   const host = site?.primaryHost ?? null
 
@@ -515,21 +501,17 @@ export default async function SettingsPage({
           )}
 
           {/* ── Advanced ─────────────────────────────────────────────────────
-              New uploads build their own display sizes, so this is a recovery
-              tool — it matters again if photographs ever arrive without them,
-              such as a library imported from another platform. */}
+              The "rebuild sizes" control that lived here wrote files and rows
+              with no photo asset behind them; P4 retired it. New uploads make
+              their own sizes, and photographs from before that are brought into
+              the library by the platform's backfill — not from this screen. */}
           {section.id === 'advanced' && (
             <div className="admin-panel st-panel">
               <h3 className="admin-h2">Photograph sizes</h3>
-              {unprocessed > 0 || derivatives.failed > 0 ? (
-                <BackfillPanel initialRemaining={unprocessed} initialQueue={derivatives} />
-              ) : (
-                <p className="admin-meta st-note" style={{ margin: 0 }}>
-                  Every photograph in this site has its display sizes. Nothing to rebuild. This tool
-                  appears here when some do not — a library imported from another platform, for
-                  instance.
-                </p>
-              )}
+              <p className="admin-meta st-note" style={{ margin: 0 }}>
+                New uploads make their own display sizes. Photographs from before that are brought
+                up to date by the platform, so there is nothing to run here.
+              </p>
             </div>
           )}
         </div>

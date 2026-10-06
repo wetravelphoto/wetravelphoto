@@ -417,11 +417,14 @@ deferred to a later phase:
       `photo_assets` row **survives, unused, pointing at deleted files**.
       Harmless while nothing reads `photo_assets`. P6 owns archive,
       soft-delete, delayed deletion and the sweeper.
-- [ ] **`derivePhoto` is a named, temporary exemption (P2 → P4).** The
+- [x] **`derivePhoto` is a named, temporary exemption (P2 → P4).** The
       pre-ladder derivative job calls `processPhoto` and writes
       `photos.derivatives` without an asset. P2's call-site scan exempts it
       by name; **P4** brings it under assets or retires it and removes the
-      exemption.
+      exemption. *P4 (implemented 2026-10-05; the retirement deployed
+      2026-10-05 and accepted; code not yet committed): retired — the handler
+      fails permanently and writes nothing, the admin control and its action
+      are gone, the exemption is removed from `.mk/ingest.ts`. See §12.*
 - [x] **For P3: the hero's `video_path` is `kind: 'image'`** — excluded from
       the extractor by key (`EXCLUDED_IMAGE_KEYS`), desktop and phone. See §11.
 - [x] **For P3: the page share image has no usage kind** — it is now the
@@ -578,19 +581,119 @@ Live verification and smoke tests: `db/schema-verified.md`.
       composite `albums_cover_photo_fk` has no covering index on
       `albums (cover_photo_id, tenant_id)` (the old key had none either).
 
+## 12. P4 — the backfill (DEPLOYED 2026-10-05/06, ACCEPTED; RECONCILED LOCALLY — NOT CLOSED)
+
+Two units: `db/migrations/2026-10-05_photo_backfill.sql` (Supabase
+`20261005192303`, sha256
+`aa46c4789f85f1280a17ab01af400d9fff5459792d334a44acfe7b351e4f3eb8`), then
+`db/migrations/2026-10-05_photo_assets_fk.sql` (Supabase `20261006012958`,
+sha256 `1bc2276e2ba325255be44509f203cc1695f8fafa276678b5f6b315a77c1d46d5`).
+Design as built: `claude/photo-migration-plan.md`, P4. Deployment record:
+`db/schema-verified.md`, P4.
+
+- [x] **The production sequence, each step separately approved — all done**:
+      unit 1 → the app deployment retiring the old derivative writer → legacy
+      deployments isolated, then verified drained by read-only observation
+      (no drain command was invoked) → reviewed dry run and journal manifest
+      → backfill `--apply` (74 assets, 71 photos linked) →
+      `rebuild-photo-usages --tenant <id>` for all four sites (102 usages, 0
+      unresolved) → unit 2. Accepted by independent review, 2026-10-06 UTC.
+- [x] **Schema-truth bookkeeping, locally**: `db/schema-2026-09.sql`,
+      `db/test-fixture.sql`, `db/schema-verified.md`, the drift guard (through
+      unit 1 + unit 2, with a Node runner and mutation proofs), and
+      `db/verify-photo-assets.sql` (deployed keys by default; the original
+      pre-unit-2 assertion kept behind an explicit stage). Awaiting final review.
+- [ ] **Close P4: review and commit.** The P4 application code — the retired
+      derivative writer, the CLI, `lib/photos/backfill*.ts`, the suites, both
+      migration files (unchanged: their hashes are the deployment's identity)
+      — went live from the reviewed working tree and is **not committed yet**.
+      Repository review and commit remain pending. **P4 needs no further
+      deployment.**
+- [ ] **A push to `main` would deploy.** The Vercel project record saved at
+      the unit 2 acceptance (`.ai-handoff/unit2-deploy-after-project.json`)
+      shows the project linked to GitHub with `main` as its production branch
+      and Git deployments enabled, so pushing the P4 commit to `main` would
+      trigger a new production deployment on its own. Committing is safe;
+      **pushing needs its own explicitly reviewed path** that respects "no
+      further deployment". Nothing in configuration, code or Git was changed
+      to address this.
+- [ ] **The Vercel legacy-deployment isolation rule
+      (`rule_p4_legacy_deployment_isolation_Tt14RW`) is still enabled**, by
+      decision. It denies every host but the current deployment's, so no
+      retained older deployment (the old `photo.derivatives` writer) can run.
+      Removing it — or keeping it as policy — is its own decision; note that
+      it must be revisited before any new alias or custom domain is added, or
+      that host will be refused.
+- [ ] **Documentation only: unit 2's header says tenants cascade to `photos`.**
+      They do not (`photos_tenant_id_fkey` and `albums_tenant_id_fkey` are NO
+      ACTION; `deleteSite()` removes photos and albums explicitly;
+      `site_images` and `photo_assets` cascade). The deployed file is left
+      byte-for-byte; the correction lives in `db/schema-verified.md`, the
+      fixture comment and the plan. Do not "fix" the migration file.
+- [ ] **MATCH SIMPLE still admits a NULL link.** Unit 2's five completeness
+      rules were preconditions, not permanent CHECKs. Whether a non-sample
+      photograph may ever be unlinked again is a later phase's ruling.
+- [ ] **Advisors after P4, left alone:** security unchanged and pre-existing
+      (mutable `search_path` 3, anon-callable definer 5,
+      authenticated-callable definer 10, leaked-password protection 1 — the
+      "five intended definer doors" note counts fewer than the advisor does;
+      reconcile in the read-only advisor pass, don't remediate here).
+      Performance: one new INFO, `site_images_asset_tenant` unused on an empty
+      table — keep the index.
+- [ ] **Not run on the Windows machine for lack of `psql`:**
+      `bash scripts/fixture-matches-migration.sh` itself (its SQL ran through
+      `node scripts/fixture-matches-migration.mjs`, which reads the script),
+      `scripts/jobs-concurrency.sh` and `scripts/album-cover-fk.sh`. Run them
+      where `psql` exists before relying on the shell paths.
+- [ ] **Follow-up, P3's, pre-existing: `rebuild-photo-usages --all` lists the
+      sites in ONE query** (`select('id').order('id')` in
+      `lib/photos/rebuild-cli.ts`), so a PostgREST row cap could silently omit
+      sites. Left unchanged by P4; P4's runbook uses `--tenant` per processed
+      site instead, and the backfill's own `--all` pages by id cursor. Fine at
+      4 sites; fix before the site count approaches the cap.
+- [ ] **Local rehearsal tooling is Node-first now:** `scripts/p4-local-db.mjs`
+      (scratch databases on a loopback server; `--stage pre_unit2|pre_p4`
+      rebuilds the historical states, since the fixture is post-P4),
+      `scripts/photo-assets-fk.mjs`, `scripts/p4-mutations.mjs`,
+      `scripts/fixture-matches-migration.mjs`. The older `*.sh` suites still
+      need `psql`/`createdb` (see the item above).
+- [ ] **Found, not P4's, left alone: P2 records width/height as stored, not
+      upright.** `processExistingOriginal` (used by `lib/photos/ingest.ts`)
+      reads them from `sharp(bytes).rotate().metadata()`, and `metadata()`
+      describes the INPUT: measured locally, an EXIF-orientation-6 4×2 JPEG
+      reports 4×2, while upright it is 2×4. So for an upload whose EXIF
+      orientation is **5–8**, the recorded width and height can be swapped
+      relative to the upright image (orientations 1–4 are unaffected; the WebP
+      sizes themselves are rotated correctly). **Not measured against
+      production** — whether any existing asset has such an orientation is
+      unknown and was not checked. P2 and existing rows are unchanged, per the
+      approved scope; P4's own standalone sizing applies 5–8 only
+      (`uprightSize`). Needs its own ruling.
+- [ ] **Found, not P4's: two pre-existing type errors in `.mk/`** —
+      `.mk/section-values.ts:224` (`SectionSettings | null`) and
+      `.mk/usages.ts:195` (`page_key` on `UsageRef`). The normal `tsc` does not
+      reach them; a config that includes `.mk/` does. The suites still run
+      under tsx.
+- [ ] **`enqueue_jobs` still allows `photo.derivatives`.** The application no
+      longer queues it and the handler fails permanently; removing the kind from
+      the SQL allow-list is a migration of its own (and `.mk/jobs.ts` holds the
+      two lists equal).
+- [ ] **Residual, by design:** a document's own writers do not take the
+      projection lock the backfill's document binding takes, so a story or page
+      edited after the binding commits can leave an asset nothing places —
+      harmless (unused assets are allowed) and tested.
+
 ---
 
 ## Where to pick up
 
-**Gonzalo:** commit the S3 hotfix and P2 (both migrations, the application
-code, their suites and this reconciliation) — production already has them, so
-the repository is what lags. Then the four Sentry variables in Vercel, and
-confirm `CRON_SECRET` is set so the nightly drain actually runs.
-
-**Next build:** **P3 — the extractor and `syncUsages`**, in
-`claude/photo-migration-plan.md`. **Not started.** P2 is deployed, reconciled
-and complete; its recorded P3 findings (hero `video_path` by key, the share
-image's missing kind, the accent mark excluded) are in §10.
+**Next:** **close P4** (§12). Its production work is done and accepted — both
+units, the backfill and the per-site rebuild — and the schema-truth files are
+reconciled locally. What remains is the final review of that diff and the
+repository commit of the P4 code already live. No further deployment is
+needed, and a push to `main` would cause one (§12), so the push needs its own
+reviewed path. Then decide on the legacy isolation rule. P3 is deployed and closed (§11). **P5 is paused — not
+started.**
 
 **The alternative**, if testers get restless: 12a, the carousel arrows. Small,
 asked for, and visible. Or **21 — visitor stats**, which after S4 is a screen
@@ -599,6 +702,21 @@ over data rather than a build.
 ---
 
 ## What shipped, most recent first
+
+### 2026-10-05 / 2026-10-06 — P4, the legacy backfill and the asset keys, DEPLOYED
+
+Unit 1 `20261005192303` (`photo_backfill_p4_unit1_2026_10_05`, sha256
+`aa46c4789f85f1280a17ab01af400d9fff5459792d334a44acfe7b351e4f3eb8`); the
+application deployment retiring the old derivative writer; legacy deployments
+isolated, then verified drained by read-only observation (no drain command was
+invoked); the reviewed dry run and manifest; the backfill (74
+assets, 71 photos linked, 12 samples left NULL); a P3 rebuild per site (102
+usages, 0 unresolved); unit 2 `20261006012958`
+(`photo_assets_fk_p4_unit2_2026_10_05`, sha256
+`1bc2276e2ba325255be44509f203cc1695f8fafa276678b5f6b315a77c1d46d5`). Production:
+37 tables · 549 columns · 30 functions · 56 policies · 157 constraints · 101
+indexes. Reconciled locally; not yet committed. Full record:
+`db/schema-verified.md`.
 
 ### 2026-10-01 — P3, the photo-usage projection, DEPLOYED (database)
 

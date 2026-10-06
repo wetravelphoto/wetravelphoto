@@ -105,12 +105,52 @@
 # without its lock, the resolver without its same-site filter, and a missing
 # P3 function.
 #
+# ── P4 (deployed 2026-10-05 / 2026-10-06) ───────────────────────────────────
+#
+# Unit 1 (db/migrations/2026-10-05_photo_backfill.sql, Supabase 20261005192303)
+# added five functions and replaced photo_usage_resolve_path; unit 2
+# (db/migrations/2026-10-05_photo_assets_fk.sql, Supabase 20261006012958) added
+# photos_asset_fk, site_images_asset_fk and their two partial indexes. The P4
+# strip removes exactly those — the keys and indexes by name, the five
+# functions by name (the resolver goes with P3's strip) — before anything else,
+# because photo_assets cannot be dropped while the keys point at it. The
+# rebuild runs unit 1 after Migration B and unit 2 last. All seventeen photo
+# functions are compared with photo_assets' facts; the keys and indexes with
+# photos' and site_images' (whole-table facts, so the creation shape and
+# everything else on those tables is compared too).
+#
+# Unit 2 refuses to apply over incomplete data — its preflight is part of the
+# deployed migration and is NOT weakened here. The fixture's seeds are not
+# production's: three gallery photographs keep a NULL asset_id (a NULL passes a
+# MATCH SIMPLE key, which is why the fixture can carry the keys at all). So in
+# THIS scratch database only, after unit 1 and before unit 2, those rows are
+# linked as the backfill would have linked them. That touches rows, not the
+# catalogue, and the comparison is of the catalogue.
+#
+# Proved to bite (scripts/fixture-matches-migration.mjs --mutations) on: the
+# fixture's photos_asset_fk made ON DELETE CASCADE, site_images_asset_tenant
+# without its predicate, an authenticated EXECUTE grant on
+# read_photo_backfill_inventory, the writer (register_legacy_photo_asset) made
+# SECURITY INVOKER, the resolver
+# back to P3's LIMIT 1, a clause missing from photo_backfill_foreign_claim, and
+# the fixture missing unit 2's keys altogether (refused at the strip).
+#
 # Wants psql on PATH and a server it may create a scratch database on:
 #
 #   PGHOST=/tmp PGPORT=5433 PGUSER=postgres
 #
-# It creates and drops its own database (`fixture_match_check`) and touches
-# nothing else.
+# It runs only against a LOCAL server — a Unix-socket directory or a loopback
+# address — and refuses any other PGHOST (and any PGHOSTADDR or PGSERVICE,
+# which could redirect it). It creates its own uniquely named scratch database
+# (`fixture_match_check_<pid>_<time>_<random>`), drops only a database THIS run
+# created, and touches nothing else: `createdb` refuses a name that already
+# exists, so a pre-existing database is never adopted and never deleted.
+#
+# Where psql is not available (a Windows checkout), the SAME proof runs from
+# Node: `node scripts/fixture-matches-migration.mjs`. That runner reads this
+# file — its strip blocks, its facts query, its migration order, its table and
+# function lists — and executes them through node-postgres on a loopback
+# scratch database. There is one definition of the proof, and it is this file.
 # ════════════════════════════════════════════════════════════════════════════
 
 set -uo pipefail
@@ -119,7 +159,19 @@ export PGHOST="${PGHOST:-/tmp}"
 export PGPORT="${PGPORT:-5433}"
 export PGUSER="${PGUSER:-postgres}"
 
-DB=fixture_match_check
+# libpq reads a comma in PGHOST as a list of hosts (`/tmp,remote.example`), so
+# a comma is refused before the local-only shapes are matched.
+case "$PGHOST" in
+  *,*) echo "refusing PGHOST=$PGHOST: a comma names more than one host" >&2; exit 2 ;;
+  /*|localhost|127.0.0.1|::1) ;;
+  *) echo "refusing PGHOST=$PGHOST: only a Unix-socket directory or a loopback host" >&2; exit 2 ;;
+esac
+if [ -n "${PGHOSTADDR:-}" ] || [ -n "${PGSERVICE:-}" ]; then
+  echo "refusing: PGHOSTADDR / PGSERVICE are set and could point somewhere other than PGHOST" >&2; exit 2
+fi
+
+DB="fixture_match_check_$$_$(date +%s)_${RANDOM}"
+CREATED=0
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FIXTURE="$ROOT/db/test-fixture.sql"
 JOBS="$ROOT/db/migrations/2026-09-29_jobs.sql"
@@ -133,19 +185,24 @@ INGEST="$ROOT/db/migrations/2026-09-30_photo_ingest.sql"
 # Deployed 2026-10-01 (P3): Migration A, then Migration B.
 COVER_FK="$ROOT/db/migrations/2026-09-30_album_cover_tenant_fk.sql"
 USAGES="$ROOT/db/migrations/2026-09-30_photo_usages_sync.sql"
+# Deployed 2026-10-05 / 2026-10-06 (P4): unit 1, then unit 2.
+BACKFILL="$ROOT/db/migrations/2026-10-05_photo_backfill.sql"
+ASSET_FK="$ROOT/db/migrations/2026-10-05_photo_assets_fk.sql"
 
 # Every table P1 created or altered. Compared whole — see the note at the top.
 P1_TABLES="photo_assets photo_usages photos albums blog_posts catalog_items site_images"
-# P2's and P3's functions, compared with photo_assets' facts: definition (which
-# carries SECURITY, search_path and body) and EXECUTE grants. Two of P2's —
-# register_gallery_photo and register_album_cover — are as P3 re-created them.
-P2_FNS="'upsert_photo_asset','register_gallery_photo','register_site_image','register_journal_image','register_album_cover','photo_usage_lock','photo_usage_parent_key','photo_usage_source','photo_usage_resolve_path','read_photo_usage_source','list_photo_usage_parents','sync_photo_usages'"
+# P2's, P3's and P4 unit 1's functions, compared with photo_assets' facts:
+# definition (which carries SECURITY, search_path and body) and EXECUTE grants.
+# Two of P2's — register_gallery_photo and register_album_cover — are as P3
+# re-created them; photo_usage_resolve_path is as P4 unit 1 replaced it.
+P2_FNS="'upsert_photo_asset','register_gallery_photo','register_site_image','register_journal_image','register_album_cover','photo_usage_lock','photo_usage_parent_key','photo_usage_source','photo_usage_resolve_path','read_photo_usage_source','list_photo_usage_parents','sync_photo_usages','photo_backfill_key_base','photo_backfill_foreign_claim','read_photo_backfill_inventory','read_photo_backfill_claims','register_legacy_photo_asset'"
 
-for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST" "$COVER_FK" "$USAGES"; do
+for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST" "$COVER_FK" "$USAGES" "$BACKFILL" "$ASSET_FK"; do
   [ -r "$f" ] || { echo "cannot read $f" >&2; exit 1; }
 done
 
-cleanup() { dropdb --if-exists "$DB" >/dev/null 2>&1; }
+# Drops the scratch database only if this run created it.
+cleanup() { if [ "$CREATED" = 1 ]; then dropdb --if-exists "$DB" >/dev/null 2>&1; fi; }
 trap cleanup EXIT
 
 # Every fact about either table that a drifted copy could get wrong. `$1` is the
@@ -220,8 +277,8 @@ for t in $P1_TABLES; do
                               else P1_FACTS[$t]=$(facts_sql "$t" "''"); fi
 done
 
-cleanup
 createdb "$DB" >/dev/null || { echo "could not create $DB" >&2; exit 1; }
+CREATED=1
 
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$FIXTURE" >/tmp/fmm-fixture.log 2>&1; then
   echo "FAIL  the fixture does not build:"; tail -5 /tmp/fmm-fixture.log; exit 1
@@ -269,6 +326,27 @@ grant delete, insert, references, select, trigger, truncate, update
 SQL
 then
   echo "FAIL  could not strip the fixture's S4 additions:"; tail -8 /tmp/fmm-drop.log; exit 1
+fi
+
+# P4's additions, by name, first: unit 2's keys point at photo_assets, which
+# the P1 strip below drops. A missing one is a failure, not a skip.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-p4.log 2>&1 <<'SQL'
+-- Unit 2: the two keys and their two indexes, so unit 2 has to create them.
+alter table public.photos      drop constraint photos_asset_fk;
+alter table public.site_images drop constraint site_images_asset_fk;
+drop index public.photos_asset_tenant;
+drop index public.site_images_asset_tenant;
+-- Unit 1: its five new functions, so unit 1 has to create them. The resolver
+-- it replaced is dropped with P3's below, so Migration B creates P3's and
+-- unit 1 has to replace it again.
+drop function public.register_legacy_photo_asset(uuid, text, uuid, text, text, text, text, text, text, text, jsonb, integer, integer, bigint, text, text, timestamptz, text, text, text, integer, numeric, text, numeric, text[], text[], jsonb, boolean);
+drop function public.read_photo_backfill_claims(uuid, text[]);
+drop function public.read_photo_backfill_inventory(uuid);
+drop function public.photo_backfill_foreign_claim(uuid, text, boolean);
+drop function public.photo_backfill_key_base(text);
+SQL
+then
+  echo "FAIL  could not strip the fixture's P4 additions:"; tail -8 /tmp/fmm-drop-p4.log; exit 1
 fi
 
 # P1's additions, written out one by one for the same reason as S4's. The two
@@ -337,6 +415,32 @@ if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$USAGES" >/tmp/fmm-usages.log 2>
   echo "FAIL  P3 Migration B does not apply:"; tail -8 /tmp/fmm-usages.log; exit 1
 fi
 
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$BACKFILL" >/tmp/fmm-backfill.log 2>&1; then
+  echo "FAIL  P4 unit 1 does not apply:"; tail -8 /tmp/fmm-backfill.log; exit 1
+fi
+
+# SCRATCH ONLY — see the P4 note at the top. The fixture's seeded photographs
+# are linked as the backfill would have linked them, so unit 2's own,
+# unweakened preflight has nothing to refuse. Rows only; nothing compared.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-link.log 2>&1 <<'SQL'
+insert into public.photo_assets (tenant_id, key_base, display_path, derivatives, state)
+select distinct tenant_id, regexp_replace(storage_path, '/[^/]+$', ''), storage_path, '{}'::jsonb, 'derived'
+  from (select tenant_id, storage_path from public.photos where storage_path !~ '^/samples/'
+        union all
+        select tenant_id, storage_path from public.site_images) s;
+update public.photos p set asset_id = a.id from public.photo_assets a
+ where a.tenant_id = p.tenant_id and a.display_path = p.storage_path and p.storage_path !~ '^/samples/';
+update public.site_images si set asset_id = a.id from public.photo_assets a
+ where a.tenant_id = si.tenant_id and a.display_path = si.storage_path;
+SQL
+then
+  echo "FAIL  could not link the fixture's seeded rows for unit 2:"; tail -8 /tmp/fmm-link.log; exit 1
+fi
+
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$ASSET_FK" >/tmp/fmm-assetfk.log 2>&1; then
+  echo "FAIL  P4 unit 2 does not apply:"; tail -8 /tmp/fmm-assetfk.log; exit 1
+fi
+
 JOBS_AFTER=$(psql -X -q -t -A -d "$DB" -c "$JOBS_FACTS")
 PV_AFTER=$(psql -X -q -t -A -d "$DB" -c "$PV_FACTS")
 for t in $P1_TABLES; do P1_AFTER[$t]=$(psql -X -q -t -A -d "$DB" -c "${P1_FACTS[$t]}"); done
@@ -373,9 +477,11 @@ done
 for table in $P1_TABLES; do
   before="${P1_BEFORE[$table]}"; after="${P1_AFTER[$table]}"
   file=2026-09-29_photo_assets.sql
-  [ "$table" = photo_assets ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_ingest.sql + 2026-09-30_photo_usages_sync.sql (12 functions)"
+  [ "$table" = photo_assets ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_ingest.sql + 2026-09-30_photo_usages_sync.sql + 2026-10-05_photo_backfill.sql (17 functions)"
   [ "$table" = photo_usages ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_usages_sync.sql"
   [ "$table" = albums ] && file="2026-09-29_photo_assets.sql + 2026-09-30_album_cover_tenant_fk.sql"
+  [ "$table" = photos ] && file="2026-09-29_photo_assets.sql + 2026-10-05_photo_assets_fk.sql"
+  [ "$table" = site_images ] && file="2026-09-29_photo_assets.sql + 2026-10-05_photo_assets_fk.sql"
 
   if [ -z "$before" ]; then
     echo "FAIL  the fixture built no $table at all."

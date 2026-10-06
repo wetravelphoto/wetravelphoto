@@ -106,9 +106,10 @@ bash scripts/sandbox-build.sh           # expect: BUILD EXIT: 0
 
 Database suites — need a local Postgres carrying the fixture, which already
 contains `jobs` (with the hardened `enqueue_jobs`), `page_views`, the P1 photo
-tables, the P2 ingestion functions and P3's projection (the tenant-aware cover
-key, `page_share`, seven functions, the re-locked wrappers) in their deployed
-shape:
+tables, the P2 ingestion functions, P3's projection (the tenant-aware cover
+key, `page_share`, seven functions, the re-locked wrappers) and P4 (unit 1's
+five functions and flat-aware resolver; unit 2's two asset keys and indexes) in
+their deployed shape:
 
 ```bash
 createdb wtp && psql -d wtp -f db/test-fixture.sql
@@ -116,14 +117,22 @@ createdb wtp && psql -d wtp -f db/test-fixture.sql
 psql -d wtp -f db/verify-analytics.sql         # 76 assertions
 psql -d wtp -f db/verify-jobs.sql              # 114 (incl. the no-profile tenant gate)
 psql -d wtp -f db/verify-tenant-isolation.sql  # 25
-psql -d wtp -f db/verify-photo-assets.sql      # 146
+psql -d wtp -f db/verify-photo-assets.sql      # 147 (deployed keys; the pre-unit-2 contract under wtp.p4_stage)
 psql -d wtp -f db/verify-photo-ingest.sql      # 246
 psql -d wtp -f db/verify-photo-usages.sql      # 159
 psql -d wtp -f db/verify-album-cover-fk.sql    # 17
-bash scripts/fixture-matches-migration.sh      # 409 jobs + 175 page_views + 1616 P1/P2/P3 facts
+psql -d wtp -f db/verify-photo-backfill.sql    # 182
+psql -d wtp -f db/verify-photo-assets-fk.sql   # 22
+bash scripts/fixture-matches-migration.sh      # 409 jobs + 175 page_views + 2223 P1–P4 facts
 bash scripts/jobs-concurrency.sh               # 17, needs two connections
 bash scripts/album-cover-fk.sh                 # 15, its own scratch database
 ```
+
+Without `psql` (Windows): `node scripts/p4-local-db.mjs sql <suites…>` runs SQL
+suites on its own loopback scratch database (`--stage pre_unit2|pre_p4`
+rebuilds a historical stage first), and `node
+scripts/fixture-matches-migration.mjs [--mutations]` runs the drift guard's own
+SQL, read from the `.sh`.
 
 TypeScript suites live in `.mk/` and are run directly:
 
@@ -133,6 +142,7 @@ npx tsx .mk/jobs.ts            #  64  (needs the database)
 npx tsx .mk/photo-assets.ts    #  58  (needs the database)
 npx tsx .mk/ingest.ts          # 175  (needs the database; two-connection concurrency)
 npx tsx .mk/usages.ts          # 176  (needs the database; two-connection concurrency)
+npx tsx .mk/backfill.ts        # 355  (needs the database; --unit-only: 245 without one)
 npx tsx .mk/section-values.ts  # 1557
 npx tsx .mk/settings.ts        #  408
 ```
@@ -188,23 +198,61 @@ definer functions; nothing READS the photo tables yet.
 (B: `page_share`, `sync_photo_usages` and its reads, service_role only), and
 reconciled. Application commit `cd018bd`, deployed by Vercel; the one-time
 `scripts/rebuild-photo-usages.ts --all` ran twice and converged (0 failed, 102
-unresolved pre-P2 references, 0 written — production holds no assets yet).
+unresolved pre-P2 references, 0 written — production held no assets then).
 **P3 is COMPLETE / CLOSED** (`open-items.md` §11).
 
-Production: 37 tables · 549 columns · 25 functions · 56 policies · RLS on all 37
-· PostgreSQL 17.6.
+**P4** the legacy backfill and the asset keys — **deployed and accepted in
+production** (`photo-migration-plan.md`, P4; `open-items.md` §12):
 
-**The next phase is P4 — the backfill** (`photo-migration-plan.md`).
-**Not started.**
+| unit | Supabase version | file | sha256 |
+|---|---|---|---|
+| 1 | `20261005192303` | `2026-10-05_photo_backfill.sql` — five backfill functions + the flat-aware resolver | `aa46c4789f85f1280a17ab01af400d9fff5459792d334a44acfe7b351e4f3eb8` |
+| 2 | `20261006012958` | `2026-10-05_photo_assets_fk.sql` — the two tenant-aware NO ACTION asset keys + two partial indexes | `1bc2276e2ba325255be44509f203cc1695f8fafa276678b5f6b315a77c1d46d5` |
 
-The Supabase security advisor warns that `authenticated` may execute five
-SECURITY DEFINER functions (`enqueue_jobs`, the four `register_*`). **Intended —
-do not "fix" them**; the narrow definer function is the approved boundary
-(`db/schema-verified.md`).
+The whole production
+sequence ran, each step separately approved: unit 1 → the application
+deployment retiring the old derivative writer → legacy deployments isolated,
+then verified drained by read-only observation (no drain command invoked) →
+reviewed dry run and journal manifest → backfill `--apply` (74
+assets, 71 photos linked) → a P3 rebuild per site (102 usages, 0 unresolved)
+→ unit 2. The schema snapshot, fixture, `db/schema-verified.md` and drift
+guard are **reconciled locally**. **P4 is NOT CLOSED** until that
+reconciliation and the uncommitted P4 application code (deployed from the
+working tree) pass final review and are committed. **No further deployment is
+needed — and a push to `main` would deploy** (the Vercel project is
+Git-linked, production branch `main`, Git deployments enabled), so the push
+needs its own explicitly reviewed path (`open-items.md` §12). The Vercel
+legacy-deployment isolation rule stays on; removing it is a separate decision.
+**P5 is paused — not started.**
+
+Production: 37 tables · 549 columns · 30 functions · 56 policies · 157
+constraints · 101 indexes · RLS on all 37 · PostgreSQL 17.6. Data: 74 assets,
+83 photos (71 linked, 12 built-in samples unlinked), 102 usages, 0
+`site_images`, 0 jobs.
+
+**The unit 2 migration's header is wrong about one thing** and the file is
+deliberately left byte-for-byte as deployed: tenants do NOT cascade to
+`photos` (or `albums`) — `deleteSite()` removes those explicitly;
+`site_images` and `photo_assets` do cascade (`db/schema-verified.md`, P4).
+
+Local rehearsal (no `psql` needed): `node scripts/p4-local-db.mjs sql|ts …`
+(its own scratch database on a loopback server; `--stage pre_unit2|pre_p4` for
+the historical states), `node scripts/photo-assets-fk.mjs`, `node
+scripts/p4-mutations.mjs`, `node scripts/fixture-matches-migration.mjs
+[--mutations]`, and `npx tsx .mk/backfill.ts` through the harness
+(`--unit-only` without a database).
+
+The five intended application doors — `enqueue_jobs` and the four
+`register_*`, which `authenticated` may execute as SECURITY DEFINER — are
+**intended; do not "fix" them**; the narrow definer function is the approved
+boundary (`db/schema-verified.md`). The advisor's accepted current counts are
+larger (authenticated-callable definer 10, anon-callable 5, mutable
+`search_path` 3, leaked-password protection 1), all pre-existing; reconciling
+them is the standing read-only advisor pass, with no remediation in scope.
 
 ## Not without explicit approval
 
-- **Starting P4**, or any other phase, or more than one phase at a time.
+- **Starting P5**, or any other phase, or more than one phase at a time.
 - **Applying anything to the production database.**
 - **Committing or pushing.**
 - Dropping, renaming or repurposing a column — including **Phase D** (the

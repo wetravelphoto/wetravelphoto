@@ -5,6 +5,11 @@ import { JOB_KINDS, PermanentJobError, type JobHandler, type JobKind } from '@/l
 import { enqueue, ENQUEUE_BATCH } from '@/lib/jobs/queue'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+// The repository root, wherever it is checked out (was the old sandbox's
+// /home/claude/build — made portable in P4 so the job retirement can be run).
+const JOBS_MIGRATION = resolve(__dirname, '../db/migrations/2026-09-29_jobs.sql')
 
 /**
  * THE WORKER, AGAINST A REAL DATABASE
@@ -590,7 +595,7 @@ async function main() {
     // The bound in SQL and the one in TypeScript are the same number, or the
     // split is either wasteful or wrong.
     const migration = readFileSync(
-      '/home/claude/build/db/migrations/2026-09-29_jobs.sql',
+      JOBS_MIGRATION,
       'utf8'
     )
     const declared = /c_max_items\s+constant\s+int\s*:=\s*(\d+)/.exec(migration)
@@ -656,7 +661,7 @@ async function main() {
   // on a machine with no Postgres at all.
   {
     const migration = readFileSync(
-      '/home/claude/build/db/migrations/2026-09-29_jobs.sql',
+      JOBS_MIGRATION,
       'utf8'
     )
     const clause = /p_kind not in \(([^)]*)\)/.exec(migration)

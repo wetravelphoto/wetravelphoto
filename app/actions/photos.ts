@@ -2,8 +2,6 @@
 
 import { requireEditor } from '@/lib/auth'
 import { ownsKey } from '@/lib/storage-keys'
-import { r2Client } from '@/lib/r2'
-import { DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createClient } from '@/lib/supabase/server'
 import { fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
 import { syncProductsForPhoto } from '@/lib/products'
@@ -45,46 +43,55 @@ export async function registerPhoto(
   revalidatePath(`/admin/trips/${albumId}`)
 }
 
-export async function deletePhoto(albumId: string, photoId: string, storagePath: string) {
+/**
+ * Removes a photograph from its gallery: the `photos` membership row, and
+ * nothing in storage (P6, retention-first). The original, every display size
+ * and the asset stay exactly as they were — another gallery, a section, a
+ * draft or a story may still show the same files, and the usage projection
+ * that could say so may be stale. Physical cleanup is a later, separate step.
+ *
+ * Because no file is deleted, no file has to be proved this site's: a row
+ * from before the `t/<tenant>/` prefix is removed like any other.
+ *
+ * The row's cascades are unchanged: its catalogue entry, products,
+ * favourites and downloads go with it, and keeping the files does not bring
+ * them back.
+ *
+ * `storagePath` is the browser's and is ignored. The parameter stays so the
+ * caller does not change.
+ */
+export async function deletePhoto(
+  albumId: string,
+  photoId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  storagePath: string
+) {
   // A server action is a public endpoint: check who is asking before anything else.
   const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  // A photo is now several files — the original plus each display size
-  const { data: photo } = await supabase
+  const { data: photo, error: readError } = await supabase
     .from('photos')
-    .select('original_path, derivatives, album_id')
+    .select('album_id')
     .eq('tenant_id', tenantId)
     .eq('id', photoId)
     .maybeSingle()
 
-  const keys = new Set<string>([storagePath])
-  if (photo?.original_path) keys.add(photo.original_path)
-
-  for (const value of Object.values((photo?.derivatives ?? {}) as Record<string, string>)) {
-    if (value) keys.add(value)
-  }
-
-  await Promise.all(
-    [...keys].map((Key) =>
-      r2Client
-        .send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key }))
-        // One missing object shouldn't block removing the record
-        .catch(() => null)
-    )
-  )
+  // No row on this site (or no answer) means nothing is touched.
+  if (readError) throw new Error('That photograph could not be read, so nothing was removed.')
+  if (!photo) throw new Error('That photograph is not on this site.')
 
   const { error } = await supabase
     .from('photos')
     .delete()
     .eq('tenant_id', tenantId)
     .eq('id', photoId)
-  if (error) throw new Error(error.message)
+  if (error) throw new Error('That photograph could not be removed.')
 
   // Its gallery and shop usages went with the row, by cascade; its cover
   // usage, if it was the chosen cover, did not (P3). The album is the one the
   // row said it was in, not the one the browser named.
-  await syncAlbum(tenantId, (photo?.album_id as string | undefined) ?? albumId)
+  await syncAlbum(tenantId, photo.album_id as string)
 
   revalidatePath(`/admin/trips/${albumId}`)
 }

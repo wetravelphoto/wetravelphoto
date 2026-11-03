@@ -2,104 +2,49 @@
 
 import { requireEditor } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { r2Client } from '@/lib/r2'
-import { DeleteObjectsCommand } from '@aws-sdk/client-s3'
+import { assessRemoval } from '@/lib/photos/deletion'
 import { revalidatePath } from 'next/cache'
 
 /**
- * Removes a gallery, its photo records, and the underlying files in R2.
- * The database rows cascade; the storage objects have to go explicitly.
- */
-/**
- * Removes a gallery and its photo records. Files are only deleted from
- * storage when nothing else points at them — journal posts and site settings
- * reference photos by path, and deleting those files would silently break
- * whatever was using them.
+ * Removes a gallery and its photo records — and nothing in storage (P6,
+ * retention-first). Every original, display size, custom cover and cover
+ * video stays, and so does every asset: a section, a draft, a story or
+ * another gallery may still show them. Physical cleanup is a later step.
+ *
+ * `kept` is the number of this gallery's files that another canonical source
+ * of this site is KNOWN to name, read fresh before anything is removed
+ * (lib/photos/deletion.ts). It is not the number of files retained — they
+ * all are. If that evidence cannot be read whole, the gallery is not removed:
+ * an unreadable site is never reported as `kept: 0`.
+ *
+ * The rows cascade as before: the photographs' memberships, captions,
+ * catalogue entries, products, favourites and downloads go with the gallery,
+ * and keeping the files does not bring them back.
  */
 export async function deleteAlbum(albumId: string) {
   // A server action is a public endpoint: check who is asking before anything else.
   const { tenantId } = await requireEditor()
   const supabase = await createClient()
 
-  const { data: album } = await supabase
-    .from('albums')
-    .select('cover_custom_path, cover_video_path')
-    .eq('tenant_id', tenantId)
-    .eq('id', albumId)
-    .maybeSingle()
-
-  const { data: photos } = await supabase
-    .from('photos')
-    .select('storage_path')
-    .eq('tenant_id', tenantId)
-    .eq('album_id', albumId)
-
-  const candidates = [
-    ...(photos ?? []).map((p) => p.storage_path),
-    album?.cover_custom_path,
-    album?.cover_video_path,
-  ].filter(Boolean) as string[]
-
-  // Anything still referenced elsewhere stays in storage
-  const inUse = new Set<string>()
-
-  const { data: posts } = await supabase
-    .from('blog_posts')
-    .select('featured_custom_path, blocks')
-    .eq('tenant_id', tenantId)
-    .not('featured_custom_path', 'is', null)
-
-  for (const post of posts ?? []) {
-    if (post.featured_custom_path) inUse.add(post.featured_custom_path)
+  const { found, assessment } = await assessRemoval(supabase, tenantId, { kind: 'album', albumId })
+  if (!assessment.complete) {
+    throw new Error('This site’s photographs could not all be read, so the gallery was not deleted.')
   }
-
-  // Images used inside post bodies count too
-  const { data: allPosts } = await supabase.from('blog_posts').select('blocks')
-    .eq('tenant_id', tenantId)
-  for (const post of allPosts ?? []) {
-    const json = JSON.stringify(post.blocks ?? [])
-    for (const path of candidates) {
-      if (json.includes(path)) inUse.add(path)
-    }
-  }
-
-  const { data: settings } = await supabase
-    .from('site_settings')
-    .select('intro_image_path, contact_image_path, logo_header_path, logo_footer_path, logo_bird_path')
-    .eq('tenant_id', tenantId)
-    .maybeSingle()
-
-  for (const value of Object.values(settings ?? {})) {
-    if (typeof value === 'string') inUse.add(value)
-  }
-
-  const deletable = candidates.filter((key) => !inUse.has(key))
-
-  if (deletable.length > 0) {
-    // DeleteObjects takes up to 1000 keys per call
-    for (let i = 0; i < deletable.length; i += 1000) {
-      await r2Client.send(
-        new DeleteObjectsCommand({
-          Bucket: process.env.R2_BUCKET_NAME!,
-          Delete: { Objects: deletable.slice(i, i + 1000).map((Key) => ({ Key })) },
-        })
-      )
-    }
-  }
+  if (!found) throw new Error('That gallery is not on this site.')
 
   const { error } = await supabase
     .from('albums')
     .delete()
     .eq('tenant_id', tenantId)
     .eq('id', albumId)
-  if (error) throw new Error(error.message)
+  if (error) throw new Error('That gallery could not be deleted.')
 
   revalidatePath('/admin/trips')
   revalidatePath('/admin')
   revalidatePath('/')
   revalidatePath('/trips')
 
-  return { kept: candidates.length - deletable.length }
+  return { kept: assessment.counts.referenced }
 }
 
 /**

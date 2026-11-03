@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { drain } from '@/lib/jobs/run'
+import { r2Storage } from '@/lib/photos/storage'
+import { SWEEP_BUDGET_MS, sweep } from '@/lib/photos/sweep'
 
 /**
  * Scheduled job: runs whatever is waiting in the queue, for every site.
@@ -23,6 +25,19 @@ import { drain } from '@/lib/jobs/run'
  * the admin, which drains their own site on the spot. On Pro this becomes
  * `*​/5 * * * *` — one string in vercel.json — and the safety net becomes the
  * scheduler.
+ *
+ * ── AND IT SWEEPS (P6) ──────────────────────────────────────────────────────
+ *
+ * After the queue, this runs the photo sweeper: the only thing on the platform
+ * that deletes a stored file. It is NOT a job kind, deliberately — `jobs`
+ * grants INSERT to nobody, `enqueue_jobs` is the only door and allow-lists one
+ * kind, and widening that door would cost a migration and hand a browser the
+ * ability to queue sweeps. See `lib/photos/sweep.ts` and
+ * .ai-handoff/p6-sweeper-design-claude.md.
+ *
+ * Daily is the right cadence for a thirty-day grace period, so unlike the
+ * queue this is not waiting for Pro. A sweep that runs out of budget simply
+ * continues tomorrow; there is no partial state.
  */
 export const dynamic = 'force-dynamic'
 
@@ -50,11 +65,48 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Comfortably inside maxDuration, with room for the response.
-  const report = await drain(db, { budgetMs: 240_000 })
+  /*
+   * Comfortably inside maxDuration, with room for the sweep and the response.
+   * This was 240s before the sweeper; the queue keeps first claim on the
+   * budget because a photographer may be waiting on a job, while nothing is
+   * waiting on a sweep.
+   */
+  const started = Date.now()
+  const report = await drain(db, { budgetMs: 200_000 })
 
   if (report.errors.length > 0) {
     console.error('[jobs] drain finished with errors', report.errors)
+  }
+
+  /*
+   * Whatever is left of the function's own window, minus a margin for the
+   * response. If the queue used everything, the sweep is skipped rather than
+   * started with no time to finish an asset — the next run picks it up.
+   */
+  const left = 285_000 - (Date.now() - started)
+  const sweepBudget = Math.max(0, Math.min(SWEEP_BUDGET_MS, left))
+
+  let swept = null
+  if (sweepBudget >= 5_000) {
+    swept = await sweep(db, r2Storage, { budgetMs: sweepBudget })
+    if (swept.notes.length > 0) {
+      console.error('[p6] sweep did not purge', swept.notes.slice(0, 20))
+    }
+    /*
+     * `examined` is also the answer to whether this cron ran at all: every
+     * examined asset gets a `sweep_checked_at`, so
+     * `select count(*) from photo_assets where sweep_checked_at is not null`
+     * settles natural cron execution without a monitor or a job invocation.
+     */
+    console.log('[p6] sweep', {
+      examined: swept.examined,
+      purged: swept.purged,
+      filesDeleted: swept.filesDeleted,
+      clocksStarted: swept.clocksStarted,
+      clocksCleared: swept.clocksCleared,
+      outOfTime: swept.outOfTime,
+      outcomes: swept.outcomes,
+    })
   }
 
   return NextResponse.json({
@@ -62,5 +114,16 @@ export async function GET(request: NextRequest) {
     done: report.done,
     failed: report.failed,
     outOfTime: report.outOfTime,
+    sweep: swept
+      ? {
+          examined: swept.examined,
+          purged: swept.purged,
+          filesDeleted: swept.filesDeleted,
+          clocksStarted: swept.clocksStarted,
+          clocksCleared: swept.clocksCleared,
+          outOfTime: swept.outOfTime,
+          outcomes: swept.outcomes,
+        }
+      : { skipped: 'no budget left after the queue' },
   })
 }

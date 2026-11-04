@@ -16,6 +16,7 @@ import {
   type SweepEvidence,
 } from '../lib/photos/sweep'
 import { SOURCES, HISTORY_SOURCES } from '../lib/photos/deletion'
+import { main, parseArgs, runSweep } from '../lib/photos/sweep-cli'
 import type { PhotoStorage } from '../lib/photos/storage'
 
 /**
@@ -327,7 +328,19 @@ async function main() {
    * thirty days early. So: every update containing it must also contain
    * `swept_at`, and no clock write may mention it.
    */
-  const updates = [...src.matchAll(/update\(\s*\{[^}]*\}/gs)].map((m) => m[0])
+  /*
+   * BOTH SPELLINGS. The purge writes `update({…})` directly; the batched clock
+   * writes go through a local `write({…}, ids)` helper added to fix TS2345. A
+   * scan for `update(` alone found no clock writes at all, so the "no clock
+   * write touches deleted_at" check below passed by matching NOTHING — Codex
+   * caught it. The non-vacuity assertion right after is the real fix: a guard
+   * that cannot tell "nothing is wrong" from "nothing was examined" is not a
+   * guard.
+   */
+  const updates = [...src.matchAll(/(?:update|write)\(\s*\{[^}]*\}/gs)].map((m) => m[0])
+  const clockWrites = updates.filter((u) => /\bunreferenced_since\b/.test(u))
+  ok('source: the scan actually found the clock writes', clockWrites.length >= 2, clockWrites.length)
+  ok('source: the scan actually found the purge write', updates.some((u) => /\bswept_at\b/.test(u)))
   const withDeleted = updates.filter((u) => /\bdeleted_at\b/.test(u))
   ok('source: deleted_at appears in at most one write', withDeleted.length <= 1, withDeleted.length)
   ok(
@@ -335,10 +348,7 @@ async function main() {
     withDeleted.every((u) => /\bswept_at\b/.test(u)),
     withDeleted
   )
-  ok(
-    'source: no clock write touches deleted_at',
-    updates.filter((u) => /\bunreferenced_since\b/.test(u)).every((u) => !/\bdeleted_at\b/.test(u))
-  )
+  ok('source: no clock write touches deleted_at', clockWrites.every((u) => !/\bdeleted_at\b/.test(u)))
   ok(
     'source: the candidate queue is ordered by sweep_checked_at, not by a clock',
     /\.order\(\s*'sweep_checked_at'/.test(src) && !/\.order\(\s*'deleted_at'/.test(src)
@@ -699,6 +709,72 @@ async function main() {
     ok('two sites: theirs is not', !removed.includes(theirs.paths[0]!), removed)
   }
 
+  // ── 19. The command ────────────────────────────────────────────────────
+  //
+  // `parseArgs` is pure and `runSweep` takes its sweep injected, so the whole
+  // command is testable without a database or a bucket.
+  {
+    const bad = [
+      [[], 'no mode'],
+      [['--dry-run', '--apply'], 'both modes'],
+      [['--dry-run', '--dry-run'], 'twice'],
+      [['--grace'], 'a flag with no number'],
+      [['--dry-run', '--grace', '0'], 'a zero grace period'],
+      [['--dry-run', '--grace', 'soon'], 'a word where a number belongs'],
+      [['--dry-run', '--max', '-5'], 'a negative count'],
+      [['--sweep-everything'], 'an unknown argument'],
+    ] as const
+    for (const [argv, why] of bad) {
+      ok(`cli: refuses ${why}`, parseArgs([...argv]).ok === false, parseArgs([...argv]))
+    }
+
+    const dry = parseArgs(['--dry-run'])
+    ok('cli: --dry-run alone is enough', dry.ok === true && dry.command.dryRun === true)
+    ok('cli: defaults come from the sweeper, not the command', dry.ok === true && dry.command.graceDays === GRACE_DAYS)
+
+    const applied = parseArgs(['--apply', '--grace', '7', '--max', '3', '--budget', '1000'])
+    ok(
+      'cli: --apply with options parses',
+      applied.ok === true &&
+        applied.command.dryRun === false &&
+        applied.command.graceDays === 7 &&
+        applied.command.maxAssets === 3 &&
+        applied.command.budgetMs === 1000,
+      applied
+    )
+
+    // A failure outcome must exit non-zero; a decision must not.
+    const lines: string[] = []
+    const base = { examined: 1, purged: 0, filesDeleted: 0, clocksStarted: 0, clocksCleared: 0, outOfTime: false, notes: [] }
+    const failing = await runSweep(
+      { dryRun: false, graceDays: 30, maxAssets: 10, budgetMs: 1000 },
+      { sweep: async () => ({ ...base, outcomes: { kept_storage_failed: 1 } }), out: (l) => lines.push(l) }
+    )
+    ok('cli: a bucket refusal exits 1', failing === 1)
+
+    const decided = await runSweep(
+      { dryRun: false, graceDays: 30, maxAssets: 10, budgetMs: 1000 },
+      { sweep: async () => ({ ...base, outcomes: { kept_referenced: 1 } }), out: () => {} }
+    )
+    ok('cli: an asset kept because it is referenced exits 0', decided === 0)
+
+    const threw = await runSweep(
+      { dryRun: true, graceDays: 30, maxAssets: 10, budgetMs: 1000 },
+      {
+        sweep: async () => {
+          throw new Error('the client exploded')
+        },
+        out: () => {},
+      }
+    )
+    ok('cli: a thrown sweep is reported, not propagated', threw === 1)
+
+    const started = await main(['--nonsense'], () => {
+      throw new Error('deps must not be built for a bad command')
+    }, () => {})
+    ok('cli: a bad command exits 2 and never builds the dependencies', started === 2)
+  }
+
   console.log(`sweep: ${pass} passed, ${fail.length} failed`)
   for (const f of fail) console.log('  FAIL ' + f)
 
@@ -758,6 +834,14 @@ const MUTATIONS: Array<{ change: string; expect: string }> = [
   {
     change: 'Add deleted_at: stamp to the start-clock write as well.',
     expect: 'clock started: the photograph is still available (and source: no clock write touches deleted_at)',
+  },
+  {
+    change: 'In sweep-cli parseArgs, default dryRun to true instead of refusing.',
+    expect: 'cli: refuses no mode',
+  },
+  {
+    change: 'In sweep-cli, drop kept_storage_failed from FAILURES.',
+    expect: 'cli: a bucket refusal exits 1',
   },
   {
     change: 'In sweep, honour dryRun for storage but still write sweep_checked_at.',

@@ -15,7 +15,7 @@ import {
   type SweepDb,
   type SweepEvidence,
 } from '../lib/photos/sweep'
-import { SOURCES, HISTORY_SOURCES, type SourceName } from '../lib/photos/deletion'
+import { SOURCES, HISTORY_SOURCES } from '../lib/photos/deletion'
 import type { PhotoStorage } from '../lib/photos/storage'
 
 /**
@@ -316,9 +316,29 @@ async function main() {
   const src = readFileSync(SWEEP_SRC, 'utf8')
   const writesColumn = (col: string) =>
     new RegExp(`(update\\s*\\(\\s*\\{[^}]*\\b${col}\\b)|(\\b${col}\\s*:\\s*(stamp|new Date))`, 's').test(src)
-  ok('source: never writes deleted_at', !writesColumn('deleted_at'))
   ok('source: never writes archived_at', !writesColumn('archived_at'))
   ok('source: never writes original_purged_at', !writesColumn('original_purged_at'))
+
+  /*
+   * `deleted_at` is allowed in exactly one place: the purge write, where it is
+   * true and where it makes every deployed reader hide an asset whose files
+   * are gone. It must never appear in a write that is merely starting or
+   * stamping a clock — that was the withdrawn design, and it hid photographs
+   * thirty days early. So: every update containing it must also contain
+   * `swept_at`, and no clock write may mention it.
+   */
+  const updates = [...src.matchAll(/update\(\s*\{[^}]*\}/gs)].map((m) => m[0])
+  const withDeleted = updates.filter((u) => /\bdeleted_at\b/.test(u))
+  ok('source: deleted_at appears in at most one write', withDeleted.length <= 1, withDeleted.length)
+  ok(
+    'source: any write of deleted_at also writes swept_at',
+    withDeleted.every((u) => /\bswept_at\b/.test(u)),
+    withDeleted
+  )
+  ok(
+    'source: no clock write touches deleted_at',
+    updates.filter((u) => /\bunreferenced_since\b/.test(u)).every((u) => !/\bdeleted_at\b/.test(u))
+  )
   ok(
     'source: the candidate queue is ordered by sweep_checked_at, not by a clock',
     /\.order\(\s*'sweep_checked_at'/.test(src) && !/\.order\(\s*'deleted_at'/.test(src)
@@ -338,6 +358,28 @@ async function main() {
   ok(
     'files: duplicates collapse',
     JSON.stringify(assetFiles({ display_path: 'x', original_path: 'x', derivatives: { a: 'x' } })) === '["x"]'
+  )
+  /*
+   * ASSERTED DIRECTLY, and it has to be.
+   *
+   * A sample photograph is `/samples/<dir>/<file>.webp` — a URL on this
+   * origin, shipped with the platform and shared by every site. It can never
+   * satisfy `ownsKey`, so end to end the sweeper refuses it as `unprovable`
+   * before the sample guard matters: removing the guard left the behavioural
+   * test green, which is exactly what Codex's surviving mutation showed. The
+   * guard lives in `assetFiles`, so that is where it is tested. Do not "fix"
+   * this by loosening `ownsKey`.
+   */
+  ok(
+    'files: a sample photograph is excluded by assetFiles itself',
+    JSON.stringify(assetFiles({ display_path: '/samples/coast/one.webp', derivatives: {} })) === '[]',
+    assetFiles({ display_path: '/samples/coast/one.webp', derivatives: {} })
+  )
+  ok(
+    'files: a sample among real files is dropped and the rest kept',
+    JSON.stringify(
+      assetFiles({ display_path: '/samples/coast/one.webp', original_path: 'real.webp', derivatives: {} })
+    ) === '["real.webp"]'
   )
 
   // ── 4. graceElapsed ─────────────────────────────────────────────────────
@@ -547,7 +589,35 @@ async function main() {
     row.derivatives = {}
     const { storage, removed } = fakeStorage()
     await sweep(db as unknown as SweepDb, storage, { now: new Date() })
+    // Defence in depth only: `ownsKey` refuses this path before the sample
+    // guard is consulted. The guard's own test is in block 3.
     ok('samples: no sample key is ever sent to remove', removed.length === 0, removed)
+  }
+
+  // ── 14b. A purged asset becomes unavailable to every deployed reader ────
+  //
+  // Codex's finding: without this the row keeps a display_path pointing at
+  // nothing and the picker goes on offering it.
+  {
+    const db = new FakeDb()
+    seedEvidence(db, TENANT)
+    const a = seedAsset(db, TENANT, { unreferencedSince: daysAgo(GRACE_DAYS + 1) })
+    const { storage } = fakeStorage()
+    await sweep(db as unknown as SweepDb, storage, { now: new Date() })
+    const row = db.of('photo_assets').find((r) => r.id === a.id)!
+    ok('purged: swept_at is set', typeof row.swept_at === 'string')
+    ok('purged: deleted_at is set, so the renderer and picker hide it', typeof row.deleted_at === 'string', row)
+  }
+
+  // ── 14c. Starting a clock must not make a photograph disappear ──────────
+  {
+    const db = new FakeDb()
+    seedEvidence(db, TENANT)
+    const a = seedAsset(db, TENANT)
+    const { storage } = fakeStorage()
+    await sweep(db as unknown as SweepDb, storage, { now: new Date() })
+    const row = db.of('photo_assets').find((r) => r.id === a.id)!
+    ok('clock started: the photograph is still available', row.deleted_at === undefined || row.deleted_at === null, row)
   }
 
   // ── 15. dryRun writes nothing and deletes nothing ───────────────────────
@@ -679,7 +749,15 @@ const MUTATIONS: Array<{ change: string; expect: string }> = [
   },
   {
     change: 'In assetFiles, remove the isSamplePhoto guard.',
-    expect: 'samples: no sample key is ever sent to remove',
+    expect: 'files: a sample photograph is excluded by assetFiles itself',
+  },
+  {
+    change: 'In the purge write, drop deleted_at from the patch.',
+    expect: 'purged: deleted_at is set, so the renderer and picker hide it',
+  },
+  {
+    change: 'Add deleted_at: stamp to the start-clock write as well.',
+    expect: 'clock started: the photograph is still available (and source: no clock write touches deleted_at)',
   },
   {
     change: 'In sweep, honour dryRun for storage but still write sweep_checked_at.',

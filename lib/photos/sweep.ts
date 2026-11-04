@@ -39,13 +39,20 @@ import {
  *    hidden the photograph immediately, so a thirty-day storage grace period
  *    would not have been a thirty-day no-impact window.
  *
- * So no removal action writes anything, `deleted_at` is never written by this
- * phase at all, and the sweeper keeps its own three columns
- * (`2026-11-03_photo_sweeper.sql`), which nothing already deployed reads:
+ * So no removal action writes anything, and the sweeper keeps its own three
+ * columns (`2026-11-03_photo_sweeper.sql`), which nothing already deployed
+ * reads:
  *
  *     unreferenced_since   when it first saw the asset referenced by nothing
  *     sweep_checked_at     when it last examined it
  *     swept_at             its files are gone
+ *
+ * `archived_at` and `original_purged_at` stay unwritten by this phase.
+ * `deleted_at` is written at the moment of a PURGE and nowhere else: by then
+ * it is true, and it is what makes every deployed reader stop offering an
+ * asset whose files are gone. Writing it while a clock merely runs is the
+ * withdrawn design and must not come back — `.mk/sweep.ts` asserts that every
+ * write containing it also contains `swept_at`.
  *
  * Discovery is also strictly better than marking: it finds an asset orphaned
  * by ANY path — a section edited, a draft discarded, an upload forgotten — and
@@ -563,11 +570,28 @@ export async function sweep(
         continue
       }
 
+      /*
+       * `deleted_at` IS WRITTEN HERE, AND ONLY HERE.
+       *
+       * The withdrawn design wrote it to START a thirty-day clock, which was
+       * wrong: the deployed reader
+       * (`2026-10-08_photo_render_record_fix.sql`) and the picker
+       * (`lib/photos/library.ts`) both treat a non-null value as
+       * "unavailable", so the photograph would have vanished thirty days
+       * early. Written at PURGE time it is simply true — the files are gone —
+       * and it makes every already-deployed reader hide the asset without a
+       * line of new code anywhere.
+       *
+       * The alternative was teaching the picker, the library and the render
+       * reader about `swept_at` one at a time, where the failure mode is
+       * missing one and offering a photographer a photograph that no longer
+       * exists. Reusing the filter that already ships is the smaller risk.
+       */
       let error: { message: string } | null = null
       try {
         const answer = await db
           .from('photo_assets')
-          .update({ swept_at: stamp, sweep_checked_at: stamp })
+          .update({ swept_at: stamp, sweep_checked_at: stamp, deleted_at: stamp })
           .eq('id', asset.id)
           .eq('tenant_id', tenantId)
         error = answer.error
@@ -589,39 +613,37 @@ export async function sweep(
 
     if (dryRun) continue
 
+    /*
+     * Each write is wrapped in its own async function rather than pushed as a
+     * builder. A PostgREST builder is a THENABLE, not a Promise — pushing one
+     * into an `Array<Promise<…>>` is TS2345, which is what Codex's typecheck
+     * caught — and awaiting it in here also gives each write its own catch, so
+     * `Promise.all` cannot reject and one failed group cannot lose the others.
+     */
+    const write = (patch: Record<string, unknown>, ids: string[]) =>
+      (async (): Promise<{ error: { message: string } | null }> => {
+        try {
+          const { error } = await db
+            .from('photo_assets')
+            .update(patch)
+            .eq('tenant_id', tenantId)
+            .in('id', ids)
+          return { error: error ? { message: error.message } : null }
+        } catch (e) {
+          return { error: { message: e instanceof Error ? e.message : 'a bookkeeping write failed' } }
+        }
+      })()
+
     const writes: Array<Promise<{ error: { message: string } | null }>> = []
-    if (checkedOnly.length > 0) {
-      writes.push(
-        db.from('photo_assets').update({ sweep_checked_at: stamp }).eq('tenant_id', tenantId).in('id', checkedOnly)
-      )
-    }
+    if (checkedOnly.length > 0) writes.push(write({ sweep_checked_at: stamp }, checkedOnly))
     if (startClock.length > 0) {
-      writes.push(
-        db
-          .from('photo_assets')
-          .update({ unreferenced_since: stamp, sweep_checked_at: stamp })
-          .eq('tenant_id', tenantId)
-          .in('id', startClock)
-      )
+      writes.push(write({ unreferenced_since: stamp, sweep_checked_at: stamp }, startClock))
     }
     if (clearClock.length > 0) {
-      writes.push(
-        db
-          .from('photo_assets')
-          .update({ unreferenced_since: null, sweep_checked_at: stamp })
-          .eq('tenant_id', tenantId)
-          .in('id', clearClock)
-      )
+      writes.push(write({ unreferenced_since: null, sweep_checked_at: stamp }, clearClock))
     }
 
-    let settled: Array<{ error: { message: string } | null }> = []
-    try {
-      settled = await Promise.all(writes)
-    } catch (e) {
-      settled = [{ error: { message: e instanceof Error ? e.message : 'a bookkeeping write failed' } }]
-    }
-
-    for (const done of settled) {
+    for (const done of await Promise.all(writes)) {
       if (done.error) {
         // The examination stands; only the bookkeeping failed. Those assets
         // keep their old `sweep_checked_at`, so the next run looks at them

@@ -118,7 +118,14 @@ create index if not exists photo_assets_sweep_queue
 --
 --   select on photo_assets   to find candidates and read their file paths
 --   select on photo_usages   the extra veto (never a permission on its own)
---   update on photo_assets   THREE COLUMNS ONLY
+--   update on photo_assets   FOUR COLUMNS ONLY
+--
+-- The fourth is `deleted_at`, and it is written at the moment of a purge and
+-- nowhere else. It already means "unavailable" to the deployed reader and the
+-- picker, which after a purge is simply true — and reusing that filter is why
+-- a purged asset stops being offered without touching the reader, the picker
+-- or the library. Writing it while a clock merely runs is the withdrawn design
+-- and `.mk/sweep.ts` asserts it cannot come back.
 --
 -- Column-level UPDATE rather than table-level is the whole point. The
 -- sweeper's job is to write three timestamps; granting it the table would also
@@ -146,7 +153,7 @@ grant select on table public.photo_usages to authenticated;
 
 grant select on table public.photo_assets to service_role;
 grant select on table public.photo_usages to service_role;
-grant update (unreferenced_since, sweep_checked_at, swept_at)
+grant update (unreferenced_since, sweep_checked_at, swept_at, deleted_at)
   on table public.photo_assets to service_role;
 
 -- ── 4. Prove it landed ─────────────────────────────────────────────────────
@@ -178,7 +185,7 @@ declare
   wrong    text := '';
 begin
   select array_agg(x order by x) into expected
-  from unnest(array['unreferenced_since', 'sweep_checked_at', 'swept_at']) x;
+  from unnest(array['unreferenced_since', 'sweep_checked_at', 'swept_at', 'deleted_at']) x;
 
   -- ── service_role: UPDATE on exactly those three columns, and no others ──
   select coalesce(array_agg(c.column_name order by c.column_name), '{}'::text[])

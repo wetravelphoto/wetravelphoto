@@ -208,19 +208,32 @@ export async function candidateAssets(
   db: SweepDb,
   { limit = SWEEP_ASSETS }: { limit?: number } = {}
 ): Promise<{ ok: true; assets: SweepAsset[] } | { ok: false; reason: string }> {
-  const { data, error } = await db
-    .from('photo_assets')
-    .select('id, tenant_id, key_base, display_path, original_path, derivatives, unreferenced_since')
-    .is('swept_at', null)
-    .order('sweep_checked_at', { nullsFirst: true })
-    .order('unreferenced_since', { nullsFirst: true })
-    .limit(limit)
+  /*
+   * WRAPPED. supabase-js resolves `{ data, error }` for a query error and
+   * REJECTS on a network failure, an aborted fetch or an unparseable
+   * response. An exception here would abort the whole run instead of
+   * producing the report this function promises — the same defect Codex
+   * found in the withdrawn marking module, in a second place.
+   */
+  let rows: unknown[]
+  try {
+    const { data, error } = await db
+      .from('photo_assets')
+      .select('id, tenant_id, key_base, display_path, original_path, derivatives, unreferenced_since')
+      .is('swept_at', null)
+      .order('sweep_checked_at', { nullsFirst: true })
+      .order('unreferenced_since', { nullsFirst: true })
+      .limit(limit)
 
-  if (error) return { ok: false, reason: error.message }
-  if (!Array.isArray(data)) return { ok: false, reason: 'The candidate read did not return rows.' }
+    if (error) return { ok: false, reason: error.message }
+    if (!Array.isArray(data)) return { ok: false, reason: 'The candidate read did not return rows.' }
+    rows = data
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : 'The candidate read failed.' }
+  }
 
   const assets: SweepAsset[] = []
-  for (const row of data) {
+  for (const row of rows) {
     if (!isRecord(row)) return { ok: false, reason: 'A candidate row was not an object.' }
     // No policy narrowed this read, so the row's own site is the authority and
     // it has to look like one.
@@ -333,13 +346,18 @@ export function graceElapsed(unreferencedSince: string | null, now: Date, graceD
  * stop. Null means the question could not be answered, which is also a stop.
  */
 export async function usageCount(db: SweepDb, tenantId: string, assetId: string): Promise<number | null> {
-  const { count, error } = await db
-    .from('photo_usages')
-    .select('*', { count: 'exact', head: true })
-    .eq('tenant_id', tenantId)
-    .eq('asset_id', assetId)
-  if (error || typeof count !== 'number') return null
-  return count
+  try {
+    const { count, error } = await db
+      .from('photo_usages')
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('asset_id', assetId)
+    if (error || typeof count !== 'number') return null
+    return count
+  } catch {
+    // Unanswerable is a stop, and a thrown read is unanswerable.
+    return null
+  }
 }
 
 // ── The run ────────────────────────────────────────────────────────────────
@@ -440,7 +458,22 @@ export async function sweep(
       break
     }
 
-    const evidence = await readSweepEvidence(db, tenantId)
+    /*
+     * `readSource` catches its own rejections and reports the source as
+     * incomplete, so this cannot normally throw — wrapped anyway, because
+     * a run that aborts here would skip every remaining site.
+     */
+    let evidence: SweepEvidence
+    try {
+      evidence = await readSweepEvidence(db, tenantId)
+    } catch (e) {
+      report.notes.push({
+        assetId: '-',
+        outcome: 'kept_evidence_incomplete',
+        detail: `${tenantId}: ${e instanceof Error ? e.message : 'the evidence read failed'}`,
+      })
+      continue
+    }
 
     // Grouped writes for the three cases that only change timestamps.
     const checkedOnly: string[] = []
@@ -530,11 +563,17 @@ export async function sweep(
         continue
       }
 
-      const { error } = await db
-        .from('photo_assets')
-        .update({ swept_at: stamp, sweep_checked_at: stamp })
-        .eq('id', asset.id)
-        .eq('tenant_id', tenantId)
+      let error: { message: string } | null = null
+      try {
+        const answer = await db
+          .from('photo_assets')
+          .update({ swept_at: stamp, sweep_checked_at: stamp })
+          .eq('id', asset.id)
+          .eq('tenant_id', tenantId)
+        error = answer.error
+      } catch (e) {
+        error = { message: e instanceof Error ? e.message : 'the purge marker could not be written' }
+      }
 
       if (error) {
         // The files are gone and the row does not say so. A later run deletes
@@ -575,7 +614,14 @@ export async function sweep(
       )
     }
 
-    for (const done of await Promise.all(writes)) {
+    let settled: Array<{ error: { message: string } | null }> = []
+    try {
+      settled = await Promise.all(writes)
+    } catch (e) {
+      settled = [{ error: { message: e instanceof Error ? e.message : 'a bookkeeping write failed' } }]
+    }
+
+    for (const done of settled) {
       if (done.error) {
         // The examination stands; only the bookkeeping failed. Those assets
         // keep their old `sweep_checked_at`, so the next run looks at them

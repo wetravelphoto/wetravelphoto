@@ -16,7 +16,16 @@ import {
   type SweepEvidence,
 } from '../lib/photos/sweep'
 import { SOURCES, HISTORY_SOURCES } from '../lib/photos/deletion'
-import { main, parseArgs, runSweep } from '../lib/photos/sweep-cli'
+/*
+ * `main` is ALIASED and this file's own entry point is `runSuite`.
+ *
+ * The first version imported `main` into a file that already declared
+ * `async function main()`. The local declaration won, so the CLI test called
+ * the suite, which called the CLI test, until the stack gave out — and the
+ * delivered suite could not be run at all. Codex found it by having to build
+ * a corrected harness to review anything.
+ */
+import { main as cliMain, parseArgs, runSweep } from '../lib/photos/sweep-cli'
 import type { PhotoStorage } from '../lib/photos/storage'
 
 /**
@@ -305,7 +314,7 @@ const ok = (name: string, good: boolean, detail?: unknown) => {
   else fail.push(detail === undefined ? name : `${name} — ${JSON.stringify(detail)}`)
 }
 
-async function main() {
+async function runSuite() {
   // ── 1. The source never writes a column somebody else reads ─────────────
   //
   // `deleted_at` is a VISIBILITY verdict in the deployed reader, and
@@ -723,6 +732,8 @@ async function main() {
       [['--dry-run', '--grace', 'soon'], 'a word where a number belongs'],
       [['--dry-run', '--max', '-5'], 'a negative count'],
       [['--sweep-everything'], 'an unknown argument'],
+      [['--apply', '--grace', '1'], 'applying with a one-day grace period'],
+      [['--apply', '--grace', String(GRACE_DAYS - 1)], 'applying one day under the floor'],
     ] as const
     for (const [argv, why] of bad) {
       ok(`cli: refuses ${why}`, parseArgs([...argv]).ok === false, parseArgs([...argv]))
@@ -732,12 +743,21 @@ async function main() {
     ok('cli: --dry-run alone is enough', dry.ok === true && dry.command.dryRun === true)
     ok('cli: defaults come from the sweeper, not the command', dry.ok === true && dry.command.graceDays === GRACE_DAYS)
 
-    const applied = parseArgs(['--apply', '--grace', '7', '--max', '3', '--budget', '1000'])
+    // A SHORT window is fine for a dry run, which deletes nothing, and refused
+    // for --apply. A LONGER one is always fine: more waiting is never the
+    // dangerous direction.
+    const shortDry = parseArgs(['--dry-run', '--grace', '7'])
+    ok('cli: --dry-run accepts a short grace period', shortDry.ok === true && shortDry.command.graceDays === 7)
+
+    const longApply = parseArgs(['--apply', '--grace', String(GRACE_DAYS + 30)])
+    ok('cli: --apply accepts a longer grace period', longApply.ok === true)
+
+    const applied = parseArgs(['--apply', '--grace', String(GRACE_DAYS), '--max', '3', '--budget', '1000'])
     ok(
       'cli: --apply with options parses',
       applied.ok === true &&
         applied.command.dryRun === false &&
-        applied.command.graceDays === 7 &&
+        applied.command.graceDays === GRACE_DAYS &&
         applied.command.maxAssets === 3 &&
         applied.command.budgetMs === 1000,
       applied
@@ -745,7 +765,16 @@ async function main() {
 
     // A failure outcome must exit non-zero; a decision must not.
     const lines: string[] = []
-    const base = { examined: 1, purged: 0, filesDeleted: 0, clocksStarted: 0, clocksCleared: 0, outOfTime: false, notes: [] }
+    const base = {
+      examined: 1,
+      purged: 0,
+      filesDeleted: 0,
+      clocksStarted: 0,
+      clocksCleared: 0,
+      outOfTime: false,
+      runErrors: [],
+      notes: [],
+    }
     const failing = await runSweep(
       { dryRun: false, graceDays: 30, maxAssets: 10, budgetMs: 1000 },
       { sweep: async () => ({ ...base, outcomes: { kept_storage_failed: 1 } }), out: (l) => lines.push(l) }
@@ -758,6 +787,25 @@ async function main() {
     )
     ok('cli: an asset kept because it is referenced exits 0', decided === 0)
 
+    /*
+     * A RUN that failed examines no asset, so it increments no outcome
+     * counter. The first version computed the exit code from those counters
+     * alone and reported success for a sweep that did nothing whatsoever.
+     */
+    const ranNothing = await runSweep(
+      { dryRun: false, graceDays: 30, maxAssets: 10, budgetMs: 1000 },
+      {
+        sweep: async () => ({
+          ...base,
+          examined: 0,
+          outcomes: {},
+          runErrors: ['the candidate read failed: permission denied'],
+        }),
+        out: () => {},
+      }
+    )
+    ok('cli: a failed candidate read exits 1, not 0', ranNothing === 1)
+
     const threw = await runSweep(
       { dryRun: true, graceDays: 30, maxAssets: 10, budgetMs: 1000 },
       {
@@ -769,10 +817,21 @@ async function main() {
     )
     ok('cli: a thrown sweep is reported, not propagated', threw === 1)
 
-    const started = await main(['--nonsense'], () => {
+    const started = await cliMain(['--nonsense'], () => {
       throw new Error('deps must not be built for a bad command')
     }, () => {})
     ok('cli: a bad command exits 2 and never builds the dependencies', started === 2)
+  }
+
+  // ── 20. A failed run says so in a field, not only in prose ─────────────
+  {
+    const db = new FakeDb()
+    db.fail = { table: 'photo_assets', op: 'select', mode: 'error' }
+    const { storage } = fakeStorage()
+    const r = await sweep(db as unknown as SweepDb, storage, { now: new Date() })
+    ok('run failure: examined nothing', r.examined === 0)
+    ok('run failure: recorded in runErrors', r.runErrors.length === 1, r.runErrors)
+    ok('run failure: no outcome was invented for it', Object.keys(r.outcomes).length === 0, r.outcomes)
   }
 
   console.log(`sweep: ${pass} passed, ${fail.length} failed`)
@@ -844,12 +903,24 @@ const MUTATIONS: Array<{ change: string; expect: string }> = [
     expect: 'cli: a bucket refusal exits 1',
   },
   {
+    change: 'In sweep-cli report(), ignore runErrors when computing the exit code.',
+    expect: 'cli: a failed candidate read exits 1, not 0',
+  },
+  {
+    change: 'In sweep-cli parseArgs, remove the --apply grace floor.',
+    expect: 'cli: refuses applying with a one-day grace period',
+  },
+  {
+    change: 'In sweep(), push the candidate-read failure to notes instead of runErrors.',
+    expect: 'run failure: recorded in runErrors',
+  },
+  {
     change: 'In sweep, honour dryRun for storage but still write sweep_checked_at.',
     expect: 'dry run: writes nothing',
   },
 ]
 
-main().catch((e) => {
+runSuite().catch((e) => {
   console.log(`FAIL the suite stopped: ${e instanceof Error ? e.stack : String(e)}`)
   process.exit(1)
 })

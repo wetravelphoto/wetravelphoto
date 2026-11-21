@@ -25,11 +25,20 @@ import { GRACE_DAYS, SWEEP_ASSETS, SWEEP_BUDGET_MS, sweep, type SweepDb, type Sw
  * And it makes the sweeper USABLE while natural cron execution is still
  * unconfirmed. That was an open coverage gap from the October 21 release and
  * the sweeper's whole value sits on top of the drain firing. With this, the
- * feature works whether or not it does — and, once deployed, the drain
- * answers the cron question for free, because every examined asset gets a
- * `sweep_checked_at` and
- * `select count(*) from photo_assets where sweep_checked_at is not null`
- * settles it with no monitor and no job invocation.
+ * feature works whether or not it does.
+ *
+ * ── AND A CAVEAT ABOUT USING IT AS A CRON PROBE ─────────────────────────────
+ *
+ * It was claimed that, once deployed, `select count(*) from photo_assets where
+ * sweep_checked_at is not null` would settle the cron question for free. That
+ * is only true while NOTHING ELSE writes that column — and this command writes
+ * it, on every `--apply` run. So a non-null `sweep_checked_at` proves that
+ * SOMETHING swept, not that the drain did.
+ *
+ * To use it as a cron probe, either run this CLI only with `--dry-run` (which
+ * writes nothing at all) or record when you ran it and exclude that window.
+ * Codex raised this; it is written here rather than in a report because the
+ * claim will be repeated by whoever reads the column next.
  *
  * ── THERE IS NO DEFAULT MODE, ON PURPOSE ────────────────────────────────────
  *
@@ -72,10 +81,19 @@ const positive = (raw: string) => {
 /**
  * Pure. Exactly one of `--dry-run` or `--apply`; never a default.
  *
- * `--grace 0` is refused rather than normalised: a zero grace period turns the
- * two-observation rule into one and purges a file the moment it is first seen
- * unreferenced, which is the behaviour the thirty days exist to prevent. If
- * that is ever wanted it should be a deliberate, named flag.
+ * ── THE GRACE FLOOR ─────────────────────────────────────────────────────────
+ *
+ * An earlier version refused `--grace 0` and stopped thinking, which left
+ * `--apply --grace 1` accepted: a one-day window defeats the thirty-day rule
+ * just as completely as a zero-day one, and that is the whole protection
+ * against a file being purged before anybody notices it was wanted. Codex
+ * caught it.
+ *
+ * So the floor is the design's own `GRACE_DAYS`, and it applies **only to
+ * `--apply`**. `--dry-run` may take any positive number, because it deletes
+ * nothing and "what would be due if the window were seven days?" is a
+ * legitimate question to ask of a report. A longer-than-default grace is
+ * always allowed: more waiting is never the dangerous direction.
  */
 export function parseArgs(argv: readonly string[]): Parsed {
   let dryRun: boolean | null = null
@@ -107,6 +125,16 @@ export function parseArgs(argv: readonly string[]): Parsed {
     return { ok: false, error: `Unknown argument "${arg}".` }
   }
 
+  if (dryRun === false && graceDays < GRACE_DAYS) {
+    return {
+      ok: false,
+      error:
+        `--apply will not accept a grace period under ${GRACE_DAYS} days (you gave ${graceDays}). ` +
+        `An asset must be seen unreferenced twice, ${GRACE_DAYS} days apart, before its files go. ` +
+        `Use --dry-run with a shorter window to see what WOULD be due.`,
+    }
+  }
+
   if (dryRun === null) {
     return { ok: false, error: 'Give --dry-run or --apply. There is no default, because this one deletes files.' }
   }
@@ -131,6 +159,17 @@ const FAILURES = [
   'kept_evidence_incomplete',
 ] as const
 
+/*
+ * AND `report.runErrors`, which is the other half.
+ *
+ * These counters are per-examined-asset. A failure of the RUN — the candidate
+ * read, a site's evidence read, a batched bookkeeping write — examines no
+ * asset, so it increments none of them. The first version computed the exit
+ * code from these counters alone, which meant a total candidate-read failure
+ * printed "examined 0" and exited 0: a sweep that did nothing at all,
+ * reporting success. Codex found it.
+ */
+
 export function report(r: SweepReport, dryRun: boolean, out: (line: string) => void): number {
   out(
     `${dryRun ? 'dry run' : 'applied'}  examined ${r.examined}  purged ${r.purged}  ` +
@@ -151,9 +190,14 @@ export function report(r: SweepReport, dryRun: boolean, out: (line: string) => v
   }
   if (r.notes.length > shown.length) out(`  · … and ${r.notes.length - shown.length} more`)
 
+  for (const problem of r.runErrors) out(`  ! ${problem}`)
+
   const failures = FAILURES.reduce((sum, key) => sum + (r.outcomes[key] ?? 0), 0)
   if (failures > 0) out(`${failures} asset(s) were held back by a failure rather than by a decision.`)
-  return failures > 0 ? 1 : 0
+  if (r.runErrors.length > 0) {
+    out(`${r.runErrors.length} failure(s) of the run itself — this sweep did not do what it was asked.`)
+  }
+  return failures > 0 || r.runErrors.length > 0 ? 1 : 0
 }
 
 /** Runs a parsed command. Returns the exit code. */

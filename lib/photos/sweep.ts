@@ -391,6 +391,17 @@ export type SweepReport = {
   /** True when it stopped because it ran out of time rather than work. */
   outOfTime: boolean
   outcomes: Partial<Record<SweepOutcome, number>>
+  /**
+   * FAILURES OF THE RUN ITSELF, not of an asset: the candidate read, a site's
+   * evidence read, a batched bookkeeping write.
+   *
+   * Separate from `outcomes` because those are per-examined-asset and must keep
+   * summing to `examined` — and separate from `notes` because a caller has to
+   * be able to ASK whether anything went wrong without parsing prose. The CLI
+   * exited 0 on a total candidate-read failure for exactly that reason: the
+   * only record of it was a note.
+   */
+  runErrors: string[]
   /** For the log. Never shown to a photographer. */
   notes: { assetId: string; outcome: SweepOutcome; detail?: string }[]
 }
@@ -434,6 +445,7 @@ export async function sweep(
     clocksCleared: 0,
     outOfTime: false,
     outcomes: {},
+    runErrors: [],
     notes: [],
   }
 
@@ -446,7 +458,8 @@ export async function sweep(
 
   const found = await candidateAssets(db, { limit: maxAssets })
   if (!found.ok) {
-    report.notes.push({ assetId: '-', outcome: 'kept_evidence_incomplete', detail: found.reason })
+    // Nothing was examined, so this is not an outcome — it is the run failing.
+    report.runErrors.push(`the candidate read failed: ${found.reason}`)
     return report
   }
 
@@ -474,11 +487,9 @@ export async function sweep(
     try {
       evidence = await readSweepEvidence(db, tenantId)
     } catch (e) {
-      report.notes.push({
-        assetId: '-',
-        outcome: 'kept_evidence_incomplete',
-        detail: `${tenantId}: ${e instanceof Error ? e.message : 'the evidence read failed'}`,
-      })
+      report.runErrors.push(
+        `${tenantId}: the evidence read failed: ${e instanceof Error ? e.message : 'no message'}`
+      )
       continue
     }
 
@@ -648,7 +659,7 @@ export async function sweep(
         // The examination stands; only the bookkeeping failed. Those assets
         // keep their old `sweep_checked_at`, so the next run looks at them
         // first — which is the safe direction for this to fail in.
-        report.notes.push({ assetId: '-', outcome: 'kept_write_failed', detail: done.error.message })
+        report.runErrors.push(`${tenantId}: a bookkeeping write failed: ${done.error.message}`)
       }
     }
   }

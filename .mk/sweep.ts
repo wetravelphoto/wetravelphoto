@@ -346,7 +346,7 @@ async function runSuite() {
    * that cannot tell "nothing is wrong" from "nothing was examined" is not a
    * guard.
    */
-  const updates = [...src.matchAll(/(?:update|write)\(\s*\{[^}]*\}/gs)].map((m) => m[0])
+  const updates = [...src.matchAll(/(?:(?:update|write)\(\s*\{|patch:\s*\{)[^}]*\}/gs)].map((m) => m[0])
   const clockWrites = updates.filter((u) => /\bunreferenced_since\b/.test(u))
   ok('source: the scan actually found the clock writes', clockWrites.length >= 2, clockWrites.length)
   ok('source: the scan actually found the purge write', updates.some((u) => /\bswept_at\b/.test(u)))
@@ -823,6 +823,39 @@ async function runSuite() {
     ok('cli: a bad command exits 2 and never builds the dependencies', started === 2)
   }
 
+  // ── 19b. A FAILED BOOKKEEPING WRITE — Codex's surviving mutation ───────
+  //
+  // Nothing was due, so no purge write happens and the only write is the
+  // batched one. It fails. The run must say so, and must NOT claim it started
+  // a clock it did not write.
+  {
+    const db = new FakeDb()
+    seedEvidence(db, TENANT)
+    const a = seedAsset(db, TENANT) // unreferenced, no clock yet → startClock
+    db.fail = { table: 'photo_assets', op: 'update', mode: 'error' }
+    const { storage, removed } = fakeStorage()
+
+    const r = await sweep(db as unknown as SweepDb, storage, { now: new Date() })
+    const row = db.of('photo_assets').find((x) => x.id === a.id)!
+
+    ok('bookkeeping failure: recorded in runErrors', r.runErrors.length === 1, r.runErrors)
+    ok('bookkeeping failure: the clock was not actually written', row.unreferenced_since === null, row)
+    ok('bookkeeping failure: no clock is claimed as started', r.clocksStarted === 0, r.clocksStarted)
+    ok('bookkeeping failure: the decision is still reported', (r.outcomes.clock_started ?? 0) === 1, r.outcomes)
+    ok('bookkeeping failure: nothing was deleted', removed.length === 0)
+  }
+
+  // ── 19c. A clock the write DID land is counted ─────────────────────────
+  {
+    const db = new FakeDb()
+    seedEvidence(db, TENANT)
+    seedAsset(db, TENANT)
+    const { storage } = fakeStorage()
+    const r = await sweep(db as unknown as SweepDb, storage, { now: new Date() })
+    ok('bookkeeping success: the clock is counted', r.clocksStarted === 1, r.clocksStarted)
+    ok('bookkeeping success: no run errors', r.runErrors.length === 0, r.runErrors)
+  }
+
   // ── 20. A failed run says so in a field, not only in prose ─────────────
   {
     const db = new FakeDb()
@@ -913,6 +946,14 @@ const MUTATIONS: Array<{ change: string; expect: string }> = [
   {
     change: 'In sweep(), push the candidate-read failure to notes instead of runErrors.',
     expect: 'run failure: recorded in runErrors',
+  },
+  {
+    change: 'In sweep(), ignore answer.error on the batched bookkeeping writes.',
+    expect: 'bookkeeping failure: recorded in runErrors',
+  },
+  {
+    change: 'In sweep(), count clocksStarted/clocksCleared in the per-asset loop again, before the write.',
+    expect: 'bookkeeping failure: no clock is claimed as started',
   },
   {
     change: 'In sweep, honour dryRun for storage but still write sweep_checked_at.',

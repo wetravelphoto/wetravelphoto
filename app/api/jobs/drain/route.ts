@@ -49,6 +49,27 @@ export const dynamic = 'force-dynamic'
  */
 export const maxDuration = 300
 
+/*
+ * A sweep's `runErrors` are failures of the RUN — the candidate read, a site's
+ * evidence read, a batched bookkeeping write — and they increment none of the
+ * per-asset counters. Left out of the log and the response, a sweep that did
+ * nothing at all reads "examined 0", exactly the shape the CLI once reported
+ * as success. The total is always given; the detail is bounded, in count and
+ * in length, because a message comes from a database or a network error and
+ * its size is not ours to choose.
+ */
+const RUN_ERRORS_SHOWN = 10
+const RUN_ERROR_CHARS = 300
+
+function runErrorSummary(errors: string[]) {
+  return {
+    total: errors.length,
+    detail: errors
+      .slice(0, RUN_ERRORS_SHOWN)
+      .map((e) => (e.length > RUN_ERROR_CHARS ? `${e.slice(0, RUN_ERROR_CHARS)}…` : e)),
+  }
+}
+
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
@@ -87,8 +108,13 @@ export async function GET(request: NextRequest) {
   const sweepBudget = Math.max(0, Math.min(SWEEP_BUDGET_MS, left))
 
   let swept = null
+  let runErrors = null
   if (sweepBudget >= 5_000) {
     swept = await sweep(db, r2Storage, { budgetMs: sweepBudget })
+    runErrors = runErrorSummary(swept.runErrors)
+    if (runErrors.total > 0) {
+      console.error('[p6] sweep run failed', runErrors)
+    }
     if (swept.notes.length > 0) {
       console.error('[p6] sweep did not purge', swept.notes.slice(0, 20))
     }
@@ -106,6 +132,7 @@ export async function GET(request: NextRequest) {
       clocksCleared: swept.clocksCleared,
       outOfTime: swept.outOfTime,
       outcomes: swept.outcomes,
+      runErrors: runErrors.total,
     })
   }
 
@@ -123,6 +150,7 @@ export async function GET(request: NextRequest) {
           clocksCleared: swept.clocksCleared,
           outOfTime: swept.outOfTime,
           outcomes: swept.outcomes,
+          runErrors,
         }
       : { skipped: 'no budget left after the queue' },
   })

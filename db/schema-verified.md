@@ -23,10 +23,11 @@ The full picture is in **`db/schema-2026-09.sql`**, transcribed from
 policies**, **9 functions**, one trigger (`site_draft_touch` on `site_draft`),
 and no trigger anywhere else.
 
-*That was the survey. After S3, S4, P1, the S3 tenant-guard hotfix, P2, P3
-and P4, production is **37 tables, 549 columns, 30 functions, 56 policies,
-157 constraints, 101 indexes**, RLS on all 37 — see the deployment sections
-below, the latest of which is P4 (2026-10-05 / 2026-10-06).*
+*That was the survey. After S3, S4, P1, the S3 tenant-guard hotfix, P2, P3,
+P4, P5 and the P6 sweeper migration, production is **37 tables, 553
+columns, 32 functions, 56 policies, 158 constraints, 102 indexes**, RLS on
+all 37. Codex directly surveyed these totals on 2026-11-21; see the deployment
+sections below for the migration details.*
 
 *The policy figure was first written here as 53, which was a counting error in
 the transcription rather than anything about the database. Corrected 2026-09-29
@@ -603,6 +604,222 @@ already recorded for the queue's three indexes.
 
 ---
 
+## 2026-11-21 — P6, the sweeper's lifecycle columns and grants, DEPLOYED TO PRODUCTION
+
+One migration, reviewed by Work and applied once by Codex with Gonzalo's explicit approval, from the
+hash-verified file, which has not been edited since — its bytes are the
+deployment's identity:
+
+| | Supabase version | file | sha256 |
+|---|---|---|---|
+| P6 | `20261121173616` | `db/migrations/2026-11-03_photo_sweeper.sql` | `0acfb119ef1d143f8fbe4d8c41657601e592eb18c1e4caff24324ee8d5b508e9` |
+
+Gate `P6-20261104-four-column-migration-02`, Work review recorded in
+`REVIEW.md`. Migration only: **no application was deployed, and no sweep,
+dry run or storage deletion was run.**
+
+**Source of every production fact below:** Codex's postflight, and a separate
+read-only re-read of production by Codex for this reconciliation — both
+relayed 2026-11-21. **Claude Code did not read production**; the "measured
+locally" facts further down are loopback rehearsal only.
+
+### Production, as Work and Codex recorded it
+
+| | |
+|---|---|
+| history | the migration applied once; postflight passed |
+| `photo_assets` columns | `unreferenced_since timestamptz NULL`, `sweep_checked_at timestamptz NULL`, `swept_at timestamptz NULL` — **no defaults**; added by ALTER TABLE, so the table's last three columns |
+| constraint | `photo_assets_swept_after_unreferenced CHECK (swept_at IS NULL OR unreferenced_since IS NOT NULL)` |
+| index | `photo_assets_sweep_queue ON public.photo_assets (sweep_checked_at NULLS FIRST, unreferenced_since) WHERE swept_at IS NULL` |
+| `service_role` | SELECT on `photo_assets` and `photo_usages`; column-level UPDATE on **exactly four** `photo_assets` columns — `deleted_at`, `unreferenced_since`, `sweep_checked_at`, `swept_at` |
+| `authenticated` | SELECT only on both tables — unchanged |
+| everything else | existing row fingerprints, policies and prior schema objects unchanged |
+| data | 74 photo assets · 105 usages · every new lifecycle field NULL · **0** deleted · **0** originals purged |
+
+**Totals**, directly surveyed by Codex on 2026-11-21: 37 tables · **553** columns (550 + 3)
+· 32 functions · 56 policies · **158** constraints (157 + 1) · **102** indexes
+(101 + 1), RLS on all 37 — the P5 figures plus this migration's additions,
+reproduced exactly by the reconciled fixture (below).
+
+### Measured locally, 2026-11-21 (Postgres 16.15, loopback only)
+
+- **Equivalence.** The fixture as it stood before this reconciliation, plus
+  the deployed migration, compared against the reconciled fixture: **77
+  catalog facts identical** — every `photo_assets` column by rank, type,
+  nullability and default; its constraints; its indexes; table and column
+  privileges on both tables for `anon`, `authenticated`, `service_role` and
+  PUBLIC.
+- **Idempotence.** The migration applied twice onto the old fixture, and once
+  onto the reconciled one, is a no-op each repeat — and its embedded
+  exhaustive privilege assertion passes every time, which it cannot do if
+  `service_role` holds one column too many or too few.
+- **The drift guard.** `scripts/fixture-matches-migration.sh` now replays this
+  migration last, after the P5-R1 correction; **all nine tables ok**, 2,128
+  facts for `photo_assets`. The Node runner used on Windows,
+  `scripts/fixture-matches-migration.mjs`, reads its steps from the shell file
+  and reports the same nine — its step trace ends at
+  `db/migrations/2026-11-03_photo_sweeper.sql`.
+- **Shown to bite.** Each of these turned the guard red and was reverted:
+  leaving the migration out of the replay (drift on `photo_assets` AND
+  `photo_usages`); declaring the three columns beside `original_purged_at`
+  instead of last (drift on rank — production added them with ALTER TABLE);
+  and granting `service_role` UPDATE on three columns, omitting `deleted_at`.
+
+### Why `deleted_at` is in the grant
+
+`deleted_at` already means "unavailable" to the deployed render reader and the
+picker. The sweeper writes it **only at purge time**, alongside `swept_at`,
+when the asset's files are genuinely gone — so the filters that already ship
+stop offering a photograph that no longer exists, without teaching each reader
+about `swept_at`. Writing it while a clock merely runs was the withdrawn first
+design, and it would have hidden photographs thirty days early;
+`.mk/sweep.ts` asserts it cannot come back.
+
+**Not tested in production, deliberately:** no sweep, no dry run, no row
+written. The sweeper application is code-complete and awaiting its own
+release review; until it ships, these columns exist and nothing writes them,
+which is the safe order (deployment rule 5).
+
+---
+
+## 2026-10-08 — P5, the album access revision and the render read, DEPLOYED TO PRODUCTION
+
+Three migrations, each applied once by Work (ChatGPT) with Gonzalo's
+explicit approval, from the hash-verified files, which have not been edited
+since — their bytes are the deployments' identity, and the "CANDIDATE — NOT
+DEPLOYED" headers inside them are historical:
+
+| | Supabase version | name | file | sha256 |
+|---|---|---|---|---|
+| F1 | `20261008154244` | `album_access_revision_p5_f1_2026_10_08` | `db/migrations/2026-10-08_album_access_revision.sql` | `78d283589a2f151931c804aeca411419b355f369cc356aa19c9df35148d7ccec` |
+| render read | `20261008154343` | `photo_render_read_p5_2026_10_07` | `db/migrations/2026-10-07_photo_render_read.sql` | `fa2e0594e12299338f00ad017b346b1fb6b424b9b7b8d73ebf15d423b8d7128b` |
+| P5-R1 | `20261008180722` | `photo_render_record_fix_p5_r1_2026_10_08` | `db/migrations/2026-10-08_photo_render_record_fix.sql` | `736c9a0b9e934b91fa11f6c939d256504715ce4255d8f701c7f4920324ad3bca` |
+
+**Source of every production fact below: Work's records**,
+`.ai-handoff/p5-f1-production-deployment-20261008.md` / `.json` (the first
+two, final observation 15:52:17 UTC, gate
+`P5-20261008-album-grant-security-migration-02`, BLOCKED by P5-R1) and
+`.ai-handoff/p5-r1-production-deployment-20261008.md` / `.json` (the third,
+final observation 18:10:42 UTC, gate `P5-20261008-render-cold-session-fix-01`,
+DEPLOYED_VERIFIED). **Neither Claude Code nor Codex read production for this
+reconciliation**; the "measured locally" facts further down are loopback
+rehearsal only.
+
+### Production, as Work recorded it
+
+| | |
+|---|---|
+| history | 12 entries; each P5 version exactly once; the earlier nine unchanged |
+| totals | 37 tables · **32** public functions (30 + `albums_access_revision` + `read_photo_render_assets`; `sync_photo_usages` replaced) · 56 policies · table owners/RLS, constraints and indexes unchanged |
+| `albums.access_revision` | `uuid NOT NULL DEFAULT gen_random_uuid()`, no column ACL, albums' 48th (last) column; all 8 albums distinct and non-null, unchanged after initialisation (revision fingerprint `f28c6663…`) |
+| `albums_access_revision()` | plpgsql, SECURITY INVOKER, VOLATILE, `search_path=""`, owner postgres, ACL `{postgres=X/postgres}` only |
+| trigger | `CREATE TRIGGER albums_access_revision BEFORE INSERT OR UPDATE ON public.albums FOR EACH ROW EXECUTE FUNCTION albums_access_revision()`, tgtype 23, enabled `O` |
+| `albums` ACL | before F1 `anon/authenticated/service_role=arwdDxtm`; after `arwdDxm` — TRIGGER (`t`) removed and nothing else; no PUBLIC entry either side. No application role can create an album trigger or execute the trigger function |
+| `read_photo_render_assets(uuid, jsonb)` | returns jsonb, plpgsql, STABLE, SECURITY DEFINER, `search_path=""`, owner postgres, ACL `{postgres=X/postgres,service_role=X/postgres}`; prosrc md5 `0f73aec4d8bb7c12b6c10fbabe9bdfb6` from 15:43 to 18:07 UTC, then **`afb20e567041072e63324eb5f13b2940`** (full definition md5 `f3eadc33e3b8283e082fa67bc25addbd`) — the R1 correction changed that one expression and nothing else in any of the 32 functions |
+| `sync_photo_usages(uuid, text, text, text, jsonb)` | replaced by the render read's §2; DEFINER, VOLATILE, `search_path=""`, ACL unchanged (postgres + service_role); prosrc md5 `74102d2413a429873f9c8ea52706a8d5`, unchanged by the correction |
+| data | 8 albums · 83 photos (71 linked, 12 unlinked samples) · 74 assets · 102 usages · 0 `site_images`; ten content fingerprints unchanged by all three migrations (albums compared without the new column) |
+| smoke | anon/authenticated refused by the ACL (42501); a bare owner by the reader's role check; seven malformed/oversize/null-tenant requests 22023; all 74 assets read under their own site, all 74 cross-site references `missing`; **after the correction**, ten genuinely fresh-backend scenarios (invalid, invalid path, missing, foreign id/path, mismatch-then-valid, negative-then-valid, valid-then-negative, empty, valid) and a warmed control all exact — the 55000 of P5-R1 gone. All READ ONLY, rolled back |
+| advisors | the same 19 pre-existing WARN findings, none new |
+
+**P5-R1 (resolved).** The render read as first deployed named `v_a.id` — a
+field of an untyped record no lookup had assigned yet — in its result line, so
+a backend's first call that began with an invalid, missing, foreign,
+mismatched or ambiguous reference raised 55000 `record "v_a" is not assigned
+yet`. `20261008180722` replaced that expression with `v_asset`; production
+has carried the corrected body since 18:07 UTC.
+
+**Not tested in production, deliberately:** no album was written to watch
+the trigger fire; the trigger's behaviour and the TRIGGER-privilege bypass
+are proved locally (`.mk/album-revision-db.ts`, as the real roles). No
+application and no real `ALBUM_ACCESS_SECRET` is deployed — the database half
+alone changes nothing a visitor sees.
+
+### The reconciliation (local, 2026-10-08, after Work's R1 postflight)
+
+Independently reviewed locally by Codex (schema and snapshot parity, all
+historical stages, the guard and its mutations, the suites). That is a local
+review only: it does not deploy the P5 application or the real
+`ALBUM_ACCESS_SECRET`, accept the visible UI, approve any further scope or
+close P5.
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` carry all three, every
+statement **cut from the deployed files by a script**
+(`.ai-handoff/p5-reconcile-apply.cjs`, which refuses unless the three files
+hash to the deployed values): the revision column as albums' last column,
+the trigger function (the migration's dynamic CREATE written out statically
+with the identical body and attributes), its owner-only ACL, the trigger, the
+TRIGGER revoke placed after the broad table grant, P5's projector in place of
+P3's, the **corrected** reader (never the `v_a.id` body) and the render
+read's grant block. The fixture's seeded albums get random revisions from the
+trigger on every build; no production row or revision is in either file.
+
+**Measured locally (PostgreSQL 17.6, loopback scratch databases):**
+
+- **Against Work's recorded catalogue** (`.ai-handoff/p5-reconcile-catalog-check.mjs`
+  over the JSON records — record-derived, not a production read): all 21
+  photo functions (P2–P5) match production's `prosrc`, `pg_get_functiondef`,
+  ACL, owner and attributes exactly, as do the trigger, the revision column
+  and its position, and the 48 album columns. **That broad check is not
+  green and is not claimed to be:** it reported 140 passed / 32 failed, every
+  failure outside P5 and present before the reconciliation. It compares
+  against the *exported* `prosrc` strings, several of which carry CRLF, so it
+  over-counts body differences. Against Work's **server-computed**
+  `final.functions[].body_md5` (authoritative;
+  `.ai-handoff/p5-reconcile-export-aware.mjs`), **26 of 32** bodies match;
+  five more (`current_tenant_id`, `default_tenant_id`, `is_platform_admin`,
+  `push_draft_step`, `tenant_of`) differ only in the export's line endings.
+  The pre-existing differences, none of them P5's, all left alone
+  (`claude/open-items.md` §13):
+  - **six real server-body differences**: `apply_tenant_policy`,
+    `apply_tenant_policy_via`, `tenant_for_insert` (reconstructed or
+    commentary-less locally), `claim_jobs`, `finish_job` (extra explanatory
+    comments locally) — and `touch_site_draft`, which is a **semantic**
+    difference, not formatting: the fixture sets `updated_at := now()`,
+    production `clock_timestamp()`;
+  - **MAINTAIN**: production grants PostgreSQL 17's MAINTAIN (`m`) to
+    anon/authenticated/service_role on **33** recorded tables, not only
+    `albums`; the fixture's explicit seven-privilege grant predates it. P5's
+    narrowing still removes only TRIGGER from each environment's baseline;
+  - **`push_draft_step`**: production also grants EXECUTE to service_role — a
+    real effective-permission difference;
+  - eight helpers have a NULL `proacl` locally and an explicit list in
+    production (PUBLIC, postgres, anon, authenticated, service_role). Both
+    give PUBLIC EXECUTE, so the effective EXECUTE set is the same; this is a
+    representation difference, not automatically a permission one.
+- **Catalogue identity** (`.ai-handoff/p5-reconcile-stage-proof.mjs`): the
+  reconciled fixture equals the pre-reconciliation fixture plus the three
+  files in production's order — every function definition, ACL and owner,
+  every table's owner, RLS and ACL, every column with its default,
+  nullability and column ACL, constraint, index, policy and trigger.
+- **The drift guard** (`scripts/fixture-matches-migration.sh`, run through
+  `.mjs`) strips P5 first — the reader, the trigger, function and column, and
+  TRIGGER given back as before F1 — and replays P1 → … → unit 2 → the
+  revision → the render read → the correction; albums and the 19 photo
+  functions are compared whole, now with function owners, the table owner,
+  column ACLs and triggers (definition and enablement): 409 `jobs` + 175
+  `page_views` + 2489 photo-table facts. `--mutations` shows it catching 14
+  P5 fixture defects (revision column nullable / without default / with a
+  column grant; trigger disabled / UPDATE-only / missing; TRIGGER not
+  revoked; revision function DEFINER / executable / foreign-owned; the reader
+  back to `v_a.id`, VOLATILE, executable by authenticated; the projector's
+  blank rule changed) and the 7 P4 ones (proof: a green baseline + 21
+  mutants, 22 passed), plus eight parser checks — a green baseline and seven
+  refusals, two of them new for the P5 replays (8 passed).
+- **Historical stages** (`scripts/p4-local-db.mjs`): `pre_r1`,
+  `pre_p5_render`, `pre_p5` — and `pre_unit2`/`pre_p4`, which now strip P5
+  too — each rebuilt from the migration files' own text and proved
+  catalogue-identical to the true historical state. A plain fixture load now
+  refuses a fixture that is not the present.
+
+### Advisors
+
+Not re-run for the reconciliation (it changes no database). Work's last
+record: 19 pre-existing WARN findings — mutable `search_path` 3, anon-callable
+definer 5, authenticated-callable definer 10, leaked-password protection 1 —
+unchanged by all three migrations.
+
+---
+
 ## 2026-10-05 / 2026-10-06 — P4, the legacy backfill and the asset keys, DEPLOYED TO PRODUCTION
 
 Two migrations, each applied once from the reviewed file and verified against
@@ -1015,8 +1232,8 @@ deliberately NOT touched before deployment, when the fixture had no such tables.
 ## 2026-09-29 — two things found while updating these files
 
 Recorded rather than corrected, per the standing rule: show the discrepancy and
-establish which represents production before changing anything. One of the two
-has since been established and is closed; the other stands.
+establish which represents production before changing anything. Both are now
+closed: the policy count on 2026-09-29, the draft suite on 2026-10-12.
 
 ### ~~The policy count does not add up, by one~~ — SETTLED, the prose was wrong
 
@@ -1043,10 +1260,11 @@ somebody had typed, and they turned out to be the reliable ones. A prose figure
 is not evidence; the two possibilities were "the files are wrong" and "the note
 is wrong", and it was the note.
 
-### `db/verify-draft.sql` has been broken since the fixture was regenerated
+### `db/verify-draft.sql` was broken since the fixture was regenerated — HISTORICAL, RESOLVED 2026-10-12
 
-It fails on a clean build, and has done since the S1 regeneration earlier the
-same day — it was simply never in the loop:
+*Historical record, kept as found on 2026-09-29.* It failed on a clean build,
+and had done since the S1 regeneration earlier the same day — it was simply
+never in the loop:
 
 ```
 psql:db/verify-draft.sql:90: ERROR:  duplicate key value violates unique
@@ -1060,6 +1278,27 @@ first insert raises outside any handler and aborts the transaction — taking th
 rest of the file with it. Nothing to do with the queue; `jobs` does not touch
 `site_draft`.
 
-The fix is one line either way — the suite should delete or upsert rather than
-insert blind, or use its own throwaway tenant as the isolation suite does — and
-it is a separate change, not part of the queue's bookkeeping.
+**Resolution, 2026-10-12 (local only; the suite changed, the fixture and the
+schema snapshot did not).** The suite now:
+
+- **clears the seeded row inside its own transaction** — block 1 deletes tenant
+  A's `site_draft` row and checks it is gone before writing its own, so "exactly
+  one draft" is measured from zero; the closing rollback restores the seed;
+- **pins `updated_at` to a known old timestamp** (`2000-01-01 00:00:00+00`) on
+  that insert, so "the trigger moved it later" holds under either trigger body
+  (the fixture's `now()` or production's `clock_timestamp()`) and still fails
+  with no trigger;
+- **measures publish history as a count delta** (after minus before = +1)
+  rather than an absolute count;
+- **adds own-tenant positive controls** — as `authenticated`, still in its own
+  site, the account must read and write its draft (1 row each) — so the
+  cross-site zeros are attributable to the tenant policy rather than to a
+  missing grant or a deny-all policy;
+- **records a privilege refusal or a NULL result as an explicit failure**
+  (`permission denied` / `no row`, and `coalesce(pass, false)` in the count)
+  instead of aborting or passing silently.
+
+It passed **9 of 9**, twice, in independent runs. Six scratch-database
+mutations each failed the assertion expected of it: an open policy, the `updated_at` trigger missing, the `site_draft` primary key
+missing, the `site_template_history` action check missing, the grants
+missing, and a deny-all policy. It is now in the standard SQL run.

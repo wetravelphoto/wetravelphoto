@@ -531,7 +531,6 @@ export async function sweep(
         const why = finding.referencedBy.slice(0, 5).join(', ')
         if (asset.unreferencedSince) {
           clearClock.push(asset.id)
-          report.clocksCleared += 1
           record(asset.id, 'clock_cleared', why)
         } else {
           checkedOnly.push(asset.id)
@@ -543,7 +542,6 @@ export async function sweep(
       // Unreferenced. First sighting starts the clock and purges nothing.
       if (!asset.unreferencedSince) {
         startClock.push(asset.id)
-        report.clocksStarted += 1
         record(asset.id, 'clock_started')
         continue
       }
@@ -645,22 +643,46 @@ export async function sweep(
         }
       })()
 
-    const writes: Array<Promise<{ error: { message: string } | null }>> = []
-    if (checkedOnly.length > 0) writes.push(write({ sweep_checked_at: stamp }, checkedOnly))
+    /*
+     * ── THE COUNTERS ARE EFFECTS, AND THE OUTCOMES ARE DECISIONS ────────────
+     *
+     * `outcomes.clock_started` says what the examination CONCLUDED, so it is
+     * recorded above and keeps summing to `examined`. `report.clocksStarted`
+     * says what actually CHANGED, so it is counted here — only for a group
+     * whose write landed.
+     *
+     * The first version incremented both in the loop, which meant a failed
+     * bookkeeping write reported clocks that were never started: the run told
+     * you it had done something it had not. Same class as the double-count
+     * that broke the outcome sums, and in a dry run it is the same question —
+     * nothing is written, so nothing was started, while the outcomes still
+     * show what WOULD have been.
+     */
+    const groups: Array<{ of: 'checked' | 'start' | 'clear'; ids: string[]; patch: Record<string, unknown> }> = []
+    if (checkedOnly.length > 0) groups.push({ of: 'checked', ids: checkedOnly, patch: { sweep_checked_at: stamp } })
     if (startClock.length > 0) {
-      writes.push(write({ unreferenced_since: stamp, sweep_checked_at: stamp }, startClock))
+      groups.push({ of: 'start', ids: startClock, patch: { unreferenced_since: stamp, sweep_checked_at: stamp } })
     }
     if (clearClock.length > 0) {
-      writes.push(write({ unreferenced_since: null, sweep_checked_at: stamp }, clearClock))
+      groups.push({ of: 'clear', ids: clearClock, patch: { unreferenced_since: null, sweep_checked_at: stamp } })
     }
 
-    for (const done of await Promise.all(writes)) {
-      if (done.error) {
+    const settled = await Promise.all(
+      groups.map((group) => write(group.patch, group.ids).then((answer) => ({ group, answer })))
+    )
+
+    for (const { group, answer } of settled) {
+      if (answer.error) {
         // The examination stands; only the bookkeeping failed. Those assets
         // keep their old `sweep_checked_at`, so the next run looks at them
         // first — which is the safe direction for this to fail in.
-        report.runErrors.push(`${tenantId}: a bookkeeping write failed: ${done.error.message}`)
+        report.runErrors.push(
+          `${tenantId}: a bookkeeping write failed for ${group.ids.length} ${group.of} asset(s): ${answer.error.message}`
+        )
+        continue
       }
+      if (group.of === 'start') report.clocksStarted += group.ids.length
+      if (group.of === 'clear') report.clocksCleared += group.ids.length
     }
   }
 

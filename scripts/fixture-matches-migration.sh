@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ════════════════════════════════════════════════════════════════════════════
-# THE FIXTURE AND THE MIGRATIONS MUST AGREE ABOUT THE QUEUE AND ABOUT ANALYTICS
+# THE FIXTURE AND THE MIGRATIONS MUST AGREE — THE QUEUE, ANALYTICS, P1–P6
 # ════════════════════════════════════════════════════════════════════════════
 #
 # `db/test-fixture.sql` contains `jobs` with its three functions and `page_views`
@@ -135,6 +135,62 @@
 # back to P3's LIMIT 1, a clause missing from photo_backfill_foreign_claim, and
 # the fixture missing unit 2's keys altogether (refused at the strip).
 #
+# ── P5 (deployed 2026-10-08) ────────────────────────────────────────────────
+#
+# Three migrations, in production's order: the album access revision
+# (db/migrations/2026-10-08_album_access_revision.sql, Supabase 20261008154244),
+# the render read (db/migrations/2026-10-07_photo_render_read.sql,
+# 20261008154343) and its P5-R1 correction
+# (db/migrations/2026-10-08_photo_render_record_fix.sql, 20261008180722). The P5
+# strip runs FIRST (newest first): the reader dropped by name; the revision
+# trigger, function and column dropped; and TRIGGER on albums given back to
+# anon, authenticated and service_role — production's albums ACL before F1
+# (Work's record, .ai-handoff/p5-f1-production-deployment-20261008.json) — so
+# the revision migration's FIRST-RUN branch has to create all three and do the
+# revoke itself. P5's projector goes with P3's seven (dropped by name in the P1
+# strip): Migration B creates P3's, and the render read has to replace it. The
+# replay then runs all three files after unit 2, so the reader is created
+# with its deployed `v_a.id` body and the correction has to fix it.
+#
+# What is compared, beyond P1–P4: albums whole (now with the revision column,
+# its default and nullability, the trigger's definition AND enablement, the
+# TRIGGER grants that must be absent, the table's owner); and with
+# photo_assets' functions the reader and the revision function (every
+# function's definition — body, volatility, SECURITY, search_path — its owner
+# and its EXECUTE grants). Facts added for every compared table: the table
+# owner, a column's own ACL, and non-internal triggers.
+#
+# Proved to bite (scripts/fixture-matches-migration.mjs --mutations) on: the
+# revision column nullable, and without its default; the trigger disabled, and
+# UPDATE-only; the TRIGGER revoke missing; the revision function SECURITY
+# DEFINER, executable by authenticated, and owned by another role; a column
+# grant on access_revision; the reader back to its pre-R1 body, VOLATILE, and
+# executable by authenticated; the projector's section-alt blank rule changed;
+# and the fixture without the revision trigger (refused at the strip).
+#
+# ── P6 (deployed 2026-11-21) ────────────────────────────────────────────────
+#
+# One migration: the sweeper's lifecycle columns and grants
+# (db/migrations/2026-11-03_photo_sweeper.sql, Supabase 20261121173616). It
+# needs NO strip block of its own: everything it adds lives on photo_assets,
+# and the P1 strip below drops photo_assets and photo_usages entirely — which
+# takes the three columns, the CHECK, the partial index and the column-level
+# grants with them. The replay then runs it LAST, after the P5-R1 correction,
+# so it adds its columns with ALTER TABLE exactly as production did. That is
+# why the fixture declares them as the final three columns: rank is compared,
+# and declaring them beside the other lifecycle columns would be drift.
+#
+# What is compared, with no new facts needed: photo_assets' column list in
+# order (the three nullable timestamptz columns, no defaults), its constraints
+# (photo_assets_swept_after_unreferenced), its indexes
+# (photo_assets_sweep_queue, partial), and each column's own ACL — which is
+# where service_role's UPDATE on exactly four columns shows, deleted_at among
+# them. photo_usages' table grants carry service_role's new SELECT.
+#
+# Bites without a mutation harness change: with the patched fixture, leaving
+# this migration out of the replay reports the three columns, the CHECK, the
+# index and five grants as drift. Checked 2026-11-21 against Postgres 16.
+#
 # Wants psql on PATH and a server it may create a scratch database on:
 #
 #   PGHOST=/tmp PGPORT=5433 PGUSER=postgres
@@ -188,16 +244,25 @@ USAGES="$ROOT/db/migrations/2026-09-30_photo_usages_sync.sql"
 # Deployed 2026-10-05 / 2026-10-06 (P4): unit 1, then unit 2.
 BACKFILL="$ROOT/db/migrations/2026-10-05_photo_backfill.sql"
 ASSET_FK="$ROOT/db/migrations/2026-10-05_photo_assets_fk.sql"
+# Deployed 2026-10-08 (P5): the access revision, the render read, its R1 fix.
+ACCESS_REV="$ROOT/db/migrations/2026-10-08_album_access_revision.sql"
+RENDER_READ="$ROOT/db/migrations/2026-10-07_photo_render_read.sql"
+RENDER_FIX="$ROOT/db/migrations/2026-10-08_photo_render_record_fix.sql"
+# Deployed 2026-11-21 (P6): the sweeper's lifecycle columns and grants.
+SWEEPER="$ROOT/db/migrations/2026-11-03_photo_sweeper.sql"
 
 # Every table P1 created or altered. Compared whole — see the note at the top.
 P1_TABLES="photo_assets photo_usages photos albums blog_posts catalog_items site_images"
 # P2's, P3's and P4 unit 1's functions, compared with photo_assets' facts:
 # definition (which carries SECURITY, search_path and body) and EXECUTE grants.
 # Two of P2's — register_gallery_photo and register_album_cover — are as P3
-# re-created them; photo_usage_resolve_path is as P4 unit 1 replaced it.
-P2_FNS="'upsert_photo_asset','register_gallery_photo','register_site_image','register_journal_image','register_album_cover','photo_usage_lock','photo_usage_parent_key','photo_usage_source','photo_usage_resolve_path','read_photo_usage_source','list_photo_usage_parents','sync_photo_usages','photo_backfill_key_base','photo_backfill_foreign_claim','read_photo_backfill_inventory','read_photo_backfill_claims','register_legacy_photo_asset'"
+# re-created them; photo_usage_resolve_path is as P4 unit 1 replaced it;
+# sync_photo_usages is as P5's render read replaced it. P5 adds its two: the
+# reader (as the R1 correction left it) and the album revision's trigger
+# function.
+P2_FNS="'upsert_photo_asset','register_gallery_photo','register_site_image','register_journal_image','register_album_cover','photo_usage_lock','photo_usage_parent_key','photo_usage_source','photo_usage_resolve_path','read_photo_usage_source','list_photo_usage_parents','sync_photo_usages','photo_backfill_key_base','photo_backfill_foreign_claim','read_photo_backfill_inventory','read_photo_backfill_claims','register_legacy_photo_asset','read_photo_render_assets','albums_access_revision'"
 
-for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST" "$COVER_FK" "$USAGES" "$BACKFILL" "$ASSET_FK"; do
+for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST" "$COVER_FK" "$USAGES" "$BACKFILL" "$ASSET_FK" "$ACCESS_REV" "$RENDER_READ" "$RENDER_FIX" "$SWEEPER"; do
   [ -r "$f" ] || { echo "cannot read $f" >&2; exit 1; }
 done
 
@@ -216,7 +281,7 @@ select string_agg(x, E'\n' order by x) from (
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname in ($fns)
   union all
-  select 'acl  ' || p.proname || ' ' || coalesce(array_to_string(p.proacl, ','), '-')
+  select 'acl  ' || p.proname || ' owner=' || pg_get_userbyid(p.proowner) || ' ' || coalesce(array_to_string(p.proacl, ','), '-')
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname in ($fns)
   union all
@@ -235,13 +300,14 @@ select string_agg(x, E'\n' order by x) from (
   -- edit to the fixture would get wrong. Dropping the position from the
   -- comparison altogether would have been the easy fix and the wrong one.
   select 'col  ' || lpad(a.rank::text, 2, '0') || ' ' || a.attname || ' ' || a.kind
-         || a.dflt || a.nn as x
+         || a.dflt || a.nn || a.cacl as x
     from (
       select row_number() over (order by at.attnum) as rank,
              at.attname,
              format_type(at.atttypid, at.atttypmod) as kind,
              coalesce(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') as dflt,
-             case when at.attnotnull then ' NOT NULL' else '' end as nn
+             case when at.attnotnull then ' NOT NULL' else '' end as nn,
+             coalesce(' ACL ' || at.attacl::text, '') as cacl
         from pg_attribute at
         left join pg_attrdef d on d.adrelid = at.attrelid and d.adnum = at.attnum
        where at.attrelid = 'public.$table'::regclass
@@ -263,8 +329,15 @@ select string_agg(x, E'\n' order by x) from (
    where table_schema = 'public' and table_name = '$table'
   union all
   select 'rls  ' || case when c.relrowsecurity then 'enabled' else 'DISABLED' end
+         || ' owner=' || pg_get_userbyid(c.relowner)
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relname = '$table'
+  union all
+  -- Non-internal triggers: the definition (timing, events, function) and
+  -- whether it is ENABLED — a disabled trigger keeps the same definition.
+  select 'trg  ' || pg_get_triggerdef(t.oid) || ' enabled=' || t.tgenabled::text
+    from pg_trigger t
+   where t.tgrelid = 'public.$table'::regclass and not t.tgisinternal
 ) z;
 SQL
 }
@@ -328,7 +401,25 @@ then
   echo "FAIL  could not strip the fixture's S4 additions:"; tail -8 /tmp/fmm-drop.log; exit 1
 fi
 
-# P4's additions, by name, first: unit 2's keys point at photo_assets, which
+# P5's additions, by name, before everything else: newest first. A missing one
+# is a failure, not a skip.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-p5.log 2>&1 <<'SQL'
+-- The render read's reader, so the render read has to create it and the R1
+-- correction has to correct it. (Its projector goes with P3's, below.)
+drop function public.read_photo_render_assets(uuid, jsonb);
+-- The access revision's three objects, so its FIRST-RUN branch must create them.
+drop trigger albums_access_revision on public.albums;
+drop function public.albums_access_revision();
+alter table public.albums drop column access_revision;
+-- TRIGGER on albums as production had it before F1 (the three application
+-- roles; not PUBLIC), so the migration's revoke has something to take back.
+grant trigger on public.albums to anon, authenticated, service_role;
+SQL
+then
+  echo "FAIL  could not strip the fixture's P5 additions:"; tail -8 /tmp/fmm-drop-p5.log; exit 1
+fi
+
+# P4's additions, by name, next: unit 2's keys point at photo_assets, which
 # the P1 strip below drops. A missing one is a failure, not a skip.
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-p4.log 2>&1 <<'SQL'
 -- Unit 2: the two keys and their two indexes, so unit 2 has to create them.
@@ -441,6 +532,26 @@ if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$ASSET_FK" >/tmp/fmm-assetfk.log
   echo "FAIL  P4 unit 2 does not apply:"; tail -8 /tmp/fmm-assetfk.log; exit 1
 fi
 
+# P5, in production's order. The reader is created with its deployed (pre-R1)
+# body, and the correction's own preflight accepts exactly that before fixing it.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$ACCESS_REV" >/tmp/fmm-accessrev.log 2>&1; then
+  echo "FAIL  the P5 access-revision migration does not apply:"; tail -8 /tmp/fmm-accessrev.log; exit 1
+fi
+
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$RENDER_READ" >/tmp/fmm-renderread.log 2>&1; then
+  echo "FAIL  the P5 render-read migration does not apply:"; tail -8 /tmp/fmm-renderread.log; exit 1
+fi
+
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$RENDER_FIX" >/tmp/fmm-renderfix.log 2>&1; then
+  echo "FAIL  the P5-R1 correction does not apply:"; tail -8 /tmp/fmm-renderfix.log; exit 1
+fi
+
+# P6, last, as production applied it: ALTER TABLE onto the photo_assets P1
+# recreated, so the three columns land at the end of the table.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$SWEEPER" >/tmp/fmm-sweeper.log 2>&1; then
+  echo "FAIL  the P6 sweeper migration does not apply:"; tail -8 /tmp/fmm-sweeper.log; exit 1
+fi
+
 JOBS_AFTER=$(psql -X -q -t -A -d "$DB" -c "$JOBS_FACTS")
 PV_AFTER=$(psql -X -q -t -A -d "$DB" -c "$PV_FACTS")
 for t in $P1_TABLES; do P1_AFTER[$t]=$(psql -X -q -t -A -d "$DB" -c "${P1_FACTS[$t]}"); done
@@ -477,9 +588,9 @@ done
 for table in $P1_TABLES; do
   before="${P1_BEFORE[$table]}"; after="${P1_AFTER[$table]}"
   file=2026-09-29_photo_assets.sql
-  [ "$table" = photo_assets ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_ingest.sql + 2026-09-30_photo_usages_sync.sql + 2026-10-05_photo_backfill.sql (17 functions)"
-  [ "$table" = photo_usages ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_usages_sync.sql"
-  [ "$table" = albums ] && file="2026-09-29_photo_assets.sql + 2026-09-30_album_cover_tenant_fk.sql"
+  [ "$table" = photo_assets ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_ingest.sql + 2026-09-30_photo_usages_sync.sql + 2026-10-05_photo_backfill.sql + the three P5 files (19 functions) + 2026-11-03_photo_sweeper.sql"
+  [ "$table" = photo_usages ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_usages_sync.sql + 2026-11-03_photo_sweeper.sql"
+  [ "$table" = albums ] && file="2026-09-29_photo_assets.sql + 2026-09-30_album_cover_tenant_fk.sql + 2026-10-08_album_access_revision.sql"
   [ "$table" = photos ] && file="2026-09-29_photo_assets.sql + 2026-10-05_photo_assets_fk.sql"
   [ "$table" = site_images ] && file="2026-09-29_photo_assets.sql + 2026-10-05_photo_assets_fk.sql"
 

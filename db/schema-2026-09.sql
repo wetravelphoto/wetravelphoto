@@ -143,6 +143,79 @@
 -- the files to prove it. In this snapshot, as in production, the keys are
 -- created after P1's and P3's keys.
 --
+-- ── UPDATED 2026-10-08: P5 — the album access revision and the render read ──
+--
+-- Three migrations, deployed to production by Work with Gonzalo's approval
+-- and verified against the live database afterwards (Work's records:
+-- .ai-handoff/p5-f1-production-deployment-20261008.md and
+-- .ai-handoff/p5-r1-production-deployment-20261008.md; db/schema-verified.md,
+-- "P5"). Reconciled here 2026-10-08, after the third deployment:
+--
+--   · db/migrations/2026-10-08_album_access_revision.sql — Supabase
+--     **20261008154244** (`album_access_revision_p5_f1_2026_10_08`), sha256
+--     **78d283589a2f151931c804aeca411419b355f369cc356aa19c9df35148d7ccec**.
+--     albums.access_revision uuid NOT NULL DEFAULT gen_random_uuid() (the
+--     LAST column); albums_access_revision() — plpgsql, SECURITY INVOKER,
+--     VOLATILE, search_path '', EXECUTE to its owner only; the trigger
+--     albums_access_revision, BEFORE INSERT OR UPDATE, FOR EACH ROW, enabled;
+--     and TRIGGER on albums revoked from PUBLIC, anon, authenticated and
+--     service_role (an ACL narrowing; nothing else on the table changed).
+--   · db/migrations/2026-10-07_photo_render_read.sql — Supabase
+--     **20261008154343** (`photo_render_read_p5_2026_10_07`), sha256
+--     **fa2e0594e12299338f00ad017b346b1fb6b424b9b7b8d73ebf15d423b8d7128b**.
+--     read_photo_render_assets(uuid, jsonb) — STABLE, SECURITY DEFINER,
+--     search_path '', EXECUTE to service_role only — and sync_photo_usages
+--     REPLACED with its section-alt extension (prosrc md5
+--     74102d2413a429873f9c8ea52706a8d5), grants unchanged.
+--   · db/migrations/2026-10-08_photo_render_record_fix.sql — Supabase
+--     **20261008180722** (`photo_render_record_fix_p5_r1_2026_10_08`), sha256
+--     **736c9a0b9e934b91fa11f6c939d256504715ce4255d8f701c7f4920324ad3bca**.
+--     The reader re-created with one expression corrected (`v_a.id` →
+--     `v_asset`, P5-R1); owner, attributes and ACL kept. The reader below is
+--     that CORRECTED one (prosrc md5 afb20e567041072e63324eb5f13b2940) —
+--     never the 20261008154343 body, which raised 55000 on a cold backend.
+--
+-- Production is therefore now **37 tables, 550 columns** (549 +
+-- access_revision), **32 functions**, RLS on all 37, **56 policies**,
+-- constraints and indexes unchanged (157 / 101), and one more trigger.
+-- The three migration files are frozen at their deployed bytes; their
+-- "CANDIDATE — NOT DEPLOYED" headers are historical and are not edited.
+-- Every P5 statement below is cut from those files by
+-- .ai-handoff/p5-reconcile-apply.cjs (the revision function's dynamic CREATE
+-- written out statically with the same body), and the drift guard rebuilds
+-- them from the files to prove it.
+--
+-- ── UPDATED 2026-11-21: P6 — the sweeper's lifecycle columns and grants ─────
+--
+-- One migration, reviewed by Work and deployed by Codex with Gonzalo's approval and
+-- verified against the live database afterwards (gate
+-- P6-20261104-four-column-migration-02; db/schema-verified.md, "P6").
+-- Reconciled here 2026-11-21, the same day:
+--
+--   · db/migrations/2026-11-03_photo_sweeper.sql — Supabase
+--     **20261121173616**, sha256
+--     **0acfb119ef1d143f8fbe4d8c41657601e592eb18c1e4caff24324ee8d5b508e9**.
+--     photo_assets gains unreferenced_since, sweep_checked_at and swept_at —
+--     timestamptz, NULLABLE, NO DEFAULT, and the LAST three columns because
+--     the migration added them with ALTER TABLE (the drift guard compares
+--     column rank, so they are declared last here too); the CHECK
+--     photo_assets_swept_after_unreferenced; the partial index
+--     photo_assets_sweep_queue; and grants — service_role SELECT on
+--     photo_assets and photo_usages, plus column-level UPDATE on exactly four
+--     photo_assets columns: unreferenced_since, sweep_checked_at, swept_at and
+--     deleted_at. authenticated is unchanged: SELECT only on both.
+--
+-- Production is therefore now **37 tables, 553 columns** (550 + 3),
+-- **32 functions**, RLS on all 37, **56 policies**, **158 constraints** and
+-- **102 indexes**. Those totals are the P5 figures plus this migration's
+-- additions, and the reconciled fixture REPRODUCES them exactly when loaded
+-- (checked 2026-11-21 against a local Postgres 16, alongside a 77-fact
+-- catalog comparison of fixture-before + migration against fixture-after —
+-- identical). Codex's postflight verified the objects in production; a fresh
+-- survey should still confirm the production totals directly.
+-- No production row value changed: 74 assets, 105 usages, every new column
+-- NULL.
+--
 -- ── How faithful this is ────────────────────────────────────────────────────
 --
 -- Columns, types, nullability, defaults, foreign keys with their delete
@@ -401,7 +474,8 @@ create table albums (
   cover_height           text not null default 'large'::text,
   cover_fit              text not null default 'cover'::text,
   display_order          integer not null default 0,
-  allow_downloads        boolean not null default false
+  allow_downloads        boolean not null default false,
+  access_revision uuid not null default gen_random_uuid()
 );
 
 create table blog_posts (
@@ -655,7 +729,14 @@ create table photo_assets (
   original_purged_at  timestamptz,
   created_by          uuid,
   created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  updated_at          timestamptz not null default now(),
+  -- P6, 2026-11-21 (Supabase 20261121173616). The sweeper's own clock, read by
+  -- nothing else. LAST because the migration added them with ALTER TABLE, and
+  -- the drift guard compares column rank — declaring them beside the other
+  -- lifecycle columns would make this file disagree with production.
+  unreferenced_since  timestamptz,
+  sweep_checked_at    timestamptz,
+  swept_at            timestamptz
 );
 
 create table photo_shop_categories (
@@ -2558,6 +2639,9 @@ end $$;
 -- row. Which paths are samples is the application's rule (isSamplePhoto,
 -- lib/images.ts), stated once, there; this function never guesses it. Sample
 -- section and story-block photographs are simply not sent.
+-- P5 (Supabase 20261008154343) REPLACED this function: the statement below is
+-- §2 of db/migrations/2026-10-07_photo_render_read.sql, verbatim — P3's body
+-- plus the two marked P5 ▼…▲ blocks (the section's own alt text). Grants unchanged.
 create or replace function public.sync_photo_usages(
   p_tenant           uuid,
   p_parent           text,
@@ -2587,6 +2671,11 @@ declare
   v_path      text;
   v_dec       boolean;
   v_alt       text;
+  -- P5 ▼ the section's own alt sibling, and the shared blank rule (the reader's)
+  c_alt_text  constant text := '[^\t\n\v\f\r \u0085\u00a0\u1680\u180e\u2000-\u200d\u2028\u2029\u202f\u205f\u2060\u3000\ufeff]';
+  v_alt_key   text;
+  v_alt_src   jsonb;
+  -- P5 ▲
   v_slot      jsonb;
   v_block     jsonb;
   v_img       jsonb;
@@ -2747,6 +2836,28 @@ begin
       if v_slot is null or jsonb_typeof(v_slot) <> 'string' or (v_slot #>> '{}') <> v_path then
         raise exception 'photo usages: the reference does not match the saved source.' using errcode = '22023';
       end if;
+      -- P5 ▼ The section's own alt text, read from the SAME saved settings the
+      -- slot was just verified in — never from the caller, whose references
+      -- may not carry it. Its key is the image key's sibling under the
+      -- editor's naming, deviceKey(base + '_alt', device): image_path →
+      -- image_path_alt, and the phone twin image_path_mobile →
+      -- image_path_alt_mobile (never image_path_mobile_alt). A phone
+      -- photograph reads only its own phone alt, so it never borrows a
+      -- description written for a different desktop photograph. Not a
+      -- string, or blank under P5's one blank rule (c_alt_text: every Unicode
+      -- space and line break plus the zero-width marks — a lone no-break
+      -- space is blank), is NULL; anything else verbatim. Stories keep their
+      -- own deployed rule below, unchanged.
+      v_alt_key := case when v_field ~ '_mobile$'
+                        then left(v_field, length(v_field) - 7) || '_alt_mobile'
+                        else v_field || '_alt' end;
+      v_alt_src := case when p_parent = 'live_page'
+                        then v_current -> 'sections' -> v_pos -> 'settings' -> v_alt_key
+                        else v_current -> 'pages' -> v_page -> v_pos -> 'settings' -> v_alt_key end;
+      if jsonb_typeof(v_alt_src) = 'string' and (v_alt_src #>> '{}') ~ c_alt_text then
+        v_alt := v_alt_src #>> '{}';
+      end if;
+      -- P5 ▲
 
     elsif v_kind = 'story_block' and p_parent = 'post' then
       if v_field !~ '^block:(0|[1-9][0-9]{0,8})$' then
@@ -3809,6 +3920,235 @@ begin
 end $$;
 
 
+-- ── P5's render read ─────────────────────────────────────────────────────────
+--
+-- From db/migrations/2026-10-08_photo_render_record_fix.sql (Supabase
+-- 20261008180722), verbatim: read_photo_render_assets as CORRECTED for P5-R1.
+-- It was created by db/migrations/2026-10-07_photo_render_read.sql (Supabase
+-- 20261008154343) with `'asset_id', v_a.id` in its result line; that body is
+-- history (scripts/p4-local-db.mjs stage pre_r1 rebuilds it), not production.
+-- Its grants are with the other function grants below.
+
+create or replace function public.read_photo_render_assets(p_tenant uuid, p_refs jsonb)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  c_max_refs  constant integer := 200;
+  c_max_bytes constant integer := 262144;
+  c_max_path  constant integer := 1024;
+  c_max_alt   constant integer := 1000;
+  c_max_side  constant integer := 65535;
+  c_sizes     constant text[]  := array['400', '800', '1600', '2400'];
+  c_uuid      constant text    := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  -- Non-blank: at least one character outside the shared blank set (header).
+  c_text      constant text    := '[^\t\n\v\f\r \u0085\u00a0\u1680\u180e\u2000-\u200d\u2028\u2029\u202f\u205f\u2060\u3000\ufeff]';
+  v_ref       jsonb;
+  v_n         bigint;
+  v_id        text;
+  v_path      text;
+  v_kb        text;
+  v_found     uuid[];
+  v_asset     uuid;
+  v_a         record;
+  v_d         record;
+  v_outcome   text;
+  v_reason    text;
+  v_derivs    jsonb;
+  v_album     text;
+  v_upright   boolean;
+  v_trusted   boolean;
+  v_results   jsonb := '[]'::jsonb;
+  v_assets    jsonb := '{}'::jsonb;
+begin
+  -- ── 1. Who ────────────────────────────────────────────────────────────────
+  -- EXECUTE is granted to service_role only (below), AND the effective role is
+  -- checked here, so a grant added by mistake later still opens nothing — the
+  -- P3 pattern (`current_setting('role')` reports the caller's role inside a
+  -- definer function; a bare owner connection reports 'none').
+  if pg_catalog.current_setting('role', true) is distinct from 'service_role' then
+    raise exception 'Only the rendering service reads photograph metadata.' using errcode = '42501';
+  end if;
+  if p_tenant is null or not exists (select 1 from public.tenants t where t.id = p_tenant) then
+    raise exception 'photo render: there is no such site.' using errcode = '22023';
+  end if;
+
+  -- ── 2. The request, bounded and typed before anything is looked up ────────
+  if p_refs is null or jsonb_typeof(p_refs) <> 'array' then
+    raise exception 'photo render: the references must be an array.' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_refs) > c_max_refs then
+    raise exception 'photo render: at most % references a call.', c_max_refs using errcode = '22023';
+  end if;
+  if octet_length(p_refs::text) > c_max_bytes then
+    raise exception 'photo render: the references are larger than % bytes.', c_max_bytes using errcode = '22023';
+  end if;
+  for v_ref in select e from jsonb_array_elements(p_refs) e loop
+    if jsonb_typeof(v_ref) <> 'object' then
+      raise exception 'photo render: a reference must be an object.' using errcode = '22023';
+    end if;
+    if exists (select 1 from jsonb_object_keys(v_ref) k where k not in ('asset_id', 'path'))
+       or not (v_ref ? 'asset_id' or v_ref ? 'path')
+       or (v_ref ? 'asset_id' and jsonb_typeof(v_ref -> 'asset_id') <> 'string')
+       or (v_ref ? 'path' and jsonb_typeof(v_ref -> 'path') <> 'string') then
+      raise exception 'photo render: a reference is {"asset_id"}, {"path"} or both, as strings.' using errcode = '22023';
+    end if;
+  end loop;
+
+  -- ── 3. Each reference, in order ───────────────────────────────────────────
+  for v_ref, v_n in select x.e, x.n from jsonb_array_elements(p_refs) with ordinality x(e, n) order by x.n loop
+    v_id      := v_ref ->> 'asset_id';
+    v_path    := v_ref ->> 'path';
+    v_asset   := null;
+    v_outcome := null;
+    v_reason  := null;
+    v_kb      := case when v_path is not null and length(v_path) between 1 and c_max_path
+                      then public.photo_backfill_key_base(v_path) end;
+
+    if v_id is not null and v_id !~* c_uuid then
+      v_outcome := 'invalid';
+    elsif v_path is not null
+          and (v_kb is null
+               or v_path not in (v_kb || '/400.webp', v_kb || '/800.webp', v_kb || '/1600.webp',
+                                 v_kb || '/2400.webp', v_kb || '.jpg')) then
+      -- Not a RENDERABLE file of any key an upload route ever minted: a bare
+      -- key base is a folder and an original is never served. A URL, a
+      -- traversal, a sample, furniture, a video. (`<base>.jpg` is only ever
+      -- the grammar's answer for the three unprefixed flat-era routes.)
+      v_outcome := 'invalid';
+    elsif v_id is not null then
+      -- By id: this site's asset or nothing. The path, when given, must be one
+      -- of THAT asset's display files; it is never used to find another.
+      select a.id into v_asset
+        from public.photo_assets a
+       where a.id = v_id::uuid and a.tenant_id = p_tenant;
+      if v_asset is null then
+        v_outcome := 'missing';
+      elsif v_path is not null and not exists (
+              select 1 from public.photo_assets a
+               where a.id = v_asset and a.tenant_id = p_tenant
+                 and (a.display_path = v_path
+                      or exists (select 1 from jsonb_each(case when jsonb_typeof(a.derivatives) = 'object'
+                                                               then a.derivatives else '{}'::jsonb end) d
+                                  where jsonb_typeof(d.value) = 'string' and (d.value #>> '{}') = v_path))) then
+        v_outcome := 'mismatch';
+        v_asset := null;
+      end if;
+    else
+      -- By path alone: the projection's own two identity rules (P3's folder
+      -- rule and P4's flat rule), on this site only, minus the original. Two
+      -- candidates is ambiguous, never a guess.
+      select array_agg(distinct a.id) into v_found
+        from public.photo_assets a
+       where a.tenant_id = p_tenant
+         and (a.key_base = left(v_path, length(v_path) - strpos(reverse(v_path), '/'))
+              or (right(v_path, 4) = '.jpg' and a.key_base = left(v_path, length(v_path) - 4)))
+         and (a.display_path = v_path
+              or exists (select 1 from jsonb_each(case when jsonb_typeof(a.derivatives) = 'object'
+                                                       then a.derivatives else '{}'::jsonb end) d
+                          where jsonb_typeof(d.value) = 'string' and (d.value #>> '{}') = v_path));
+      if coalesce(cardinality(v_found), 0) = 0 then
+        v_outcome := 'missing';
+      elsif cardinality(v_found) > 1 then
+        v_outcome := 'ambiguous';
+      else
+        v_asset := v_found[1];
+      end if;
+    end if;
+
+    if v_asset is not null then
+      -- Only the columns a decision below needs; nothing else of the row —
+      -- not even whether it has an original — is selected.
+      select a.id, a.key_base, a.display_path, a.derivatives, a.width, a.height,
+             jsonb_typeof(a.exif) as exif_type, a.exif -> 'orientation' as orientation,
+             a.alt_text, a.state, a.derived_at is not null as ingested,
+             a.archived_at, a.deleted_at
+        into v_a
+        from public.photo_assets a
+       where a.id = v_asset and a.tenant_id = p_tenant;
+
+      if v_a.deleted_at is not null then
+        v_outcome := 'unavailable'; v_reason := 'deleted';
+      elsif v_a.archived_at is not null then
+        v_outcome := 'unavailable'; v_reason := 'archived';
+      elsif v_a.state is distinct from 'derived' then
+        v_outcome := 'unavailable';
+        v_reason := case when v_a.state in ('pending', 'failed') then v_a.state else 'malformed' end;
+      else
+        -- The sizes: only the four rungs, each exactly where its key says.
+        v_derivs := '{}'::jsonb;
+        for v_d in select d.key, d.value
+                     from jsonb_each(case when jsonb_typeof(v_a.derivatives) = 'object'
+                                          then v_a.derivatives else '{}'::jsonb end) d loop
+          if v_d.key = any (c_sizes) and jsonb_typeof(v_d.value) = 'string'
+             and (v_d.value #>> '{}') = v_a.key_base || '/' || v_d.key || '.webp' then
+            v_derivs := v_derivs || jsonb_build_object(v_d.key, v_d.value);
+          end if;
+        end loop;
+
+        -- The album an unprefixed gallery or cover key names. Only read once
+        -- the key is known to be in the grammar, so the uuid cast is safe.
+        v_album := case when public.photo_backfill_key_base(v_a.key_base) = v_a.key_base
+                             and v_a.key_base ~ '^(photos|covers)/'
+                        then split_part(v_a.key_base, '/', 2) end;
+
+        if public.photo_backfill_key_base(v_a.key_base) is distinct from v_a.key_base
+           -- A prefixed key names its site; it must be this one.
+           or (left(v_a.key_base, 2) = 't/' and split_part(v_a.key_base, '/', 2) <> p_tenant::text)
+           -- An unprefixed key whose album is another site's (header).
+           or (v_album is not null
+               and exists (select 1 from public.albums al
+                            where al.id = v_album::uuid and al.tenant_id <> p_tenant))
+           -- The display file: one of the validated sizes, or the flat era's
+           -- single JPEG (the grammar admits that only for unprefixed keys).
+           or not ((v_a.display_path = v_a.key_base || '.jpg'
+                    and public.photo_backfill_key_base(v_a.display_path) = v_a.key_base)
+                   or exists (select 1 from jsonb_each_text(v_derivs) d where d.value = v_a.display_path))
+           -- The path that found it must itself survive the allowlist.
+           or (v_path is not null and v_path <> v_a.display_path
+               and not exists (select 1 from jsonb_each_text(v_derivs) d where d.value = v_path)) then
+          v_outcome := 'unavailable'; v_reason := 'malformed';
+        else
+          v_outcome := 'ok';
+          -- Dimensions (header): P2 ingestion only, both sides in range, and
+          -- an orientation that is absent or a NUMBER equal to 1–4. CASE fixes
+          -- the order, so the numeric comparison only ever sees a JSON number.
+          v_upright := case
+            when v_a.exif_type is distinct from 'object' then false
+            when v_a.orientation is null then true
+            when jsonb_typeof(v_a.orientation) <> 'number' then false
+            else (v_a.orientation)::numeric in (1, 2, 3, 4)
+          end;
+          v_trusted := v_a.ingested
+                       and coalesce(v_a.width between 1 and c_max_side and v_a.height between 1 and c_max_side, false)
+                       and v_upright;
+          if not (v_assets ? v_a.id::text) then
+            v_assets := v_assets || jsonb_build_object(v_a.id::text, jsonb_build_object(
+              'id',           v_a.id,
+              'display_path', v_a.display_path,
+              'derivatives',  v_derivs,
+              'width',        case when v_trusted then v_a.width end,
+              'height',       case when v_trusted then v_a.height end,
+              'alt_text',     case when char_length(v_a.alt_text) > c_max_alt then null
+                                   when v_a.alt_text ~ c_text then v_a.alt_text end));
+          end if;
+        end if;
+      end if;
+    end if;
+
+    v_results := v_results || jsonb_build_array(
+      case when v_outcome = 'ok' then jsonb_build_object('outcome', 'ok', 'asset_id', v_asset)
+           when v_outcome = 'unavailable' then jsonb_build_object('outcome', 'unavailable', 'reason', v_reason)
+           else jsonb_build_object('outcome', v_outcome) end);
+  end loop;
+
+  return jsonb_build_object('v', 1, 'results', v_results, 'assets', v_assets);
+end $$;
+
+
 -- ── Primary keys ────────────────────────────────────────────────────────────
 alter table album_clients          add constraint album_clients_pkey primary key (album_id, client_id);
 alter table albums                 add constraint albums_pkey primary key (id);
@@ -4123,6 +4463,12 @@ alter table photo_assets add constraint photo_assets_alt_source_known
 alter table photo_assets add constraint photo_assets_alt_source_present
   check (alt_text is null or alt_source is not null);
 
+-- P6 (Supabase 20261121173616), copied VERBATIM from
+-- db/migrations/2026-11-03_photo_sweeper.sql: a sweep cannot have happened
+-- before the asset was seen to be unreferenced.
+alter table photo_assets add constraint photo_assets_swept_after_unreferenced
+  check (swept_at is null or unreferenced_since is not null);
+
 -- The kind, scope and parent CHECKs as P3's Migration B (Supabase
 -- 20261001010021) restated them with the eighth kind, page_share, and the
 -- share-slot CHECK it added — copied from
@@ -4267,6 +4613,11 @@ create index        photo_assets_sweep      on photo_assets (deleted_at)
   where deleted_at is not null;
 create index        photo_assets_no_alt     on photo_assets (tenant_id)
   where alt_text is null and deleted_at is null;
+-- P6 (Supabase 20261121173616): the sweeper's queue, least recently examined
+-- first. Partial on `swept_at is null` because a swept asset is never a
+-- candidate again, and that is the larger set over time.
+create index        photo_assets_sweep_queue on photo_assets (sweep_checked_at nulls first, unreferenced_since)
+  where swept_at is null;
 
 create unique index photo_usages_slot_gallery     on photo_usages (photo_id)
   where kind = 'gallery';
@@ -4461,6 +4812,13 @@ grant delete, insert, references, select, trigger, truncate, update
      site_template, site_template_history, template_versions, templates, tenants
   to anon, authenticated, service_role;
 
+-- P5 F1 (db/migrations/2026-10-08_album_access_revision.sql, Supabase
+-- 20261008154244): TRIGGER on albums taken back from every application role,
+-- so none of them can CREATE OR REPLACE the revision trigger below. Verified
+-- by Work afterwards: albums is arwdDxm for the three roles (production's
+-- MAINTAIN, `m`, is not granted by this file — a pre-existing difference).
+revoke trigger on table public.albums from public, anon, authenticated, service_role;
+
 -- ANALYTICS IS THE SECOND TABLE NOBODY MAY WRITE TO DIRECTLY. `page_views` left
 -- the list above when S4 deployed, and these are the grants production carries,
 -- verified by name after deployment:
@@ -4500,13 +4858,27 @@ grant delete, insert, references, select, trigger, truncate, update
 grant select on jobs to authenticated;
 
 -- P1: the photo tables. authenticated may READ (narrowed by the tenant policy to
--- its own site); anon, service_role and PUBLIC hold NOTHING, and nobody may
--- write — P2 and P3 each add their own narrow writer, deliberately. Revoked
+-- its own site); anon, service_role and PUBLIC held NOTHING (service_role
+-- gains SELECT and a narrow column UPDATE in P6, below), and nobody may write
+-- rows — P2 and P3 each add their own narrow writer, deliberately. Revoked
 -- first because a grant is additive. Verified against production 2026-09-30.
 revoke all on table photo_assets from public, anon, authenticated, service_role;
 revoke all on table photo_usages from public, anon, authenticated, service_role;
 grant select on table photo_assets to authenticated;
 grant select on table photo_usages to authenticated;
+
+-- P6 (Supabase 20261121173616). The sweeper runs as service_role, which held
+-- nothing on either table until now — BYPASSRLS is not a table privilege. It
+-- gets SELECT on both, and UPDATE on exactly four photo_assets COLUMNS so a bug
+-- in it cannot rewrite display_path, alt_text or derivatives. deleted_at is the
+-- fourth: written only at purge time, when it is true, so the deployed reader
+-- and picker stop offering an asset whose files are gone. authenticated is
+-- unchanged, and still no role holds INSERT or DELETE on either table.
+-- Verified against production 2026-11-21.
+grant select on table photo_assets to service_role;
+grant select on table photo_usages to service_role;
+grant update (unreferenced_since, sweep_checked_at, swept_at, deleted_at)
+  on table photo_assets to service_role;
 
 -- A visitor resolves a site by its address and may do nothing else here.
 grant select on tenant_domains to anon;
@@ -4642,10 +5014,22 @@ grant execute on function public.register_legacy_photo_asset(
   timestamptz, text, text, text, integer, numeric, text, numeric, text[], text[], jsonb, boolean)
   to service_role;
 
--- ── The only trigger in the public schema ───────────────────────────────────
--- Verified 2026-09-29: this is the ONLY non-internal trigger production has.
--- In particular there are none on `albums` or `photos`, so the cascade in
--- photos_album_id_fkey is the whole of what happens when an album is deleted.
+-- P5's, from §3 of db/migrations/2026-10-07_photo_render_read.sql, verbatim.
+-- Verified by Work 2026-10-08 (and unchanged by the R1 correction): both to
+-- service_role ONLY; anon and authenticated have none.
+
+revoke all on function public.read_photo_render_assets(uuid, jsonb)            from public, anon, authenticated, service_role;
+revoke all on function public.sync_photo_usages(uuid, text, text, text, jsonb) from public, anon, authenticated, service_role;
+
+grant execute on function public.read_photo_render_assets(uuid, jsonb)            to service_role;
+grant execute on function public.sync_photo_usages(uuid, text, text, text, jsonb) to service_role;
+
+-- ── The triggers in the public schema ───────────────────────────────────────
+-- Verified 2026-09-29: site_draft_touch was then the ONLY non-internal trigger
+-- production had. Since P5 F1 (Supabase 20261008154244) albums carries one
+-- too, albums_access_revision, defined at the end of this section. There is
+-- still none on `photos`, so the cascade in photos_album_id_fkey is the whole
+-- of what happens to an album's photographs when it is deleted.
 create or replace function public.touch_site_draft() returns trigger
 language plpgsql as $$
 begin
@@ -4656,3 +5040,31 @@ end $$;
 create trigger site_draft_touch
   before update on public.site_draft
   for each row execute function public.touch_site_draft();
+
+-- P5 F1, from db/migrations/2026-10-08_album_access_revision.sql: the revision
+-- is the database's, never a caller's — a fresh UUID on every insert and on
+-- every change of privacy_type, password_hash, tenant_id or id, and the old
+-- one kept otherwise. The function body is the migration's `v_body`,
+-- character for character; EXECUTE is its owner's alone (a trigger fires
+-- without the caller holding EXECUTE).
+create function public.albums_access_revision() returns trigger language plpgsql
+  security invoker volatile set search_path = '' as $body$
+begin
+  if tg_op = 'INSERT' then
+    new.access_revision := pg_catalog.gen_random_uuid();
+  elsif new.privacy_type  is distinct from old.privacy_type
+     or new.password_hash is distinct from old.password_hash
+     or new.tenant_id     is distinct from old.tenant_id
+     or new.id            is distinct from old.id then
+    new.access_revision := pg_catalog.gen_random_uuid();
+  else
+    new.access_revision := old.access_revision;
+  end if;
+  return new;
+end
+$body$;
+revoke all on function public.albums_access_revision() from public, anon, authenticated, service_role;
+
+create trigger albums_access_revision
+  before insert or update on public.albums
+  for each row execute function public.albums_access_revision();

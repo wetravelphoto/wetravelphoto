@@ -1,19 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { imageSrc } from '@/lib/images'
+import type { ImageView } from '@/lib/photos/render-view'
 
-type Slide = { id: string; storage_path: string; caption: string | null }
+/** A photograph as the server resolved it: its id, caption and one file to show. */
+type Slide = { id: string; caption: string | null; slide: ImageView }
 
 /** Full-screen slideshow, advancing on a timer with keyboard control. */
 export default function Slideshow({
   photos,
-  publicUrl,
   startAt = 0,
   onClose,
 }: {
   photos: Slide[]
-  publicUrl: string
   startAt?: number
   onClose: () => void
 }) {
@@ -60,7 +59,7 @@ export default function Slideshow({
       </button>
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imageSrc(publicUrl, current.storage_path)} alt={current.caption ?? ''} className="slideshow-image" />
+      <img src={current.slide.src} alt={current.slide.alt} className="slideshow-image" />
 
       <div className="slideshow-bar">
         <button onClick={prev} aria-label="Previous">

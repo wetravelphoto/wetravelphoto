@@ -1,9 +1,52 @@
 /** Post bodies are an ordered list of typed blocks. */
 
 export type BlockImage = {
+  /** The stored file: authoritative, what every story written before P5 renders from. */
   path: string
   caption?: string | null
+  /** This placement's own description. Blank is unset, never "decorative": a story image is content. */
   alt?: string | null
+  /**
+   * The photograph's identity (P5), written by the picker beside the path it
+   * chose. Absent on every older block, which keeps rendering from its path.
+   */
+  assetId?: string | null
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+/** Every image object in a story's blocks, in order. */
+export function blockImages(blocks: unknown): unknown[] {
+  if (!Array.isArray(blocks)) return []
+  const out: unknown[] = []
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') continue
+    const b = block as Record<string, unknown>
+    if (b.type === 'image') out.push(b.image)
+    else if (b.type === 'image_pair') out.push(b.left, b.right)
+    else if ((b.type === 'gallery' || b.type === 'masonry') && Array.isArray(b.images)) out.push(...b.images)
+  }
+  return out
+}
+
+/**
+ * The identities a story asks to store, each with the path it was chosen
+ * with — for the server to check both name the same photograph of this site.
+ * Throws on an identity that is not one (a malformed id is not an absent one),
+ * on an identity with no path, and on a description that is not text.
+ */
+export function blockIdentities(blocks: unknown): Array<{ assetId: string; path: string }> {
+  const out: Array<{ assetId: string; path: string }> = []
+  for (const image of blockImages(blocks)) {
+    if (!image || typeof image !== 'object') continue
+    const i = image as Record<string, unknown>
+    if (i.alt !== undefined && i.alt !== null && typeof i.alt !== 'string') throw new Error('A photograph’s description is not text.')
+    if (i.assetId === undefined || i.assetId === null) continue
+    if (typeof i.assetId !== 'string' || !UUID.test(i.assetId)) throw new Error('A photograph in this story is not one of this site’s.')
+    if (typeof i.path !== 'string' || i.path === '') throw new Error('A photograph in this story has no file.')
+    out.push({ assetId: i.assetId, path: i.path })
+  }
+  return out
 }
 
 export type Block =

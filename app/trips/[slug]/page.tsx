@@ -1,65 +1,37 @@
-import { albumBySlug, photosForAlbum } from '@/lib/album-access'
+import { openGallery } from '@/lib/photos/public'
 import { photoUrl } from '@/lib/images'
-import { srcSetFor, displayUrl, srcSetFromPath } from '@/lib/srcset'
 import { formatTripDate } from '@/lib/dates'
 import SiteHeader from '@/components/SiteHeader'
 import AlbumPasswordGate from '@/components/AlbumPasswordGate'
 import TripCover from '@/components/TripCover'
 import GalleryView from '@/components/GalleryView'
 import { getSiteSettings } from '@/lib/site'
-import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
 import '../../gallery.css'
 
 export default async function TripPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
 
-  // A password-gated album cannot be read with the anon key any more — its row
-  // carries password_hash, and the policy that used to expose it handed that
-  // to anyone who asked. albumBySlug reads it server-side and strips the hash
-  // before it can reach a page. The gate below is unchanged.
-  const album = await albumBySlug(slug)
+  // The album's own gate (lib/album-access.ts openAlbum, through
+  // lib/photos/public.ts): a password-gated album's row is read server-side
+  // with its hash stripped; a client-only album is not here; a locked album
+  // never loads its photographs at all, so there is nothing in the payload to
+  // read past. Only an open album's photographs and cover are resolved, and
+  // what reaches the browser is a view of each — never the row.
+  const gallery = await openGallery(slug)
 
-  if (!album) notFound()
-  if (album.privacy_type === 'client_only') notFound()
-
-  if (album.privacy_type === 'password') {
-    const cookieStore = await cookies()
-    const granted = cookieStore.get(`album_access_${album.id}`)?.value === 'granted'
-    // Photographs are fetched below, after this returns — a locked album never
-    // loads them at all, so there is nothing in the payload to read past.
-    if (!granted) return <AlbumPasswordGate slug={slug} title={album.title as string} />
+  if (gallery.status === 'missing') notFound()
+  if (gallery.status === 'locked') {
+    return <AlbumPasswordGate slug={slug} title={gallery.album.title as string} />
   }
 
-  const orderColumn = album.sort_order === 'manual' ? 'sort_order' : 'taken_at'
-  const ascending = album.sort_order !== 'date_desc'
-
+  const { album, photos } = gallery
   const settings = await getSiteSettings()
 
-  // Explicit columns, not '*'. At 300 photographs the unused columns (tags,
-  // gps, timestamps) are pure weight in the server-rendered payload, which is
-  // sent to every visitor whether they scroll that far or not.
-  // The anon key can read a public album's photographs under RLS; anything
-  // else needs the privileged read, and we only get here once its gate has
-  // passed.
-  const photos = await photosForAlbum(
-    album.id,
-    orderColumn as string,
-    ascending,
-    album.privacy_type === 'public'
-  )
-
-  const coverPhoto = photos?.find((p) => p.id === album.cover_photo_id) ?? photos?.[0]
-
-  // The cover is the largest thing on the page and was being served at full
-  // size with no alternatives offered.
-  const customCoverUrl = album.cover_custom_path ? photoUrl(album.cover_custom_path) : null
-  const imageUrl = customCoverUrl ?? (coverPhoto ? displayUrl(coverPhoto) : null)
-  const imageSrcSet = customCoverUrl
-    ? srcSetFromPath(customCoverUrl)
-    : coverPhoto
-      ? srcSetFor(coverPhoto)
-      : undefined
+  // The cover is the largest thing on the page: a custom cover with the ladder
+  // derived from its path, the chosen photograph or the first, with its sizes.
+  const imageUrl = gallery.cover.coverUrl
+  const imageSrcSet = gallery.cover.coverSrcSet
 
   const dateLabel = formatTripDate(
     album.trip_start_date ?? album.created_at,
@@ -142,9 +114,8 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
       </div>
 
       <GalleryView
-        photos={photos ?? []}
+        photos={photos}
         layoutStyle={album.layout_style ?? 'masonry'}
-        publicUrl={process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''}
         heroFirst={album.gallery_hero ?? false}
         galleryTitle={album.title}
         siteTitle={settings.site_title}

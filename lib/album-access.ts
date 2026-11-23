@@ -1,9 +1,11 @@
 import 'server-only'
 
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClientOrNull } from '@/lib/supabase/admin'
 import { verifyPassword } from '@/lib/password'
 import { currentSiteTenantId } from '@/lib/tenant'
+import { albumGrantAdmits, grantCookieName, issueAlbumGrant } from '@/lib/album-grant'
 
 /**
  * Albums opened by slug on the public site — public ones, and the ones behind
@@ -43,13 +45,21 @@ import { currentSiteTenantId } from '@/lib/tenant'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type PublicAlbum = Record<string, any>
 
+// album_id and asset_id since P5: the page resolves each photograph's canonical
+// file and the album's cover from these rows, server-side. Neither reaches the
+// browser — the page hands its client components a trimmed view.
 const PHOTO_COLUMNS =
-  'id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, sort_order'
+  'id, album_id, asset_id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, sort_order'
 
-/** Never let the hash out of this module, whatever a page asks for. */
+/**
+ * Never let the hash out of this module, whatever a page asks for. The access
+ * revision is not a secret (it is MAC input, not key — lib/album-grant.ts),
+ * but no page needs it either, so it stays here too.
+ */
 function withoutHash(row: Record<string, unknown>): PublicAlbum {
-  const { password_hash: _hash, ...safe } = row
+  const { password_hash: _hash, access_revision: _revision, ...safe } = row
   void _hash
+  void _revision
   return safe as PublicAlbum
 }
 
@@ -67,30 +77,94 @@ export async function albumBySlug(slug: string): Promise<PublicAlbum | null> {
   const tenantId = await currentSiteTenantId()
   if (!tenantId) return null
 
-  // Public albums: the anon key and RLS, same as every other public page.
-  const anon = await createClient()
-  const { data: open } = await anon
-    .from('albums')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('slug', slug)
-    .maybeSingle()
+  // P5 F1: this row decides whether a gallery opens, so a read that failed is
+  // "no album" — never the row an errored reply happened to carry, and never
+  // an exception that escapes to a caller with its own idea of a fallback.
+  // Only a clean "no row" from the anon key moves on to the privileged read.
+  try {
+    // Public albums: the anon key and RLS, same as every other public page.
+    const anon = await createClient()
+    const { data: open, error: openError } = await anon
+      .from('albums')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('slug', slug)
+      .maybeSingle()
 
-  if (open) return withoutHash(open as Record<string, unknown>)
+    if (openError) return null
+    if (open) return ownRow(open, tenantId)
 
-  // Nothing came back, so it is unlisted, gated — or simply not there.
-  const admin = createAdminClientOrNull()
-  if (!admin) return null
+    // Nothing came back, so it is unlisted, gated — or simply not there.
+    const admin = createAdminClientOrNull()
+    if (!admin) return null
 
-  const { data } = await admin
-    .from('albums')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('slug', slug)
-    .maybeSingle()
+    const { data, error } = await admin
+      .from('albums')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('slug', slug)
+      .maybeSingle()
 
-  if (!data) return null
-  return withoutHash(data as Record<string, unknown>)
+    if (error || !data) return null
+    return ownRow(data, tenantId)
+  } catch {
+    return null
+  }
+}
+
+/** A row only if it is an object on this site; anything else is no album. */
+function ownRow(row: unknown, tenantId: string): PublicAlbum | null {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return null
+  if ((row as Record<string, unknown>).tenant_id !== tenantId) return null
+  return withoutHash(row as Record<string, unknown>)
+}
+
+/** The privacy modes the database allows (albums_privacy_type_check). Anything else opens nothing. */
+const OPEN_BY_ADDRESS = new Set(['public', 'unlisted'])
+
+/**
+ * THE GATE OF /trips/<slug>, exactly as the page has always applied it:
+ *
+ *   no such album on this site → missing
+ *   client-only                → missing (only a share link opens one)
+ *   password, no valid grant   → locked (the album row, never its photographs)
+ *   otherwise                  → open — public, unlisted by its address, or a
+ *                                password album this browser holds a grant for
+ *
+ * "A valid grant" is lib/album-grant.ts albumGrantAdmits(): a signed grant
+ * bound to this site, this album and the album's CURRENT access revision,
+ * inside its thirty days, checked against a fresh read of the row. The old
+ * literal `granted` cookie proves nothing and opens nothing (P5 F1).
+ *
+ * Moved here from the page in P5 so the page and the photograph resolver ask
+ * the SAME question: nothing about an album's photographs is read until this
+ * has answered `open`.
+ */
+export type AlbumGate =
+  | { status: 'missing' }
+  | { status: 'locked'; album: PublicAlbum }
+  | { status: 'open'; album: PublicAlbum }
+
+export async function openAlbum(slug: string): Promise<AlbumGate> {
+  const album = await albumBySlug(slug)
+  if (!album) return { status: 'missing' }
+  if (album.privacy_type === 'client_only') return { status: 'missing' }
+
+  if (album.privacy_type === 'password') {
+    const cookieStore = await cookies()
+    const admitted = await albumGrantAdmits(
+      createAdminClientOrNull(),
+      await currentSiteTenantId(),
+      album.id as string,
+      cookieStore.get(grantCookieName(album.id as string))?.value
+    )
+    if (admitted !== true) return { status: 'locked', album }
+    return { status: 'open', album }
+  }
+  // Open by address only in a mode that is open by address. A privacy value
+  // the database should never hold is not a reason to show the photographs.
+  if (typeof album.privacy_type === 'string' && OPEN_BY_ADDRESS.has(album.privacy_type)) return { status: 'open', album }
+  return { status: 'missing' }
 }
 
 /**
@@ -110,9 +184,17 @@ export async function photosForAlbum(
   const supabase = isPublic ? await createClient() : createAdminClientOrNull()
   if (!supabase) return []
 
+  // The album came from this site's own row, but the privileged read ignores
+  // row-level security and a platform admin passes it anyway — so the site is
+  // named here too, and a photograph filed under another site's id is never
+  // returned with this album's.
+  const tenantId = await currentSiteTenantId()
+  if (!tenantId) return []
+
   const { data } = await supabase
     .from('photos')
     .select(PHOTO_COLUMNS)
+    .eq('tenant_id', tenantId)
     .eq('album_id', albumId)
     .order(orderColumn, { ascending, nullsFirst: false })
 
@@ -120,43 +202,19 @@ export async function photosForAlbum(
 }
 
 /**
- * Checks a password against an album. Returns the album id on success and null
- * on failure — including when the album has no password, so a wrong slug and a
- * wrong password are indistinguishable from outside.
+ * Checks a password against an album and, only if it is right, mints the
+ * grant for it (lib/album-grant.ts issueAlbumGrant). Null on every failure —
+ * a wrong slug, a wrong password, an album not in password mode, a missing
+ * key — so they are indistinguishable from outside.
  *
- * The hash is read here and compared here. It is never returned, logged, or
- * passed to a caller. A gated album is invisible to the anon key by design, so
- * this is one of the places that genuinely needs the service role.
+ * The hash is read, compared and bound in ONE snapshot inside the issuer; it
+ * is never returned, logged, or passed to a caller. A gated album is
+ * invisible to the anon key by design, so this genuinely needs the service
+ * role — and the site, from the Host header, is the scoping: a password typed
+ * on one site must never open another's.
  */
-export async function verifyAlbumPassword(
-  slug: string,
-  password: string
-): Promise<string | null> {
-  if (!password) return null
-
-  const supabase = createAdminClientOrNull()
-  if (!supabase) return null
-
-  // The service-role key ignores row-level security, so the scoping here IS
-  // the security: a password typed on one site must never open another's.
-  const tenantId = await currentSiteTenantId()
-  if (!tenantId) return null
-
-  const { data: album } = await supabase
-    .from('albums')
-    .select('id, password_hash')
-    .eq('tenant_id', tenantId)
-    .eq('slug', slug)
-    .maybeSingle()
-
-  if (!album?.password_hash) return null
-
-  try {
-    return verifyPassword(password, album.password_hash as string) ? (album.id as string) : null
-  } catch {
-    // A malformed stored hash is a failed login, not a 500.
-    return null
-  }
+export async function issueAlbumAccessGrant(slug: unknown, password: unknown) {
+  return issueAlbumGrant(createAdminClientOrNull(), await currentSiteTenantId(), slug, password, verifyPassword)
 }
 
 /** Whether a zip of this album is allowed without a share token. */

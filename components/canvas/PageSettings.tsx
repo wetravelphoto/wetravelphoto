@@ -287,10 +287,24 @@ export default function PageSettings({
         <PhotoPicker
           publicUrl={publicUrl}
           title="Share image"
+          slot={{
+            label: 'Share image',
+            /*
+             * The share image is CONTENT — it is what a link preview shows —
+             * but the page's share settings store a path and nothing else, so
+             * the picker shows the photograph's own description read-only and
+             * offers no box whose words would be thrown away. The photograph's
+             * identity is derived from that path when it is read.
+             */
+            role: 'content',
+            editableAlt: false,
+          }}
+          current={values.image ? [{ path: values.image }] : []}
           onClose={() => setPicking(false)}
-          onPick={(path) => {
+          onConfirm={(result) => {
             setPicking(false)
-            change({ image: path }, true)
+            const choice = result.choices[0]
+            if (choice) change({ image: choice.path }, true)
           }}
         />
       )}

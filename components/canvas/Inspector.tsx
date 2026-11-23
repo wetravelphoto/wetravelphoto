@@ -11,13 +11,13 @@ import {
   type LiveSpec,
   type SectionDef,
 } from '@/lib/sections/registry'
-import { overrideValue } from '@/lib/sections/backdrop'
 import HeroFocal from '@/components/canvas/editors/HeroFocal'
 import HeroStories, { type StoryOption } from '@/components/canvas/editors/HeroStories'
 import SpotPicker from '@/components/canvas/editors/SpotPicker'
 import ShownPicker from '@/components/canvas/editors/ShownPicker'
 import MarkImage from '@/components/canvas/editors/MarkImage'
 import ImageField from '@/components/canvas/ImageField'
+import { bundleValues, isPhotoField } from '@/lib/sections/image-bundle'
 import TextStylePanel, { describeTextStyle } from '@/components/canvas/editors/TextStylePanel'
 import Customize from '@/components/canvas/editors/Customize'
 import DeviceSwitcher, { type PreviewDevice } from '@/components/canvas/DeviceSwitcher'
@@ -559,25 +559,6 @@ export default function Inspector({
   const view = deviceView(def, section.settings, editing)
 
   /**
-   * A value from a custom editor — an image picker, a focal point — saved
-   * under the right size's key.
-   *
-   * The form path does this in lib/sections/form.ts; these save outside the
-   * form, so they need the same rule: on a narrower size, store only what
-   * DIFFERS from the desktop, and null when it matches, because null is
-   * "following" and a copy is a freeze.
-   */
-  const saveField = (field: Field, value: unknown) => {
-    if (!field.device || editing === BASE_DEVICE) {
-      saveValues(section.id, { [field.key]: value })
-      return
-    }
-    saveValues(section.id, {
-      [deviceKey(field.key, editing)]: overrideValue(section.settings[field.key], value),
-    })
-  }
-
-  /**
    * WHETHER THIS SIZE HAS AN ANSWER OF ITS OWN.
    *
    * Drawn only on a narrower size, and only for settings that can differ —
@@ -602,8 +583,14 @@ export default function Inspector({
             type="button"
             onClick={() => {
               // Null, not the desktop's value: following has to stay absent to
-              // stay following.
-              saveValues(section.id, { [deviceKey(field.key, editing)]: null })
+              // stay following. A photograph follows whole — its identity and
+              // its description go with its path (lib/sections/image-bundle.ts).
+              saveValues(
+                section.id,
+                isPhotoField(field)
+                  ? bundleValues(field, editing, null)
+                  : { [deviceKey(field.key, editing)]: null }
+              )
               sendValues()
             }}
           >
@@ -695,7 +682,8 @@ export default function Inspector({
            * desktop's value showing through wherever the phone has none of
            * its own — under their plain keys, so the panel, its `when`
            * conditions and the form read all stay in one vocabulary. Only
-           * `formDevice` in lib/sections/form.ts and `saveField` below know
+           * `formDevice` in lib/sections/form.ts and ImageField (through
+           * lib/sections/image-bundle.ts) know
            * that a phone twin exists.
            */
           settings={view}
@@ -873,19 +861,21 @@ export default function Inspector({
               />
             )
           }}
-          renderImage={(field: Field, value: unknown, set) => (
+          renderImage={(field: Field, _value: unknown, set) => (
             <ImageField
-              name={field.key}
-              label={field.label}
-              value={typeof value === 'string' && value ? value : null}
+              field={field}
+              device={editing}
+              settings={section.settings}
               publicUrl={publicUrl}
               note={field.kind === 'image' ? field.help : undefined}
-              onChange={(path) => {
+              onSave={(values, path) => {
                 // Written into the panel's own copy so a `when` on this field
                 // re-evaluates now, and saved straight away rather than waiting
-                // for a keystroke somewhere else in the form.
+                // for a keystroke somewhere else in the form. The path, the
+                // photograph's identity and its description go in ONE save
+                // (lib/sections/image-bundle.ts), already resolved for this size.
                 set(field.key, path ?? '')
-                saveField(field, path)
+                saveValues(section.id, values)
               }}
             />
           )}

@@ -31,14 +31,18 @@ import { currentSiteTenantId } from '@/lib/tenant'
  */
 
 export type ShareAccess = {
+  /** The site that minted the token — the request's own, checked in accessForToken. */
+  tenantId: string
   clientId: string
   clientName: string | null
   /** Exactly the albums this token opens. Nothing else is reachable. */
   albumIds: string[]
 }
 
+// asset_id since P5: the page resolves each photograph's canonical file from
+// it, server-side; the browser is handed a trimmed view, never the row.
 const PHOTO_COLUMNS =
-  'id, album_id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, sort_order'
+  'id, album_id, asset_id, storage_path, derivatives, caption, alt_text, width, height, is_for_sale, taken_at, sort_order'
 
 /**
  * Verifies a share token. Null means "no such token" — callers should render
@@ -76,6 +80,7 @@ export async function accessForToken(token: string): Promise<ShareAccess | null>
     .eq('client_id', client.id)
 
   return {
+    tenantId,
     clientId: client.id as string,
     clientName: (client.name as string) ?? null,
     albumIds: (shares ?? []).map((s) => s.album_id as string).filter(Boolean),
@@ -102,6 +107,9 @@ export async function albumsForAccess(access: ShareAccess) {
     .select(
       'id, title, slug, cover_photo_id, cover_title_text, cover_focal_x, cover_focal_y, allow_downloads'
     )
+    // album_clients carries no site of its own, so a link row pointing at
+    // another site's album must not open it here.
+    .eq('tenant_id', access.tenantId)
     .in('id', access.albumIds)
     .order('created_at', { ascending: false })
 
@@ -117,6 +125,7 @@ export async function photosForAccess(access: ShareAccess) {
   const { data } = await supabase
     .from('photos')
     .select(PHOTO_COLUMNS)
+    .eq('tenant_id', access.tenantId)
     .in('album_id', access.albumIds)
     .order('sort_order', { ascending: true })
 

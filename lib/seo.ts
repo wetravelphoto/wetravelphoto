@@ -4,6 +4,7 @@ import { str } from '@/lib/sections/registry'
 import type { LoadedSection } from '@/lib/sections/load'
 import type { SiteSettings } from '@/lib/site'
 import { photoUrl } from '@/lib/images'
+import { isPhotoField } from '@/lib/sections/image-bundle'
 
 /**
  * SEARCH AND SHARING, PER PAGE
@@ -140,17 +141,30 @@ function autoDescription(page: string, sections: LoadedSection[], settings: Site
   return settings.tagline ?? `Photographs by ${settings.site_title}.`
 }
 
-/** The first photograph drawn on the page, in order: any image setting. */
-function firstPhoto(sections: LoadedSection[]): string | null {
+/**
+ * Where the first photograph drawn on the page comes from, in order: any
+ * PHOTOGRAPH setting — `isPhotoField`, so the hero's `video_path`, declared
+ * `kind: 'image'`, is never a share image; its still is. Exported so the
+ * public route can resolve that very slot's photograph (lib/photos/public.ts)
+ * rather than re-deciding which it is.
+ */
+export function firstPhotoSlot(
+  sections: LoadedSection[]
+): { section: LoadedSection; field: LoadedSection['def']['fields'][number]; value: string } | null {
   for (const section of sections) {
     if (!section.visible) continue
     for (const field of section.def.fields) {
-      if (field.kind !== 'image') continue
+      if (!isPhotoField(field)) continue
       const value = str(section.settings, field.key)
-      if (value) return value
+      if (value) return { section, field, value }
     }
   }
   return null
+}
+
+/** The first photograph drawn on the page, in order: any photograph setting. */
+function firstPhoto(sections: LoadedSection[]): string | null {
+  return firstPhotoSlot(sections)?.value ?? null
 }
 
 export type ResolvedSeo = {
@@ -236,15 +250,24 @@ export function resolveSeo(
   }
 }
 
-/** Next.js metadata for one of the editor's pages. */
+/**
+ * Next.js metadata for one of the editor's pages.
+ *
+ * `imageUrl`, when given, is the share image's URL as the public route
+ * resolved it (P5: the photograph's own file, or nothing when the photograph
+ * named is not this site's to show) — `null` means "no image". Left out, the
+ * stored key is used as it always was.
+ */
 export function pageMetadata(
   page: string,
   sections: LoadedSection[],
-  settings: SiteSettings
+  settings: SiteSettings,
+  imageUrl?: string | null
 ): Metadata {
   const seo = resolveSeo(page, sections, settings)
   const path = findPage(page, sanitizeCustomPages(settings.custom_pages))?.path ?? '/'
-  const images = seo.image ? [{ url: photoUrl(seo.image) }] : undefined
+  const url = imageUrl === undefined ? (seo.image ? photoUrl(seo.image) : null) : imageUrl
+  const images = url ? [{ url }] : undefined
 
   return {
     // `absolute`, so the layout's own title does not get appended a second time.

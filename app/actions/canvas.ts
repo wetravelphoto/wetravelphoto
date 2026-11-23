@@ -21,6 +21,9 @@ import { getSiteSettings } from '@/lib/site'
 import { readSettingsFromForm } from '@/lib/sections/form'
 import { sectionDef, type SectionSettings } from '@/lib/sections/registry'
 import { validateValues } from '@/lib/sections/values'
+import { assetPairs, reconcileBundles } from '@/lib/sections/image-bundle'
+import { checkWritePairs, pairKey } from '@/lib/photos/library'
+import { editorLibraryDb } from '@/lib/photos/editor-library'
 import { sanitizeOwnStyle, sanitizeTokens, trimToDefaults } from '@/lib/styles/sanitize'
 import { sanitizeTextStyles } from '@/lib/sections/text-style'
 import { sanitizeShown } from '@/lib/sections/shown'
@@ -309,7 +312,7 @@ export async function updateDraftSectionValues(
   id: string,
   values: Record<string, unknown>
 ) {
-  await requireEditor()
+  const { tenantId } = await requireEditor()
   await requirePage(page)
   const draft = await ensureDraft(page)
   const rows = draft.pages[page] ?? []
@@ -331,6 +334,27 @@ export async function updateDraftSectionValues(
    * four sanitizers below are for.
    */
   values = validateValues(def, values)
+
+  /*
+   * A photograph's path, identity and placement text move together (P5,
+   * lib/sections/image-bundle.ts): a path changed without its siblings takes
+   * them down with it, and a sibling with no path beside it is refused. Then
+   * every identity this write stores is checked to be ONE photograph of THIS
+   * site whose files include the path beside it — through the picker's own
+   * reader and the canonical proof (lib/photos/library.ts `checkWritePairs`),
+   * the same check a story's save makes. A pair the renderer would refuse is
+   * never saved; a pair already stored here may stay while its photograph is
+   * unavailable, but none is newly written that way.
+   */
+  const current = (row.settings ?? {}) as SectionSettings
+  values = reconcileBundles(def, current, values)
+  const pairs = assetPairs(def, { ...current, ...values }, values)
+  if (pairs.length) {
+    const already = new Set(
+      assetPairs(def, current, current).map((p) => pairKey(p))
+    )
+    await checkWritePairs(await editorLibraryDb(), tenantId, pairs, already)
+  }
 
   // Values arrive from the browser, so anything with a shape is validated
   // before it is stored. Typography is the one structured value written here

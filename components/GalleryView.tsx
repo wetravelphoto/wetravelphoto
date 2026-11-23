@@ -4,16 +4,10 @@ import { useState } from 'react'
 import AlbumGallery from '@/components/AlbumGallery'
 import GalleryToolbar, { type ToolbarAction } from '@/components/GalleryToolbar'
 import Slideshow from '@/components/Slideshow'
+import type { GalleryPhotoView } from '@/lib/photos/render-view'
 
-type Photo = {
-  id: string
-  storage_path: string
-  caption: string | null
-  alt_text: string | null
-  is_for_sale: boolean
-  width: number | null
-  height: number | null
-}
+/** A gallery photograph as the server resolved it — its views, never its row. */
+type Photo = GalleryPhotoView
 
 /**
  * Wraps the grid with the toolbar and slideshow, so the page stays a server
@@ -22,7 +16,6 @@ type Photo = {
 export default function GalleryView({
   photos,
   layoutStyle,
-  publicUrl,
   heroFirst,
   galleryTitle,
   siteTitle,
@@ -32,7 +25,6 @@ export default function GalleryView({
 }: {
   photos: Photo[]
   layoutStyle: string
-  publicUrl: string
   heroFirst: boolean
   galleryTitle: string
   siteTitle: string
@@ -60,13 +52,12 @@ export default function GalleryView({
         <AlbumGallery
           photos={photos}
           layoutStyle={layoutStyle}
-          publicUrl={publicUrl}
           heroFirst={heroFirst}
         />
       </div>
 
       {slideshowOpen && (
-        <Slideshow photos={photos} publicUrl={publicUrl} onClose={() => setSlideshowOpen(false)} />
+        <Slideshow photos={photos} onClose={() => setSlideshowOpen(false)} />
       )}
     </>
   )

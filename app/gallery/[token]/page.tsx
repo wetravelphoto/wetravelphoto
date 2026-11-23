@@ -1,13 +1,8 @@
-import { photoUrl, focalPosition } from '@/lib/images'
+import { focalPosition } from '@/lib/images'
 import ClientGallery from '@/components/ClientGallery'
 import { getSiteSettings } from '@/lib/site'
 import { notFound } from 'next/navigation'
-import {
-  accessForToken,
-  albumsForAccess,
-  favoritePhotoIds,
-  photosForAccess,
-} from '@/lib/gallery-access'
+import { openSharedGallery } from '@/lib/photos/public'
 import '@/app/gallery.css'
 import '@/app/lightbox.css'
 
@@ -20,16 +15,14 @@ export default async function ClientGalleryPage({
 
   // Everything on this page comes from one verified token. These tables are no
   // longer readable with the anon key at all, so there is no path to them that
-  // does not start here. See lib/gallery-access.ts.
-  const access = await accessForToken(token)
-  if (!access) notFound()
+  // does not start here. See lib/gallery-access.ts — and lib/photos/public.ts,
+  // which resolves the photographs of exactly the albums the token opens and
+  // hands the browser a view of each, never the row.
+  const shared = await openSharedGallery(token)
+  if (!shared) notFound()
+  const { access, albums, favoriteIds } = shared
 
   const settings = await getSiteSettings()
-  const [albums, allPhotos, favoriteIds] = await Promise.all([
-    albumsForAccess(access),
-    photosForAccess(access),
-    favoritePhotoIds(access),
-  ])
 
   if (albums.length === 0) {
     return (
@@ -46,8 +39,6 @@ export default async function ClientGalleryPage({
       </main>
     )
   }
-
-  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -68,9 +59,7 @@ export default async function ClientGalleryPage({
         </p>
       </header>
 
-      {albums.map((album) => {
-        const photos = allPhotos.filter((p) => p.album_id === album.id)
-        const cover = photos.find((p) => p.id === album.cover_photo_id) ?? photos[0]
+      {albums.map(({ album, cover, photos }) => {
 
         return (
           <section key={album.id as string} style={{ marginBottom: '2rem' }}>
@@ -78,8 +67,9 @@ export default async function ClientGalleryPage({
               <div style={{ position: 'relative', height: 'min(45vh, 380px)', overflow: 'hidden', background: 'var(--ink)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={photoUrl(cover.storage_path as string)}
-                  alt=""
+                  src={cover.src}
+                  {...(cover.srcSet ? { srcSet: cover.srcSet } : {})}
+                  alt={cover.alt}
                   style={{
                     width: '100%',
                     height: '100%',
@@ -118,7 +108,6 @@ export default async function ClientGalleryPage({
               favoriteIds={favoriteIds}
               albumId={album.id as string}
               token={token}
-              publicUrl={publicUrl}
               galleryTitle={(album.cover_title_text as string) || (album.title as string)}
               siteTitle={settings.site_title}
               // `=== true`, not `!== false`. The two download paths used to

@@ -5,14 +5,25 @@ import { toggleFavorite } from '@/app/actions/favorites'
 import PhotoLightbox from '@/components/PhotoLightbox'
 import Slideshow from '@/components/Slideshow'
 import GalleryToolbar from '@/components/GalleryToolbar'
-import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
+import { SIZES_ATTR } from '@/lib/srcset'
+import type { GalleryPhotoView } from '@/lib/photos/render-view'
 
-type Photo = {
-  id: string
-  storage_path: string
-  derivatives?: Record<string, string> | null
-  caption: string | null
-  alt_text: string | null
+/** A shared photograph as the server resolved it — its id (favourites, downloads) and views. */
+type Photo = GalleryPhotoView
+
+/**
+ * Starts a file transfer from one of the download routes. They answer with
+ * `Content-Disposition: attachment`, so following the link saves a file and
+ * the gallery stays on screen — a link click, not page navigation, which is
+ * why this is not the router.
+ */
+function startDownload(path: string, params: Record<string, string>) {
+  const link = document.createElement('a')
+  link.href = `${path}?${new URLSearchParams(params)}`
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
 }
 
 export default function ClientGallery({
@@ -20,7 +31,6 @@ export default function ClientGallery({
   favoriteIds,
   albumId,
   token,
-  publicUrl,
   galleryTitle,
   siteTitle,
   allowDownloads = true,
@@ -29,7 +39,6 @@ export default function ClientGallery({
   favoriteIds: string[]
   albumId: string
   token: string
-  publicUrl: string
   galleryTitle: string
   siteTitle: string
   allowDownloads?: boolean
@@ -51,18 +60,19 @@ export default function ClientGallery({
       return next
     })
 
-    await toggleFavorite(albumId, photoId, token, !isFavorited)
+    // The action takes the state BEFORE the toggle: true removes, false adds.
+    await toggleFavorite(token, albumId, photoId, isFavorited)
   }
 
   function downloadAll() {
     setPreparing(true)
     // The browser handles the transfer; the flag just gives feedback
-    window.location.href = `/api/download-all?album=${albumId}&token=${token}`
+    startDownload('/api/download-all', { album: albumId, token })
     setTimeout(() => setPreparing(false), 4000)
   }
 
   function downloadOne(photoId: string) {
-    window.location.href = `/api/download?photo=${photoId}&token=${token}`
+    startDownload('/api/download', { photo: photoId, token })
   }
 
   const shown = onlyFavorites ? photos.filter((p) => favorites.has(p.id)) : photos
@@ -103,10 +113,10 @@ export default function ClientGallery({
             <figure key={photo.id} className="client-tile">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={displayUrl(photo)}
-                srcSet={srcSetFor(photo)}
+                src={photo.view.src}
+                srcSet={photo.view.srcSet}
                 sizes={SIZES_ATTR.grid}
-                alt={photo.alt_text ?? photo.caption ?? ''}
+                alt={photo.view.alt}
                 loading="lazy"
                 decoding="async"
                 onClick={() => setOpenIndex(i)}
@@ -151,7 +161,6 @@ export default function ClientGallery({
       {openIndex !== null && current && (
         <PhotoLightbox
           photos={shown}
-          publicUrl={publicUrl}
           index={openIndex}
           onIndexChange={setOpenIndex}
           onClose={() => setOpenIndex(null)}
@@ -178,8 +187,7 @@ export default function ClientGallery({
 
       {slideshow && (
         <Slideshow
-          photos={shown.map((p) => ({ id: p.id, storage_path: p.storage_path, caption: p.caption }))}
-          publicUrl={publicUrl}
+          photos={shown}
           onClose={() => setSlideshow(false)}
         />
       )}

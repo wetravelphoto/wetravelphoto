@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
+import { SIZES_ATTR } from '@/lib/srcset'
+import type { ImageView } from '@/lib/photos/render-view'
 
+/** A photograph as the server resolved it: its id, caption and its full-size view. */
 export type LightboxPhoto = {
   id: string
-  storage_path: string
-  derivatives?: Record<string, string> | null
   caption: string | null
-  alt_text: string | null
+  full: ImageView
   is_for_sale?: boolean
 }
 
@@ -23,14 +23,12 @@ const MAX_SCALE = 5
  */
 export default function PhotoLightbox({
   photos,
-  publicUrl,
   index,
   onClose,
   onIndexChange,
   actions,
 }: {
   photos: LightboxPhoto[]
-  publicUrl: string
   index: number
   onClose: () => void
   onIndexChange: (next: number) => void
@@ -38,6 +36,17 @@ export default function PhotoLightbox({
 }) {
   const [transform, setTransform] = useState<Transform>(RESET)
   const zoomed = transform.scale > 1.01
+
+  // Reset the zoom whenever the photograph changes, including when the parent
+  // changes it: adjusted during render, so the new photograph never paints zoomed
+  const [shownIndex, setShownIndex] = useState(index)
+  if (index !== shownIndex) {
+    setShownIndex(index)
+    setTransform(RESET)
+  }
+
+  // Whether a finger or pointer is down; the stage follows it without easing
+  const [touching, setTouching] = useState(false)
 
   // Gesture bookkeeping, kept in a ref so it never triggers a re-render
   const gesture = useRef({
@@ -77,9 +86,6 @@ export default function PhotoLightbox({
     }
   }, [onClose, step])
 
-  // Reset the zoom whenever the photograph changes
-  useEffect(() => setTransform(RESET), [index])
-
   const current = photos[index]
   if (!current) return null
 
@@ -93,6 +99,7 @@ export default function PhotoLightbox({
     ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
     g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     g.moved = 0
+    setTouching(true)
 
     if (g.pointers.size === 2) {
       const points = [...g.pointers.values()]
@@ -137,6 +144,7 @@ export default function PhotoLightbox({
     const g = gesture.current
     const wasPinching = g.pointers.size === 2
     g.pointers.delete(e.pointerId)
+    setTouching(g.pointers.size > 0)
 
     if (wasPinching) {
       g.startDistance = 0
@@ -215,14 +223,14 @@ export default function PhotoLightbox({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={displayUrl(current)}
-          srcSet={srcSetFor(current)}
+          src={current.full.src}
+          srcSet={current.full.srcSet}
           sizes={SIZES_ATTR.fullWidth}
-          alt={current.alt_text ?? current.caption ?? ''}
+          alt={current.full.alt}
           draggable={false}
           style={{
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-            transition: gesture.current.pointers.size === 0 ? 'transform 0.22s ease-out' : 'none',
+            transition: touching ? 'none' : 'transform 0.22s ease-out',
           }}
         />
       </div>

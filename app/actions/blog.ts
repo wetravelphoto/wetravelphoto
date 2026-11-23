@@ -4,8 +4,11 @@ import { requireEditor } from '@/lib/auth'
 import { ownsKey } from '@/lib/storage-keys'
 import { createClient } from '@/lib/supabase/server'
 import { IngestError, fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
-import { estimateReadMinutes, type Block } from '@/lib/blocks'
+import { blockIdentities, estimateReadMinutes, type Block } from '@/lib/blocks'
 import { syncPost } from '@/lib/photos/usages'
+import { LibraryError, checkWritePairs, pairKey, uploadedItem, type LibraryItem } from '@/lib/photos/library'
+import { editorLibraryDb } from '@/lib/photos/editor-library'
+import { registrationFailure } from '@/lib/photos/replies'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -61,6 +64,40 @@ export async function updatePost(postId: string, formData: FormData) {
   }
 
   const supabase = await createClient()
+
+  /*
+   * An image the picker chose carries its photograph's identity beside its
+   * path (P5). Both arrive from the browser, so before they are stored the
+   * pair is checked to name ONE photograph of THIS site — the same reader and
+   * canonical proof the picker and the section writer use
+   * (lib/photos/library.ts `checkWritePairs`). A pair the story already holds
+   * may stay while its photograph is unavailable, so editing a story's words
+   * never fails on an old image; none is newly written that way. An older
+   * block with no identity is left exactly as it is.
+   */
+  const identities = blockIdentities(blocks)
+  if (identities.length) {
+    const { data: saved, error: savedError } = await supabase
+      .from('blog_posts')
+      .select('blocks')
+      .eq('tenant_id', tenantId)
+      .eq('id', postId)
+      .maybeSingle()
+    if (savedError) throw new Error('This story could not be saved just now. Try again.')
+    let already: Set<string>
+    try {
+      already = new Set(blockIdentities(saved?.blocks ?? []).map(pairKey))
+    } catch {
+      // A stored block this version cannot read vouches for nothing.
+      already = new Set()
+    }
+    try {
+      await checkWritePairs(await editorLibraryDb(), tenantId, identities, already)
+    } catch (e) {
+      throw new Error(e instanceof LibraryError ? `A photograph in this story: ${e.message}` : 'This story could not be checked just now. Try again.')
+    }
+  }
+
   const title = get('title')
   const slug = await uniqueSlug(supabase, tenantId, get('slug') || title, postId)
   const status = get('status')
@@ -162,34 +199,50 @@ export async function fetchAlbumPhotos(albumId: string | null) {
 
 /**
  * Called once the browser has uploaded a journal image straight to storage.
- * Builds the display sizes and hands back the path blocks should reference.
+ * Builds the display sizes and hands back the path blocks should reference,
+ * the photograph's identity, and the item the picker shows (P5).
+ *
+ * Every failure is answered `{ ok: false }` with words a photographer can
+ * read — Next hides a thrown server-action message in production. Calling it
+ * again for the same key and base is how the picker retries a registration
+ * whose answer was lost; the database function reuses the asset it already
+ * committed for that base.
  */
-export async function registerJournalImage(key: string, base: string): Promise<string | null> {
+export async function registerJournalImage(
+  key: string,
+  base: string
+): Promise<{ ok: true; path: string; assetId: string; item: LibraryItem | null } | { ok: false; message: string }> {
   // A server action is a public endpoint: check who is asking before anything else.
   const { tenantId } = await requireEditor()
 
   // The key comes from the browser. Only this site's own uploads may be
   // registered — see lib/storage-keys.ts.
   if (!ownsKey(tenantId, key) || !ownsKey(tenantId, base) || !key.startsWith(`${base}/`)) {
-    throw new Error('That upload does not belong to this site.')
+    return { ok: false, message: 'That upload does not belong to this site.' }
   }
 
   // Since P2 the image becomes a photograph asset (lib/photos/ingest.ts). Its
-  // placement stays in the post that uses it; P3 projects it from there.
-  // An object that cannot be read back still answers null, as it always did;
-  // any other failure throws — a path is never handed back for a photograph
-  // whose asset was not recorded.
+  // placement stays in the post that uses it; P3 projects it from there. A
+  // path is never handed back for a photograph whose asset was not recorded.
   const supabase = await createClient()
+  let result: Awaited<ReturnType<typeof ingestPhoto>>
   try {
-    const result = await ingestPhoto(
+    result = await ingestPhoto(
       { route: 'journal', tenantId, keyBase: base, sourceKey: key },
       { db: fromSupabase(supabase) }
     )
-    return result.displayPath
   } catch (e) {
-    if (e instanceof IngestError && e.reason === 'unreadable') return null
-    throw e
+    if (e instanceof IngestError && e.reason === 'unreadable') {
+      return { ok: false, message: 'The upload could not be read back. Try again.' }
+    }
+    // Only a fixed sentence: a registration fault may quote the database.
+    return { ok: false, message: registrationFailure(e) }
   }
+
+  const item = await editorLibraryDb()
+    .then((db) => uploadedItem(db, tenantId, result.assetId, 'document'))
+    .catch(() => null)
+  return { ok: true, path: result.displayPath, assetId: result.assetId, item }
 }
 
 export async function bulkUpdateStatus(ids: string[], status: 'draft' | 'published') {

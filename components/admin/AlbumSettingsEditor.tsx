@@ -10,6 +10,8 @@ import CoverRenderer, { type CoverSettings } from '@/components/CoverRenderer'
 import LayoutThumb from '@/components/admin/LayoutThumb'
 import TagInput from '@/components/admin/TagInput'
 import { imageSrc } from '@/lib/images'
+import AssetPicker from '@/components/photos/AssetPicker'
+import { libraryAdapter } from '@/components/photos/library-adapter'
 
 type Photo = { id: string; storage_path: string; taken_at?: string | null }
 
@@ -64,7 +66,7 @@ export default function AlbumSettingsEditor(props: {
   initialButtonText: string
   initialAllowDownloads: boolean
 }) {
-  const { albumId, photos, publicUrl, albumTitle, albumLocation, albumDateLabel, customCoverPath, coverVideoPath } = props
+  const { albumId, photos, publicUrl, albumTitle, albumDateLabel, customCoverPath, coverVideoPath } = props
 
   const [tab, setTab] = useState<Tab>('Cover')
   const [coverId, setCoverId] = useState<string | null>(props.initialCoverId ?? photos[0]?.id ?? null)
@@ -98,6 +100,8 @@ export default function AlbumSettingsEditor(props: {
 
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [choosing, setChoosing] = useState(false)
+  const [coverAdapter] = useState(() => libraryAdapter({ publicUrl: props.publicUrl, albumIds: [props.albumId] }))
   const [focalOpen, setFocalOpen] = useState(false)
   const [uploading, setUploading] = useState<'image' | 'video' | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -155,12 +159,17 @@ export default function AlbumSettingsEditor(props: {
   async function handleVideoUpload(files: FileList | null) {
     if (!files?.length) return
     setUploading('video')
-    const fd = new FormData()
-    fd.append('file', files[0])
-    await uploadCoverVideo(albumId, fd)
-    setUploading(null)
-    setPickerOpen(false)
-    router.refresh()
+    // The same stuck state handleCustomUpload had: a failed upload throws, and
+    // without the `finally` every upload button stayed disabled until a reload.
+    try {
+      const fd = new FormData()
+      fd.append('file', files[0])
+      await uploadCoverVideo(albumId, fd)
+      setPickerOpen(false)
+      router.refresh()
+    } finally {
+      setUploading(null)
+    }
   }
 
   async function handleUseAlbumPhoto(photoId: string) {
@@ -895,36 +904,41 @@ export default function AlbumSettingsEditor(props: {
             </div>
 
             {photos.length > 0 && (
-              <>
-                <p className="admin-meta" style={{ margin: '0 0 0.6rem' }}>
-                  Or pick from this album
+              <div style={{ border: '1px dashed var(--admin-line)', padding: '1rem', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 0.4rem', fontSize: '0.85rem' }}>A photograph from this gallery</p>
+                <p className="admin-meta" style={{ margin: '0 0 0.7rem' }}>
+                  {!usingCustom && selectedPhoto ? 'One of this gallery’s photographs is the cover.' : 'Use one of this gallery’s own photographs.'}
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '0.5rem' }}>
-                  {photos.map((photo) => (
-                    <button
-                      key={photo.id}
-                      type="button"
-                      onClick={() => handleUseAlbumPhoto(photo.id)}
-                      style={{
-                        padding: 0,
-                        border:
-                          !usingCustom && coverId === photo.id
-                            ? '2px solid var(--admin-accent)'
-                            : '0.5px solid var(--admin-line)',
-                        background: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={imageSrc(publicUrl, photo.storage_path)}
-                        alt=""
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }}
-                      />
-                    </button>
-                  ))}
-                </div>
-              </>
+                <button type="button" onClick={() => setChoosing(true)} disabled={!!uploading} className="admin-btn admin-btn-sm">
+                  Choose from this gallery
+                </button>
+              </div>
+            )}
+
+            {choosing && (
+              <AssetPicker
+                adapter={coverAdapter}
+                mode="single"
+                /*
+                 * A chosen cover is one of THIS gallery's rows (cover_photo_id),
+                 * so the picker offers memberships of this gallery only; a
+                 * photograph in no gallery cannot be one. updateAlbumSettings
+                 * still checks the row belongs to the album. The cover stores
+                 * no description, so none is asked for.
+                 */
+                slot={{ label: `Cover · ${albumTitle}`, role: 'decorative' }}
+                capabilities={{ identity: 'membership', albumIds: [albumId] }}
+                initialSource={{ id: `album:${albumId}`, kind: 'album', label: albumTitle }}
+                current={!usingCustom && selectedPhoto ? [{ photoId: selectedPhoto.id, path: selectedPhoto.storage_path }] : []}
+                title="Choose the cover"
+                confirmLabel="Use as cover"
+                onClose={() => setChoosing(false)}
+                onConfirm={(result) => {
+                  setChoosing(false)
+                  const photoId = result.choices[0]?.membership?.photoId
+                  if (photoId && photos.some((p) => p.id === photoId)) void handleUseAlbumPhoto(photoId)
+                }}
+              />
             )}
           </div>
         </div>

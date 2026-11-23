@@ -2,18 +2,14 @@
 
 import { useState } from 'react'
 import PhotoLightbox from '@/components/PhotoLightbox'
-import { srcSetFor, displayUrl, SIZES_ATTR } from '@/lib/srcset'
+import { SIZES_ATTR } from '@/lib/srcset'
+import type { GalleryPhotoView } from '@/lib/photos/render-view'
 
-type Photo = {
-  id: string
-  storage_path: string
-  derivatives?: Record<string, string> | null
-  caption: string | null
-  alt_text: string | null
-  is_for_sale: boolean
-  width: number | null
-  height: number | null
-}
+/**
+ * A gallery photograph as the server resolved it (lib/photos/public.ts): its
+ * id, caption, layout size and its views — never the row it came from.
+ */
+type Photo = GalleryPhotoView
 
 /**
  * Groups photos into rows whose combined aspect ratios fill the width,
@@ -43,12 +39,10 @@ function buildRows(photos: Photo[], targetRatio: number): Photo[][] {
 export default function AlbumGallery({
   photos,
   layoutStyle,
-  publicUrl,
   heroFirst = false,
 }: {
   photos: Photo[]
   layoutStyle: string
-  publicUrl: string
   heroFirst?: boolean
 }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
@@ -67,7 +61,7 @@ export default function AlbumGallery({
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--grid-gap)', maxWidth: 1000, margin: '0 auto' }}>
           {rest.map((photo, i) => (
-            <Figure key={photo.id} photo={photo} publicUrl={publicUrl} onOpen={() => setOpenIndex(i + offset)} />
+            <Figure key={photo.id} photo={photo} onOpen={() => setOpenIndex(i + offset)} />
           ))}
         </div>
       )
@@ -80,10 +74,10 @@ export default function AlbumGallery({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               key={photo.id}
-              src={displayUrl(photo)}
-              srcSet={srcSetFor(photo)}
+              src={photo.view.src}
+              srcSet={photo.view.srcSet}
               sizes={SIZES_ATTR.grid}
-              alt={photo.alt_text ?? photo.caption ?? ''}
+              alt={photo.view.alt}
               width={photo.width ?? undefined}
               height={photo.height ?? undefined}
               loading="lazy"
@@ -126,7 +120,6 @@ export default function AlbumGallery({
                 <Figure
                   key={photo.id}
                   photo={photo}
-                  publicUrl={publicUrl}
                   onOpen={() => setOpenIndex(index)}
                 />
               ))}
@@ -149,7 +142,7 @@ export default function AlbumGallery({
               const ratio = (photo.width ?? 3) / (photo.height ?? 2)
               return (
                 <div key={photo.id} style={{ flexGrow: ratio, flexBasis: 0, minWidth: 0 }}>
-                  <Figure photo={photo} publicUrl={publicUrl} onOpen={() => setOpenIndex(index)} />
+                  <Figure photo={photo} onOpen={() => setOpenIndex(index)} />
                 </div>
               )
             })}
@@ -166,10 +159,10 @@ export default function AlbumGallery({
         <div style={{ padding: `0 ${pad}`, marginBottom: 'var(--grid-gap)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={displayUrl(hero)}
-            srcSet={srcSetFor(hero)}
+            src={hero.full.src}
+            srcSet={hero.full.srcSet}
             sizes={SIZES_ATTR.fullWidth}
-            alt={hero.alt_text ?? hero.caption ?? ''}
+            alt={hero.full.alt}
             width={hero.width ?? undefined}
             height={hero.height ?? undefined}
             fetchPriority="high"
@@ -190,7 +183,6 @@ export default function AlbumGallery({
       {openIndex !== null && (
         <PhotoLightbox
           photos={photos}
-          publicUrl={publicUrl}
           index={openIndex}
           onIndexChange={setOpenIndex}
           onClose={() => setOpenIndex(null)}
@@ -200,15 +192,15 @@ export default function AlbumGallery({
   )
 }
 
-function Figure({ photo, publicUrl, onOpen }: { photo: Photo; publicUrl: string; onOpen: () => void }) {
+function Figure({ photo, onOpen }: { photo: Photo; onOpen: () => void }) {
   return (
     <figure style={{ margin: 0, background: 'var(--surface-alt)' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={displayUrl(photo)}
-        srcSet={srcSetFor(photo)}
+        src={photo.view.src}
+        srcSet={photo.view.srcSet}
         sizes={SIZES_ATTR.grid}
-        alt={photo.alt_text ?? photo.caption ?? ''}
+        alt={photo.view.alt}
         /* Declaring the shape reserves the space, so the page doesn't jump
            around as photographs arrive */
         width={photo.width ?? undefined}

@@ -1,17 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { updateAlbumSettings } from '@/app/actions/albums'
-import { shareAlbumWithClient, unshareAlbumWithClient } from '@/app/actions/clients'
 import AlbumSettingsEditor from '@/components/admin/AlbumSettingsEditor'
-import ConfirmButton from '@/components/admin/ConfirmButton'
-import ShareLinkPanel, { type ShareTarget } from '@/components/admin/ShareLinkPanel'
-import { formatTripDate } from '@/lib/dates'
 import { siteUrl } from '@/lib/site'
+import { galleryEmailConfigured } from '@/lib/gallery-email'
+import type { SharedClient } from '@/lib/clients/share'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { requireEditor } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
+/*
+ * The album's settings. Since client-gallery-v2 the "Private links" and
+ * "Shared with clients" panels are no longer on this page around the form:
+ * privacy, links and clients all live in the editor's Sharing tab.
+ */
 export default async function AlbumSettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { tenantId } = await requireEditor()
@@ -25,26 +28,32 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
     .single()
   const { data: photos } = await supabase
     .from('photos')
-    .select('id, storage_path, taken_at')
+    .select('id, storage_path, derivatives, taken_at, width, height')
     .eq('tenant_id', tenantId)
     .eq('album_id', id)
     .order('sort_order', { ascending: true })
 
   const { data: allClients } = await supabase
     .from('clients')
-    .select('*')
+    .select('id, name, email')
     .eq('tenant_id', tenantId)
     .order('name')
   const { data: sharedWith } = await supabase
     .from('album_clients')
-    // access_token so the settings page can show the link that actually opens
-    // this album for each client, rather than sending you to the clients page
-    // to assemble it.
+    // access_token so the Sharing tab can copy and email the link that
+    // actually opens this album for each client.
     .select('client_id, clients(id, name, email, access_token)')
     .eq('album_id', id)
 
-  const sharedClientIds = new Set(sharedWith?.map((s) => s.client_id))
-  const availableClients = allClients?.filter((c) => !sharedClientIds.has(c.id))
+  const sharedClients: SharedClient[] = (sharedWith ?? [])
+    .map((row) => row.clients as unknown as { id: string; name: string; email: string; access_token: string } | null)
+    .filter((c): c is { id: string; name: string; email: string; access_token: string } => !!c?.id)
+    .map((c) => ({ id: c.id, name: c.name ?? 'Client', email: c.email ?? '', token: c.access_token ?? '' }))
+  const sharedIds = new Set(sharedClients.map((c) => c.id))
+  const contacts = (allClients ?? [])
+    .filter((c) => !sharedIds.has(c.id as string))
+    .map((c) => ({ id: c.id as string, name: (c.name as string) ?? '', email: (c.email as string) ?? '' }))
+
   const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''
 
   // Collect tags already used across albums so they can be reused
@@ -53,21 +62,20 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
     new Set((allAlbums ?? []).flatMap((a) => (a.tags as string[] | null) ?? []))
   ).sort()
 
-  const dateSource = album?.trip_start_date ?? album?.created_at
-  const dateLabel = formatTripDate(dateSource ?? null, album?.cover_date_format ?? 'month_year')
+  // The photographer's name, as the site calls itself — on the covers and in the email.
+  const { data: settings } = await supabase.from('site_settings').select('site_title').eq('tenant_id', tenantId).maybeSingle()
 
-  const share = shareLinks({
-    // From the request rather than NEXT_PUBLIC_SITE_URL, which is unset often
-    // enough that the fallback would quietly offer you a localhost link to
-    // send someone. siteUrl() stays as the backstop.
-    base: await requestOrigin(),
-    privacy: album?.privacy_type ?? 'public',
-    slug: album?.slug ?? '',
-    clients: (sharedWith ?? []).map((row) => {
-      const client = row.clients as unknown as { name: string; access_token: string } | null
-      return { name: client?.name ?? 'Client', token: client?.access_token ?? '' }
-    }),
-  })
+  // A custom cover's own size, for orientation: its canonical asset knows it.
+  let customCoverSize: { width: number | null; height: number | null } | null = null
+  if (album?.cover_custom_path) {
+    const { data: asset } = await supabase
+      .from('photo_assets')
+      .select('width, height')
+      .eq('tenant_id', tenantId)
+      .eq('display_path', album.cover_custom_path)
+      .maybeSingle()
+    if (asset) customCoverSize = { width: (asset.width as number | null) ?? null, height: (asset.height as number | null) ?? null }
+  }
 
   return (
     <div>
@@ -75,27 +83,22 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
         <Link href="/admin/trips">Galleries</Link> / <Link href={`/admin/trips/${id}`}>{album?.title}</Link> / Settings
       </p>
 
-      <ShareLinkPanel
-        heading={share.heading}
-        blurb={share.blurb}
-        targets={share.targets}
-        warning={share.warning}
-      />
-
       <form action={updateAlbumSettings.bind(null, id)} autoComplete="off">
         <AlbumSettingsEditor
           albumId={id}
           photos={photos ?? []}
           publicUrl={publicUrl}
+          siteTitle={(settings?.site_title as string | null) ?? ''}
           albumTitle={album?.title ?? ''}
           albumSlug={album?.slug ?? ''}
           albumLocation={album?.location ?? null}
           albumDescription={album?.description ?? null}
-          albumDateLabel={dateLabel}
+          albumCreatedAt={album?.created_at ?? null}
           customCoverPath={album?.cover_custom_path ?? null}
+          customCoverSize={customCoverSize}
           coverVideoPath={album?.cover_video_path ?? null}
           privacyType={album?.privacy_type ?? 'public'}
-          layoutStyle={album?.layout_style ?? 'masonry'}
+          layoutStyle={album?.layout_style ?? 'grid'}
           sortOrder={album?.sort_order ?? 'manual'}
           tripStartDate={album?.trip_start_date ?? null}
           initialTags={(album?.tags as string[] | null) ?? []}
@@ -108,6 +111,9 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
           initialCoverId={album?.cover_photo_id ?? null}
           initialFocalX={album?.cover_focal_x ?? 0.5}
           initialFocalY={album?.cover_focal_y ?? 0.5}
+          initialZoom={album?.cover_zoom ?? null}
+          initialBackground={album?.cover_background ?? null}
+          initialSecondaryId={album?.cover_secondary_photo_id ?? null}
           initialOverlayType={album?.cover_overlay_type ?? 'none'}
           initialOverlayOpacity={album?.cover_overlay_opacity ?? 0.35}
           initialTitleEnabled={album?.cover_title_enabled ?? true}
@@ -122,73 +128,24 @@ export default async function AlbumSettingsPage({ params }: { params: Promise<{ 
           initialShowDate={album?.cover_show_date ?? false}
           initialShowButton={album?.cover_show_button ?? false}
           initialButtonText={album?.cover_button_text ?? 'View gallery'}
+          origin={await requestOrigin()}
+          sharedClients={sharedClients}
+          contacts={contacts}
+          emailConfigured={galleryEmailConfigured()}
         />
       </form>
-
-      <div className="admin-panel" style={{ marginTop: '1.5rem', maxWidth: 600 }}>
-        <h2 className="admin-h2">Shared with clients</h2>
-        <p className="admin-meta" style={{ margin: '0 0 1rem' }}>
-          Applies when privacy is &ldquo;Client only&rdquo;. Manage contacts on the{' '}
-          <Link href="/admin/clients" style={{ borderBottom: '0.5px solid currentColor' }}>
-            clients page
-          </Link>
-          .
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-          {sharedWith?.map((share) => {
-            const client = share.clients as unknown as { id: string; name: string; email: string }
-            return (
-              <div key={share.client_id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem' }}>
-                <span style={{ flex: 1 }}>
-                  {client?.name} <span className="admin-meta">({client?.email})</span>
-                </span>
-                <form action={unshareAlbumWithClient.bind(null, id, share.client_id)}>
-                  <ConfirmButton label="Remove" confirmLabel="Confirm" />
-                </form>
-              </div>
-            )
-          })}
-          {sharedWith?.length === 0 && (
-            <p className="admin-meta" style={{ margin: 0 }}>
-              Not shared with anyone yet.
-            </p>
-          )}
-        </div>
-
-        {availableClients && availableClients.length > 0 && (
-          <form action={shareAlbumWithClient.bind(null, id)} style={{ display: 'flex', gap: '0.5rem' }}>
-            <select name="client_id" className="admin-select" style={{ marginTop: 0, flex: 1 }}>
-              {availableClients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name} ({client.email})
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="admin-btn">
-              Share
-            </button>
-          </form>
-        )}
-      </div>
     </div>
   )
 }
 
 /**
- * Which link you send, for each privacy setting.
- *
- * These differ more than the settings dropdown suggests, and getting it wrong
- * is the kind of mistake you only find out about from the person who could not
- * open the gallery:
- *
- *   public      the ordinary URL, and it is already in your listings
- *   unlisted    the same ordinary URL — "unlisted" removes it from the
- *               listings, it does not mint a secret one
- *   password    the same URL again, which asks for the password first
- *   client only NO link of its own. One link per client, belonging to the
- *               person rather than the album, and it opens every album shared
- *               with them.
+ * The origin links are built on: from the request rather than
+ * NEXT_PUBLIC_SITE_URL, which is unset often enough that the fallback would
+ * quietly offer a localhost link to send someone. siteUrl() stays as the
+ * backstop. Which link each privacy setting sends is the Sharing tab's
+ * (components/admin/album/SharingPanel.tsx): public, unlisted and password
+ * share the album's own address; client only has none — one link per client,
+ * belonging to the person, opening every album shared with them.
  */
 async function requestOrigin(): Promise<string> {
   const host = (await headers()).get('host')
@@ -196,57 +153,4 @@ async function requestOrigin(): Promise<string> {
 
   const scheme = host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https'
   return `${scheme}://${host}`
-}
-
-function shareLinks({
-  base,
-  privacy,
-  slug,
-  clients,
-}: {
-  base: string
-  privacy: string
-  slug: string
-  clients: { name: string; token: string }[]
-}): { heading: string; blurb: string; targets: ShareTarget[]; warning?: string } {
-  const albumUrl = `${base}/trips/${slug}`
-
-  if (privacy === 'client_only') {
-    return {
-      heading: 'Private links',
-      blurb:
-        'A client-only album has no link of its own. Each client below has their own, which opens every album shared with them.',
-      targets: clients
-        .filter((c) => c.token)
-        .map((c) => ({ label: c.name, url: `${base}/gallery/${c.token}` })),
-      warning:
-        clients.length === 0
-          ? 'This album is set to client only but is not shared with anyone, so nobody can open it. Share it with a contact below.'
-          : undefined,
-    }
-  }
-
-  if (privacy === 'unlisted') {
-    return {
-      heading: 'Share link',
-      blurb:
-        'Hidden from your galleries page and the homepage. Anyone with this link can open it, so treat it as the key.',
-      targets: [{ url: albumUrl }],
-    }
-  }
-
-  if (privacy === 'password') {
-    return {
-      heading: 'Share link',
-      blurb:
-        'Hidden from your listings, and this link asks for the password before showing anything.',
-      targets: [{ url: albumUrl }],
-    }
-  }
-
-  return {
-    heading: 'Share link',
-    blurb: 'Public — this album also appears on your galleries page and can be found without the link.',
-    targets: [{ url: albumUrl }],
-  }
 }

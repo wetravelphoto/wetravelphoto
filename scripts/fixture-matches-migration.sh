@@ -191,6 +191,53 @@
 # this migration out of the replay reports the three columns, the CHECK, the
 # index and five grants as drift. Checked 2026-11-21 against Postgres 16.
 #
+# ── Client gallery v2 (deployed 2026-11-22) ─────────────────────────────────
+#
+# One migration: three cover columns on albums
+# (db/migrations/2026-11-22_album_cover_v2.sql, Supabase 20261122233150,
+# album_cover_v2). Its strip runs FIRST (it is the newest): the key, its
+# partial index, photos_id_album_tenant (the key's target, so after the key),
+# the two CHECKs, then the three columns — each by name, so a fixture missing
+# one is refused at the strip. The replay runs it LAST, after the sweeper, so
+# its columns land after access_revision exactly as production's ALTER TABLE
+# put them; the fixture declares them last for the same reason.
+#
+# What is compared, with no new facts needed: albums whole (the three nullable
+# columns in rank order, no defaults, no column ACL; the two CHECKs; the key's
+# full definition, SET NULL column list included; the partial index) and
+# photos whole (photos_id_album_tenant and its index).
+#
+# A second migration, after it: albums_layout_style_check admits 'square'
+# (db/migrations/2026-11-22_album_layout_square.sql, Supabase 20261122233837,
+# album_layout_square). Its strip runs before the cover strip (it is newer)
+# and puts the check back to production's three-value definition — the only
+# state the migration will replace; it refuses any other. The replay runs it
+# after the cover migration. albums' facts carry the check's full definition,
+# so a fixture left at three values, or given a fifth, is drift.
+#
+# ── Client gallery v2, the gallery email send limit (deployed 2026-11-22) ────
+#
+# Two migrations, in production's order: the send limit
+# (db/migrations/2026-11-22_gallery_email_send_limits.sql, Supabase
+# 20261123001300, gallery_email_send_limits) creates the private table
+# gallery_email_send_attempts and reserve_gallery_email_send(uuid, uuid,
+# uuid); the recipient binding (db/migrations/2026-11-22_gallery_email_
+# recipient_binding.sql, 20261123002952, gallery_email_recipient_binding)
+# re-creates the function with its success result changed to
+# 'reserved:<hex>' — and refuses unless it finds the first one's body or its
+# own. Their strip runs FIRST of all (they are the newest): the function, then
+# the table, each by name, so a fixture missing either is refused at the
+# strip. The replay runs both LAST, after the square layout, so the first
+# migration creates the table and the deployed body and the second has to
+# correct it; reversed, the second's preflight refuses.
+#
+# What is compared: a fact set of its own for gallery_email_send_attempts —
+# columns in rank order, the three constraints, both indexes, RLS, no policy,
+# no trigger, the table grants (the owner's alone), the owner — and with it
+# the function's full definition (body, SECURITY DEFINER, VOLATILE, both SET
+# clauses), its owner and its ACL (the owner's and authenticated's EXECUTE,
+# nothing else).
+#
 # Wants psql on PATH and a server it may create a scratch database on:
 #
 #   PGHOST=/tmp PGPORT=5433 PGUSER=postgres
@@ -250,6 +297,14 @@ RENDER_READ="$ROOT/db/migrations/2026-10-07_photo_render_read.sql"
 RENDER_FIX="$ROOT/db/migrations/2026-10-08_photo_render_record_fix.sql"
 # Deployed 2026-11-21 (P6): the sweeper's lifecycle columns and grants.
 SWEEPER="$ROOT/db/migrations/2026-11-03_photo_sweeper.sql"
+# Deployed 2026-11-22 (client gallery v2): three cover columns on albums.
+COVER_V2="$ROOT/db/migrations/2026-11-22_album_cover_v2.sql"
+# Deployed 2026-11-22, after it: layout_style admits 'square'.
+SQUARE="$ROOT/db/migrations/2026-11-22_album_layout_square.sql"
+# Deployed 2026-11-22, after both: the gallery email send limit, then its
+# recipient binding.
+GEL_LIMITS="$ROOT/db/migrations/2026-11-22_gallery_email_send_limits.sql"
+GEL_BINDING="$ROOT/db/migrations/2026-11-22_gallery_email_recipient_binding.sql"
 
 # Every table P1 created or altered. Compared whole — see the note at the top.
 P1_TABLES="photo_assets photo_usages photos albums blog_posts catalog_items site_images"
@@ -262,7 +317,7 @@ P1_TABLES="photo_assets photo_usages photos albums blog_posts catalog_items site
 # function.
 P2_FNS="'upsert_photo_asset','register_gallery_photo','register_site_image','register_journal_image','register_album_cover','photo_usage_lock','photo_usage_parent_key','photo_usage_source','photo_usage_resolve_path','read_photo_usage_source','list_photo_usage_parents','sync_photo_usages','photo_backfill_key_base','photo_backfill_foreign_claim','read_photo_backfill_inventory','read_photo_backfill_claims','register_legacy_photo_asset','read_photo_render_assets','albums_access_revision'"
 
-for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST" "$COVER_FK" "$USAGES" "$BACKFILL" "$ASSET_FK" "$ACCESS_REV" "$RENDER_READ" "$RENDER_FIX" "$SWEEPER"; do
+for f in "$FIXTURE" "$JOBS" "$ANALYTICS" "$PHOTOS" "$HOTFIX" "$INGEST" "$COVER_FK" "$USAGES" "$BACKFILL" "$ASSET_FK" "$ACCESS_REV" "$RENDER_READ" "$RENDER_FIX" "$SWEEPER" "$COVER_V2" "$SQUARE" "$GEL_LIMITS" "$GEL_BINDING"; do
   [ -r "$f" ] || { echo "cannot read $f" >&2; exit 1; }
 done
 
@@ -344,6 +399,7 @@ SQL
 
 JOBS_FACTS=$(facts_sql jobs "'enqueue_jobs','claim_jobs','finish_job'")
 PV_FACTS=$(facts_sql page_views "'record_page_view'")
+GEL_FACTS=$(facts_sql gallery_email_send_attempts "'reserve_gallery_email_send'")
 declare -A P1_FACTS P1_BEFORE P1_AFTER
 for t in $P1_TABLES; do
   if [ "$t" = photo_assets ]; then P1_FACTS[$t]=$(facts_sql "$t" "$P2_FNS")
@@ -359,6 +415,7 @@ fi
 
 JOBS_BEFORE=$(psql -X -q -t -A -d "$DB" -c "$JOBS_FACTS")
 PV_BEFORE=$(psql -X -q -t -A -d "$DB" -c "$PV_FACTS")
+GEL_BEFORE=$(psql -X -q -t -A -d "$DB" -c "$GEL_FACTS")
 for t in $P1_TABLES; do P1_BEFORE[$t]=$(psql -X -q -t -A -d "$DB" -c "${P1_FACTS[$t]}"); done
 
 # ── Out of the way, so the migrations have to do the creating ───────────────
@@ -401,8 +458,48 @@ then
   echo "FAIL  could not strip the fixture's S4 additions:"; tail -8 /tmp/fmm-drop.log; exit 1
 fi
 
-# P5's additions, by name, before everything else: newest first. A missing one
-# is a failure, not a skip.
+# Client gallery v2's gallery email send limit, first of all: it is the
+# newest. The function, then the table — by name, no CASCADE — so the send
+# limit must create both and the recipient binding must correct the function.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-gel.log 2>&1 <<'SQL'
+drop function public.reserve_gallery_email_send(uuid, uuid, uuid);
+drop table public.gallery_email_send_attempts;
+SQL
+then
+  echo "FAIL  could not strip the fixture's gallery email send limit:"; tail -8 /tmp/fmm-drop-gel.log; exit 1
+fi
+
+# Client gallery v2's square layout, next: it is the newer of the two. The check
+# goes back to production's three-value definition, the one state the
+# migration replaces (any other it refuses), so the replay has to do the swap.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-square.log 2>&1 <<'SQL'
+alter table public.albums drop constraint albums_layout_style_check;
+alter table public.albums add constraint albums_layout_style_check
+  check (layout_style in ('masonry', 'grid', 'single_column'));
+SQL
+then
+  echo "FAIL  could not strip the fixture's square layout:"; tail -8 /tmp/fmm-drop-square.log; exit 1
+fi
+
+# Client gallery v2's cover additions, by name, next. A missing one is a
+# failure, not a skip.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-coverv2.log 2>&1 <<'SQL'
+alter table public.albums drop constraint albums_cover_secondary_photo_fk;
+drop index public.albums_cover_secondary_photo;
+alter table public.photos drop constraint photos_id_album_tenant;
+alter table public.albums drop constraint albums_cover_zoom_range;
+alter table public.albums drop constraint albums_cover_background_hex;
+alter table public.albums
+  drop column cover_secondary_photo_id,
+  drop column cover_zoom,
+  drop column cover_background;
+SQL
+then
+  echo "FAIL  could not strip the fixture's client gallery v2 additions:"; tail -8 /tmp/fmm-drop-coverv2.log; exit 1
+fi
+
+# P5's additions, by name, next: newest first. A missing one is a failure, not
+# a skip.
 if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" >/tmp/fmm-drop-p5.log 2>&1 <<'SQL'
 -- The render read's reader, so the render read has to create it and the R1
 -- correction has to correct it. (Its projector goes with P3's, below.)
@@ -552,16 +649,43 @@ if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$SWEEPER" >/tmp/fmm-sweeper.log 
   echo "FAIL  the P6 sweeper migration does not apply:"; tail -8 /tmp/fmm-sweeper.log; exit 1
 fi
 
+# Client gallery v2, last, as production applied it: ALTER TABLE onto albums
+# after F1's access_revision, so its three columns land at the end.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$COVER_V2" >/tmp/fmm-coverv2.log 2>&1; then
+  echo "FAIL  the client gallery v2 cover migration does not apply:"; tail -8 /tmp/fmm-coverv2.log; exit 1
+fi
+
+# Client gallery v2's square layout, after the cover migration, as production
+# applied it: the three-value check replaced under the same name.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$SQUARE" >/tmp/fmm-square.log 2>&1; then
+  echo "FAIL  the client gallery v2 square-layout migration does not apply:"; tail -8 /tmp/fmm-square.log; exit 1
+fi
+
+# The gallery email send limit, last, as production applied it: the table and
+# the deployed function body; then the recipient binding, whose preflight
+# accepts exactly that body before it changes the success result.
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$GEL_LIMITS" >/tmp/fmm-gel-limits.log 2>&1; then
+  echo "FAIL  the gallery email send-limit migration does not apply:"; tail -8 /tmp/fmm-gel-limits.log; exit 1
+fi
+
+if ! psql -X -q -v ON_ERROR_STOP=1 -d "$DB" -f "$GEL_BINDING" >/tmp/fmm-gel-binding.log 2>&1; then
+  echo "FAIL  the gallery email recipient-binding migration does not apply:"; tail -8 /tmp/fmm-gel-binding.log; exit 1
+fi
+
 JOBS_AFTER=$(psql -X -q -t -A -d "$DB" -c "$JOBS_FACTS")
 PV_AFTER=$(psql -X -q -t -A -d "$DB" -c "$PV_FACTS")
+GEL_AFTER=$(psql -X -q -t -A -d "$DB" -c "$GEL_FACTS")
 for t in $P1_TABLES; do P1_AFTER[$t]=$(psql -X -q -t -A -d "$DB" -c "${P1_FACTS[$t]}"); done
 
 fail=0
 
-for pair in "jobs:2026-09-29_jobs.sql + 2026-09-30_enqueue_jobs_tenant_guard.sql" "page_views:2026-09-29_analytics.sql"; do
+for pair in "jobs:2026-09-29_jobs.sql + 2026-09-30_enqueue_jobs_tenant_guard.sql" "page_views:2026-09-29_analytics.sql" "gallery_email_send_attempts:2026-11-22_gallery_email_send_limits.sql + 2026-11-22_gallery_email_recipient_binding.sql"; do
   table="${pair%%:*}"; file="${pair##*:}"
-  if [ "$table" = jobs ]; then before="$JOBS_BEFORE"; after="$JOBS_AFTER"
-                          else before="$PV_BEFORE";   after="$PV_AFTER"; fi
+  case "$table" in
+    jobs)       before="$JOBS_BEFORE"; after="$JOBS_AFTER" ;;
+    page_views) before="$PV_BEFORE";   after="$PV_AFTER" ;;
+    *)          before="$GEL_BEFORE";  after="$GEL_AFTER" ;;
+  esac
 
   if [ -z "$before" ]; then
     echo "FAIL  the fixture built no $table at all."
@@ -590,8 +714,8 @@ for table in $P1_TABLES; do
   file=2026-09-29_photo_assets.sql
   [ "$table" = photo_assets ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_ingest.sql + 2026-09-30_photo_usages_sync.sql + 2026-10-05_photo_backfill.sql + the three P5 files (19 functions) + 2026-11-03_photo_sweeper.sql"
   [ "$table" = photo_usages ] && file="2026-09-29_photo_assets.sql + 2026-09-30_photo_usages_sync.sql + 2026-11-03_photo_sweeper.sql"
-  [ "$table" = albums ] && file="2026-09-29_photo_assets.sql + 2026-09-30_album_cover_tenant_fk.sql + 2026-10-08_album_access_revision.sql"
-  [ "$table" = photos ] && file="2026-09-29_photo_assets.sql + 2026-10-05_photo_assets_fk.sql"
+  [ "$table" = albums ] && file="2026-09-29_photo_assets.sql + 2026-09-30_album_cover_tenant_fk.sql + 2026-10-08_album_access_revision.sql + 2026-11-22_album_cover_v2.sql + 2026-11-22_album_layout_square.sql"
+  [ "$table" = photos ] && file="2026-09-29_photo_assets.sql + 2026-10-05_photo_assets_fk.sql + 2026-11-22_album_cover_v2.sql"
   [ "$table" = site_images ] && file="2026-09-29_photo_assets.sql + 2026-10-05_photo_assets_fk.sql"
 
   if [ -z "$before" ]; then

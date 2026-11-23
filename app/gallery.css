@@ -259,3 +259,150 @@
 }
 
 .gallery-tile-cover { aspect-ratio: 4 / 3; }
+
+/* ---------- Share (client-gallery-v2) ----------
+   A labelled button, not icons alone. Public albums keep the networks; a
+   client's private link is only copied, with one line saying what that means. */
+
+.share-wrap { position: relative; }
+
+.share-btn {
+  color: var(--ink);
+  border: 0.5px solid var(--line);
+  padding: 0.55rem 1rem;
+}
+.share-btn:hover, .share-btn[aria-expanded='true'] { border-color: var(--ink); }
+
+.share-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 30;
+  width: min(300px, 86vw);
+  padding: 1rem;
+  background: var(--surface, #faf9f6);
+  border: 0.5px solid var(--line);
+  box-shadow: 0 18px 40px rgba(20, 16, 14, 0.14);
+}
+
+.share-copy {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  background: var(--ink);
+  color: var(--surface, #faf9f6);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+}
+
+.share-note { margin: 0.75rem 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--ink-soft); }
+
+.share-social { display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; }
+.share-social button {
+  background: none;
+  border: 0.5px solid var(--line);
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0.55rem;
+  line-height: 0;
+}
+.share-social button:hover { color: var(--ink); border-color: var(--ink); }
+
+/* ---------- Tooltip (hover and keyboard focus) ---------- */
+
+.tip-wrap { position: relative; display: inline-flex; }
+.tip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 20;
+  width: max-content;
+  max-width: min(260px, 80vw);
+  padding: 0.55rem 0.75rem;
+  background: var(--ink);
+  color: var(--surface, #faf9f6);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.tip-wrap:hover .tip,
+.tip-wrap:focus-within .tip { opacity: 1; transform: none; }
+
+/* ---------- The client page ---------- */
+
+.client-layout {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: clamp(1rem, 2.5vw, 2rem) clamp(1.25rem, 4vw, 3rem) 4rem;
+}
+
+.client-back {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem clamp(1.25rem, 4vw, 3rem) 0;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+}
+.client-back a { color: var(--ink-mute); border-bottom: 0.5px solid currentColor; }
+.client-back a:hover { color: var(--ink); }
+
+.client-chooser {
+  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: clamp(2.5rem, 7vw, 5rem) clamp(1.25rem, 4vw, 3rem) 5rem;
+}
+.client-chooser-name {
+  margin: 0 0 clamp(1.75rem, 4vw, 3rem);
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.client-chooser ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: clamp(1.25rem, 3vw, 2.5rem);
+}
+.client-chooser a { display: block; color: var(--ink); }
+.client-chooser-cover {
+  display: block;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--surface-alt, #ece9e3);
+}
+.client-chooser-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.client-chooser a:hover .client-chooser-cover img { transform: scale(1.03); }
+.client-chooser-title {
+  display: block;
+  margin-top: 0.9rem;
+  font-family: var(--font-display), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: clamp(1.1rem, 2vw, 1.5rem);
+  line-height: 1.15;
+}
+
+.cover-first-gallery { outline: none; }

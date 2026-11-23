@@ -6,6 +6,7 @@ import { createRequire } from 'module'
 import {
   accessForToken,
   albumForZip,
+  favoritePhotosForZip,
   photosForZip as photosForTokenZip,
   recordDownload,
 } from '@/lib/gallery-access'
@@ -35,6 +36,10 @@ export const maxDuration = 300
 export async function GET(request: NextRequest) {
   const albumId = request.nextUrl.searchParams.get('album')
   const token = request.nextUrl.searchParams.get('token')
+  // "Download favourites": only this client's favourites of this album. Only
+  // meaningful with a token — favourites belong to a client — so a public zip
+  // never takes it.
+  const onlyFavorites = request.nextUrl.searchParams.get('favorites') === '1'
 
   if (!albumId) return NextResponse.json({ error: 'Missing album' }, { status: 400 })
 
@@ -46,9 +51,29 @@ export async function GET(request: NextRequest) {
     access = await accessForToken(token)
 
     if (access) {
-      album = await albumForZip(access, albumId)
-      if (album) photos = await photosForTokenZip(access, albumId)
+      const opened = await albumForZip(access, albumId)
+      // The album's download switch governs the token path too: a client
+      // whose page shows no download button gets no zip by typing the URL.
+      if (opened && opened.allow_downloads !== true) {
+        return NextResponse.json({ error: 'Downloads are not enabled' }, { status: 403 })
+      }
+      album = opened
+      if (album) {
+        if (onlyFavorites) {
+          try {
+            photos = await favoritePhotosForZip(access, albumId)
+          } catch {
+            return NextResponse.json({ error: 'Favourites could not be read' }, { status: 503 })
+          }
+        } else {
+          photos = await photosForTokenZip(access, albumId)
+        }
+      }
     }
+  }
+
+  if (onlyFavorites && !album) {
+    return NextResponse.json({ error: 'Downloads are not enabled' }, { status: 403 })
   }
 
   if (!album) {
@@ -66,7 +91,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Nothing to download' }, { status: 404 })
   }
 
-  const slug = (album.slug as string) || 'gallery'
+  const slug = `${(album.slug as string) || 'gallery'}${onlyFavorites ? '-favorites' : ''}`
   const archive = archiver('zip', { zlib: { level: 1 } })
 
   // Level 1: photos are already compressed, so heavy zipping costs time

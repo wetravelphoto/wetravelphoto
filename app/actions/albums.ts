@@ -6,13 +6,14 @@ import { createClient } from '@/lib/supabase/server'
 import { hashPassword } from '@/lib/password'
 import { r2Client } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
-import sharp from 'sharp'
 import { fromSupabase, ingestPhoto } from '@/lib/photos/ingest'
 import { syncAlbum } from '@/lib/photos/usages'
 import { randomUUID } from 'crypto'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { clampFocal, clampZoom, hexColor, storableCoverPreset } from '@/lib/covers/registry'
+import { DEFAULT_LAYOUT, storableLayout } from '@/lib/gallery/layouts'
 
 function slugify(input: string): string {
   return (
@@ -40,9 +41,12 @@ export async function createAlbum(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   const slug = await uniqueSlug(supabase, tenantId, title)
 
+  // Justified is the default layout for a new album (client-gallery-v2);
+  // the column's own default is still `masonry`, which only a migration
+  // could change, so it is named here.
   const { data, error } = await supabase
     .from('albums')
-    .insert({ title, slug, created_by: user?.id, tenant_id: tenantId })
+    .insert({ title, slug, created_by: user?.id, tenant_id: tenantId, layout_style: DEFAULT_LAYOUT })
     .select()
     .single()
 
@@ -103,6 +107,53 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
     // An unchecked box sends nothing, so absent means off — which is the
     // answer we want anyway for a switch that hands over full-size files.
     allow_downloads: formData.get('allow_downloads') === 'on',
+    // client-gallery-v2 (migration 20261122233150): NULL means "not chosen",
+    // and the renderer then uses the style's own default.
+    cover_background: hexColor(get('cover_background')),
+    cover_zoom: formData.get('cover_zoom') === null || get('cover_zoom') === '' ? null : clampZoom(get('cover_zoom')),
+    cover_secondary_photo_id: get('cover_secondary_photo_id') || null,
+  }
+
+  /*
+   * VALUES FROM A FORM ARE CHECKED AGAINST WHAT IS DECLARED, never written as
+   * sent (a server action is a public endpoint). An unknown value keeps what
+   * the album already has, as every other field of this form falls back
+   * rather than failing:
+   *
+   *   cover_preset  a prefixed cover style (`v2:<key>`, lib/covers/registry.ts)
+   *                 or one of the legacy layouts, exactly — the contract keeps
+   *                 both valid, and a bare `plate` is always the legacy Plate
+   *   layout_style  only what albums_layout_style_check accepts (`square`
+   *                 since 20261122233837); `editorial` renders but is not
+   *                 storable yet, and the database would otherwise reach the
+   *                 photographer as a redacted server error
+   *   colours       exactly #RRGGBB — never a CSS fragment
+   */
+  if (!storableCoverPreset(updates.cover_preset)) delete updates.cover_preset
+  if (!storableLayout(updates.layout_style)) delete updates.layout_style
+  const titleColor = hexColor(updates.cover_title_color)
+  if (titleColor) updates.cover_title_color = titleColor
+  else delete updates.cover_title_color
+  updates.cover_title_scale = Math.min(2.2, Math.max(0.5, updates.cover_title_scale as number))
+  updates.cover_focal_x = clampFocal(updates.cover_focal_x)
+  updates.cover_focal_y = clampFocal(updates.cover_focal_y)
+  if (!['full', 'month_year', 'year'].includes(updates.cover_date_format as string)) updates.cover_date_format = 'month_year'
+
+  /*
+   * THE SECOND PHOTOGRAPH (diptych) IS ONE OF THIS ALBUM'S OWN, on this site.
+   * The database holds that too (albums_cover_secondary_photo_fk, a key on
+   * (photo, album, site)); asking first turns a refusal into "keep what it
+   * had" rather than a failed save.
+   */
+  if (updates.cover_secondary_photo_id) {
+    const { data: own } = await supabase
+      .from('photos')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('album_id', albumId)
+      .eq('id', updates.cover_secondary_photo_id as string)
+      .maybeSingle()
+    if (!own) delete updates.cover_secondary_photo_id
   }
 
   /*
@@ -171,6 +222,8 @@ export async function updateAlbumSettings(albumId: string, formData: FormData) {
 export async function updateLayoutStyle(albumId: string, layoutStyle: string) {
   // A server action is a public endpoint: check who is asking before anything else.
   const { tenantId } = await requireEditor()
+  // Only what albums_layout_style_check accepts; anything else changes nothing.
+  if (!storableLayout(layoutStyle)) return
   const supabase = await createClient()
   const { error } = await supabase
     .from('albums')

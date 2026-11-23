@@ -1,10 +1,10 @@
 import { openGallery } from '@/lib/photos/public'
 import { photoUrl } from '@/lib/images'
-import { formatTripDate } from '@/lib/dates'
 import SiteHeader from '@/components/SiteHeader'
 import AlbumPasswordGate from '@/components/AlbumPasswordGate'
-import TripCover from '@/components/TripCover'
 import GalleryView from '@/components/GalleryView'
+import CoverFirst, { type FirstCover } from '@/components/gallery/CoverFirst'
+import { albumCover, legacyCoverSettings } from '@/lib/covers/album-cover'
 import { getSiteSettings } from '@/lib/site'
 import { notFound } from 'next/navigation'
 import '../../gallery.css'
@@ -28,53 +28,54 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
   const { album, photos } = gallery
   const settings = await getSiteSettings()
 
-  // The cover is the largest thing on the page: a custom cover with the ladder
-  // derived from its path, the chosen photograph or the first, with its sizes.
-  const imageUrl = gallery.cover.coverUrl
-  const imageSrcSet = gallery.cover.coverSrcSet
+  // Every album that reached this point is open — public, unlisted, or a
+  // password album past its gate (the locked and missing cases returned
+  // above, before any photograph was resolved) — and every one opens on its
+  // cover, full screen, with the gallery beneath (client-gallery-v2: cover
+  // first for all privacy types). A registry style (`v2:<key>`) draws through
+  // GalleryCover; a legacy preset — `plate` included — through the old
+  // CoverRenderer with exactly the settings it always had
+  // (legacyCoverSettings), only full screen and with a "View gallery" button.
+  const image = gallery.cover.coverUrl ? { src: gallery.cover.coverUrl, srcSet: gallery.cover.coverSrcSet, alt: '' } : null
+  const styled = albumCover({ album, cover: image, photos, siteTitle: settings.site_title })
+  const videoUrl = album.cover_video_path ? photoUrl(album.cover_video_path) : null
+  const first: FirstCover | null = styled
+    ? { kind: 'style', ...styled }
+    : image
+      ? { kind: 'legacy', settings: legacyCoverSettings(album, image, videoUrl) }
+      : null
 
-  const dateLabel = formatTripDate(
-    album.trip_start_date ?? album.created_at,
-    album.cover_date_format ?? 'month_year'
+  const body = (
+    <>
+      <SiteHeader />
+      <div id={first ? undefined : 'gallery'}>
+        <AlbumIntro album={album} />
+      </div>
+      <GalleryView
+        photos={photos}
+        layoutStyle={album.layout_style ?? (styled ? 'grid' : 'masonry')}
+        heroFirst={album.gallery_hero ?? false}
+        galleryTitle={album.title}
+        siteTitle={settings.site_title}
+        canDownload={false}
+      />
+    </>
   )
 
-  const showText = album.cover_title_enabled !== false
+  // No cover photograph at all: nothing to open on, so the gallery as before.
+  return <main>{first ? <CoverFirst cover={first}>{body}</CoverFirst> : body}</main>
+}
+
+/** The album's description and tags, between its cover and its photographs. */
+function AlbumIntro({ album }: { album: Record<string, unknown> }) {
   const tags = album.show_tags === false ? [] : ((album.tags as string[] | null) ?? [])
-  const descAlign = (album.description_align ?? 'left') as 'left' | 'center' | 'right'
-  const descScale = album.description_scale ?? 1
-
+  const descAlign = ((album.description_align as string | null) ?? 'left') as 'left' | 'center' | 'right'
+  const descScale = (album.description_scale as number | null) ?? 1
+  const description = album.description as string | null
+  if (!description && tags.length === 0) return null
   return (
-    <main>
-      <SiteHeader />
-
-      {imageUrl && (
-        <TripCover
-          settings={{
-            title: showText ? album.cover_title_text || album.title : '',
-            subtitle: showText ? album.cover_subtitle : null,
-            location: album.location,
-            dateLabel,
-            showLocation: showText && album.cover_show_location,
-            showDate: showText && album.cover_show_date,
-            layout: album.cover_preset,
-            font: album.cover_font,
-            titleScale: album.cover_title_scale ?? 1,
-            color: album.cover_title_color,
-            focalX: album.cover_focal_x ?? 0.5,
-            focalY: album.cover_focal_y ?? 0.5,
-            overlayType: album.cover_overlay_type,
-            overlayOpacity: album.cover_overlay_opacity ?? 0.35,
-            imageUrl,
-            imageSrcSet,
-            videoUrl: album.cover_video_path ? photoUrl(album.cover_video_path) : null,
-            showButton: showText && album.cover_show_button,
-            buttonText: album.cover_button_text,
-          }}
-        />
-      )}
-
-      <div id="gallery" style={{ padding: '0 clamp(1.25rem, 4vw, 3rem)' }}>
-        {album.description && (
+      <div style={{ padding: '0 clamp(1.25rem, 4vw, 3rem)' }}>
+        {description && (
           <p
             style={{
               maxWidth: descAlign === 'center' ? '58ch' : '52ch',
@@ -86,7 +87,7 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
               textAlign: descAlign,
             }}
           >
-            {album.description}
+            {description}
           </p>
         )}
 
@@ -112,15 +113,5 @@ export default async function TripPage({ params }: { params: Promise<{ slug: str
           </div>
         )}
       </div>
-
-      <GalleryView
-        photos={photos}
-        layoutStyle={album.layout_style ?? 'masonry'}
-        heroFirst={album.gallery_hero ?? false}
-        galleryTitle={album.title}
-        siteTitle={settings.site_title}
-        canDownload={false}
-      />
-    </main>
   )
 }

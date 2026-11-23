@@ -4,6 +4,8 @@ import { createAdminClientOrNull } from '@/lib/supabase/admin'
 import { PLATFORM } from '@/lib/platform'
 import NewSiteForm from '@/components/admin/NewSiteForm'
 import DeleteSite from '@/components/admin/DeleteSite'
+import SiteInvitations, { type Invitee } from '@/components/admin/SiteInvitations'
+import { invitationStatus, type AuthUser, type InvitationStatus } from '@/lib/invitations'
 
 /**
  * EVERY SITE ON THE PLATFORM — for the platform admin only.
@@ -41,6 +43,7 @@ type Row = {
   created_at: string
   hosts: { host: string; is_primary: boolean }[]
   people: number
+  invitations: Invitee[]
 }
 
 export default async function SitesPage() {
@@ -56,11 +59,19 @@ export default async function SitesPage() {
   if (!db) {
     unavailable = true
   } else {
-    const [{ data: tenants }, { data: domains }, { data: profiles }] = await Promise.all([
+    const [{ data: tenants }, { data: domains }, { data: profiles }, users] = await Promise.all([
       db.from('tenants').select('id, name, created_at').order('created_at', { ascending: true }),
       db.from('tenant_domains').select('tenant_id, host, is_primary'),
-      db.from('profiles').select('tenant_id'),
+      db.from('profiles').select('id, tenant_id, email, role, is_platform_admin'),
+      // Who has accepted: the auth account, not the profile, knows. One page
+      // is every account at this platform's size; a failure shows "unknown"
+      // rather than a guess.
+      db.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => null),
     ])
+    const byId = new Map<string, AuthUser>()
+    for (const u of users && !users.error ? users.data.users : []) byId.set(u.id, u as AuthUser)
+    // No accounts read at all is "unknown", never a row of false "pending"s.
+    const statusOf = (id: string): InvitationStatus => (byId.size ? invitationStatus(byId.get(id)) : 'unknown')
 
     sites = (tenants ?? []).map((t) => ({
       id: t.id as string,
@@ -71,6 +82,14 @@ export default async function SitesPage() {
         .map((d) => ({ host: d.host as string, is_primary: d.is_primary === true }))
         .sort((a, b) => Number(b.is_primary) - Number(a.is_primary)),
       people: (profiles ?? []).filter((p) => p.tenant_id === t.id).length,
+      invitations: (profiles ?? [])
+        .filter((p) => p.tenant_id === t.id && p.is_platform_admin !== true)
+        .map((p) => ({
+          userId: p.id as string,
+          email: (p.email as string) ?? '',
+          role: (p.role as string) ?? 'owner',
+          status: statusOf(p.id as string),
+        })),
     }))
   }
 
@@ -173,6 +192,8 @@ export default async function SitesPage() {
                     {site.people} {site.people === 1 ? 'person' : 'people'}
                   </span>
                 </div>
+
+                {site.invitations.length > 0 && <SiteInvitations tenantId={site.id} people={site.invitations} />}
 
                 {site.hosts[0] && <DeleteSite tenantId={site.id} host={site.hosts[0].host} />}
               </li>

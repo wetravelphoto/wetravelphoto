@@ -1083,3 +1083,8 @@ their own, with a red pill naming the address. A switch for
 set. Sentry, inert without a DSN, tagging every event with the site and
 scrubbing share-link and auth tokens before anything leaves. The checklist
 stopped asking to fill a homepage that was already full.
+
+
+## Client Gallery v2 — invitation address correction
+
+Keep invitation-address changes disabled. Investigate updating a pending auth user’s email in place and resending the invitation only if the invitee has never signed in, without deleting the account. Resolve races and old-link invalidation before enabling it.

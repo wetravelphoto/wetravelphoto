@@ -34,7 +34,7 @@ import {
 } from '@/lib/photos/render-view'
 import { photoRole } from '@/lib/sections/image-bundle'
 import { photoUrl } from '@/lib/images'
-import { srcSetFor, displayUrl } from '@/lib/srcset'
+import { srcSetFor, displayUrl, srcSetFromPath } from '@/lib/srcset'
 import { loadPageSections, type PageSections } from '@/lib/sections/load'
 import { composeDraftPage, loadDraftPage } from '@/lib/drafts/store'
 import { openShare } from '@/lib/drafts/review'
@@ -410,27 +410,48 @@ export async function openSharedGallery(
   if (!access) return null
   const [albums, rows, favoriteIds] = await Promise.all([albumsForAccess(access), photosForAccess(access), favoritePhotoIds(access)])
   const photoRows = rows as unknown as PhotoRow[]
-  const outcomes = await ask('gallery_share', photoRows.map((r) => memberRef(r)))
-  const url = publicUrl()
+  type SharedRow = Record<string, unknown> & { id: string; cover_photo_id: string | null; cover_custom_path?: string | null }
+  const albumRows = albums as unknown as SharedRow[]
 
-  const shared = await Promise.all(
-    (albums as Array<Record<string, unknown> & { id: string; cover_photo_id: string | null }>).map(async (album) => {
+  // Each album's cover source, answered from the rows just read behind the
+  // token (no further read). Since client-gallery-v2 a custom cover counts
+  // here too — the share page opens on the album's cover.
+  const sources = await Promise.all(
+    albumRows.map(async (album) => {
       const own = photoRows.filter((p) => p.album_id === album.id)
-      const { sources: covers } = await coverSources(access.tenantId, [{ id: album.id, cover_photo_id: album.cover_photo_id, cover_custom_path: null }], own)
-      const source = covers.get(album.id)
-      // The share page has always drawn the cover from the photograph's
-      // stored file, with no alternatives.
-      const cover =
-        source?.kind === 'member'
-          ? pictureView(memberPicture(outcomes, source.row, 'decorative'), 'full', (path) => ({ src: photoUrl(path), alt: '' }))
-          : null
-      return {
-        album,
-        cover,
-        photos: own.map((r) => galleryPhotoView(outcomes, r, url)).filter((p): p is GalleryPhotoView => p !== null),
-      }
+      const { sources: covers } = await coverSources(
+        access.tenantId,
+        [{ id: album.id, cover_photo_id: album.cover_photo_id, cover_custom_path: album.cover_custom_path ?? null }],
+        own
+      )
+      return { album, own, source: covers.get(album.id) }
     })
   )
+
+  const outcomes = await ask('gallery_share', [
+    ...photoRows.map((r) => memberRef(r)),
+    ...sources.map(({ source }) => (source?.kind === 'custom' ? relationalPictureRef(source.path) : null)),
+  ])
+  const url = publicUrl()
+
+  const shared = sources.map(({ album, own, source }) => {
+    // A member cover is drawn from the photograph's stored file, as the share
+    // page always has; a custom one with the ladder derived from its path.
+    const cover =
+      source?.kind === 'member'
+        ? pictureView(memberPicture(outcomes, source.row, 'decorative'), 'full', (path) => ({ src: photoUrl(path), alt: '' }))
+        : source?.kind === 'custom'
+          ? pictureView(relationalPicture(outcomes, source.path, 'decorative'), 'full', (path) => {
+              const src = photoUrl(path)
+              return { src, srcSet: srcSetFromPath(src), alt: '' }
+            })
+          : null
+    return {
+      album,
+      cover,
+      photos: own.map((r) => galleryPhotoView(outcomes, r, url)).filter((p): p is GalleryPhotoView => p !== null),
+    }
+  })
   return { access, albums: shared, favoriteIds }
 }
 

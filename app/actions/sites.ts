@@ -13,6 +13,12 @@ import { PLATFORM } from '@/lib/platform'
 import { SAMPLE_ALBUM_SLUG, SAMPLE_ALBUM_TITLE, SAMPLE_PHOTOS } from '@/lib/samples'
 import { EMAIL_PATTERN } from '@/lib/email'
 import { syncAfterSettings, syncAlbum, syncDraft, syncLivePage, syncPost } from '@/lib/photos/usages'
+import {
+  changeInvitationEmailWith,
+  resendInvitationWith,
+  type InviteAdmin,
+  type InviteResult,
+} from '@/lib/invitations'
 
 /**
  * MAKING A SITE
@@ -1037,4 +1043,55 @@ async function applyDefaultLook(db: SupabaseClient, tenantId: string): Promise<v
     },
     { onConflict: 'tenant_id' }
   )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// INVITATIONS — resend, or send to the right address (client-gallery-v2)
+// ════════════════════════════════════════════════════════════════════════════
+
+/** The service-role client, seen through the narrow interface lib/invitations.ts reads and sends with. */
+function inviteAdmin(db: SupabaseClient): InviteAdmin {
+  return db as unknown as InviteAdmin
+}
+
+async function platformAdminDb(): Promise<{ db: SupabaseClient } | { message: string }> {
+  const editor = await requireEditor()
+  if (!editor.platformAdmin) return { message: 'Only a platform admin can change an invitation.' }
+  try {
+    return { db: createAdminClient() }
+  } catch {
+    return { message: 'SUPABASE_SERVICE_ROLE_KEY is not set on this deployment, so invitations cannot be changed here.' }
+  }
+}
+
+/** Sends a pending invitation again. Platform admin only — checked here as well as on the page. */
+export async function resendInvitation(formData: FormData): Promise<InviteResult> {
+  const gate = await platformAdminDb()
+  if ('message' in gate) return { ok: false, message: gate.message }
+  const result = await resendInvitationWith(inviteAdmin(gate.db), {
+    tenantId: clean(formData.get('tenant_id')),
+    userId: clean(formData.get('user_id')),
+    fallbackDomain: PLATFORM.domain,
+  })
+  revalidatePath('/admin/sites')
+  return result
+}
+
+/**
+ * Changing a pending invitation's address — SWITCHED OFF in
+ * lib/invitations.ts until the old invitation can be withdrawn without risking
+ * a person who accepts at that moment. It refuses and changes nothing; the
+ * platform-admin gate stays in front of it regardless.
+ */
+export async function changeInvitationEmail(formData: FormData): Promise<InviteResult> {
+  const gate = await platformAdminDb()
+  if ('message' in gate) return { ok: false, message: gate.message }
+  const result = await changeInvitationEmailWith(inviteAdmin(gate.db), {
+    tenantId: clean(formData.get('tenant_id')),
+    userId: clean(formData.get('user_id')),
+    email: clean(formData.get('email')),
+    fallbackDomain: PLATFORM.domain,
+  })
+  revalidatePath('/admin/sites')
+  return result
 }

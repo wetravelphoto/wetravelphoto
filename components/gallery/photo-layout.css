@@ -1,0 +1,98 @@
+/* components/gallery/PhotoLayout.tsx — the one gallery renderer.
+   Every tile carries its own photograph's aspect-ratio; nothing here sets a
+   tile height that a photograph of another shape would have to fill. */
+
+.pl-root { width: 100%; min-width: 0; }
+
+.pl-tile {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  background: var(--surface-alt, #ece9e3);
+  min-width: 0;
+}
+
+.pl-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  cursor: zoom-in;
+  user-select: none;
+  transition: opacity 0.4s ease;
+}
+
+.pl-rows { display: flex; flex-direction: column; }
+.pl-row { display: flex; overflow: hidden; }
+.pl-row > .pl-tile { height: 100%; }
+
+.pl-masonry { display: flex; align-items: flex-start; }
+.pl-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.pl-col > .pl-tile { width: 100%; }
+
+.pl-square { display: grid; }
+
+/* One photograph: large and centred, never taller than the screen. */
+.pl-single {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(0.5rem, 2vw, 2rem) 0;
+}
+.pl-single > .pl-tile { width: min(100%, 1400px, calc(82vh * var(--pl-ratio, 1.5))); }
+
+/* Single column: editorial pacing — generous air, portraits narrower and
+   centred so nothing is taller than the screen. */
+.pl-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1.75rem, 6vw, 5rem);
+  padding: clamp(0.5rem, 2vw, 1.5rem) 0;
+}
+.pl-column-item { width: min(100%, 1180px); display: flex; flex-direction: column; align-items: center; }
+.pl-column-item > .pl-tile { width: min(100%, calc(88vh * var(--pl-ratio, 1.5))); }
+.pl-column-item[data-portrait] { width: min(100%, 720px); }
+
+.pl-hero > .pl-tile { width: 100%; }
+
+.pl-caption {
+  margin: 0.7rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--ink-soft, #5f5a53);
+  max-width: 60ch;
+  text-align: center;
+}
+
+.pl-overlay {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.35rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.pl-tile:hover .pl-overlay,
+.pl-tile:focus-within .pl-overlay { opacity: 1; }
+@media (hover: none) { .pl-overlay { opacity: 1; } }
+
+.pl-overlay button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: rgba(12, 10, 9, 0.55);
+  color: #faf9f6;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  line-height: 0;
+  transition: background 0.2s;
+}
+.pl-overlay button:hover { background: rgba(12, 10, 9, 0.8); }
+.pl-overlay button[data-on='true'] { background: var(--ember, #b5602c); }

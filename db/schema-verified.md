@@ -24,10 +24,19 @@ policies**, **9 functions**, one trigger (`site_draft_touch` on `site_draft`),
 and no trigger anywhere else.
 
 *That was the survey. After S3, S4, P1, the S3 tenant-guard hotfix, P2, P3,
-P4, P5 and the P6 sweeper migration, production is **37 tables, 553
+P4, P5 and the P6 sweeper migration, production was **37 tables, 553
 columns, 32 functions, 56 policies, 158 constraints, 102 indexes**, RLS on
-all 37. Codex directly surveyed these totals on 2026-11-21; see the deployment
-sections below for the migration details.*
+all 37 — totals Codex directly surveyed on 2026-11-21. The client gallery v2
+cover migration (2026-11-22) adds 3 columns, 4 constraints and 2 indexes, and
+the square-layout migration after it replaces one CHECK under its own name,
+changing no count. Production is now **37 tables, 556 columns, 32 functions,
+56 policies, 162 constraints, 104 indexes**, RLS on all 37 — totals
+independently counted after both migrations (relayed 2026-11-22). The two
+gallery email migrations after them add 1 table, 4 columns, 1 function, 3
+constraints and 2 indexes, so production is now **38 tables, 560 columns,
+33 functions, 56 policies, 165 constraints, 106 indexes**, RLS on all 38 —
+DERIVED from the counted figures, not independently counted. See the
+deployment sections below.*
 
 *The policy figure was first written here as 53, which was a counting error in
 the transcription rather than anything about the database. Corrected 2026-09-29
@@ -601,6 +610,192 @@ No S4-specific security finding. `page_views_tenant_time` and
 `page_views_post_idx` report as unused, which is expected immediately after
 creation and worth re-checking once there is real traffic — the same follow-up
 already recorded for the queue's three indexes.
+
+---
+
+## 2026-11-22 — Client gallery v2, the gallery email send limit, DEPLOYED TO PRODUCTION
+
+Two migrations, each reviewed by Work and applied once to production, the
+second as a forward correction of the first, from the hash-verified files,
+which have not been edited since — their bytes are the deployments'
+identity, and their "CANDIDATE — NOT DEPLOYED" headers are historical:
+
+| | Supabase version | name | file | sha256 |
+|---|---|---|---|---|
+| send limit | `20261123001300` | `gallery_email_send_limits` | `db/migrations/2026-11-22_gallery_email_send_limits.sql` | `6460b642d7ade6e3b0d5451381509579705b07da08b2e7a032f783b06c9b26a0` |
+| recipient binding | `20261123002952` | `gallery_email_recipient_binding` | `db/migrations/2026-11-22_gallery_email_recipient_binding.sql` | `fbea8b9fbbe73a4548e8850c61c5154585336a9d188e58db05f57014d0b9258c` |
+
+**Source of every production fact below:** Work's reviews and the read-only
+postflights, as relayed to Claude Code on 2026-11-22. **Claude Code did not
+read production**; anything "measured locally" is loopback rehearsal only.
+
+### Production, as the postflights recorded it
+
+| | |
+|---|---|
+| `gallery_email_send_attempts` | new; `id uuid NOT NULL DEFAULT gen_random_uuid()`, `tenant_id uuid NOT NULL` (no default), `recipient_hash bytea NOT NULL`, `attempted_at timestamptz NOT NULL` (no default) |
+| its constraints | `_pkey PRIMARY KEY (id)`; `_tenant_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE`; `_hash_shape CHECK (octet_length(recipient_hash) = 32)` |
+| its index | `gallery_email_send_attempts_tenant_recipient (tenant_id, recipient_hash, attempted_at)` (plus the primary key's) |
+| RLS | enabled, not forced, **no policy**; no trigger |
+| table privileges | **none** for PUBLIC, anon, authenticated or service_role — the owner alone |
+| `reserve_gallery_email_send(p_tenant uuid, p_album uuid, p_client uuid)` | returns text; plpgsql, SECURITY DEFINER, VOLATILE, `search_path=""`, `lock_timeout=5s`; owner **postgres**; EXECUTE to **authenticated only** (anon, service_role and PUBLIC: none) |
+| its success result | since `20261123002952`: `'reserved:' \|\| encode(<recipient hash>, 'hex')` — the hash the same call inserted. `'site_limited'` and `'recipient_limited'` unchanged, carrying no hash; every refusal's SQLSTATE and message unchanged |
+| data | the table **empty** |
+
+**What it means.** The limit lives in the database: at most 30 reserved
+attempts per site and 3 per recipient per site in any rolling hour, reserved
+before the provider is called and never given back. The function derives the
+recipient itself (this site's client, on this site's gallery, shared with
+that client) and restates the editor-of-this-site-or-platform-admin rule
+NULL-safely.
+
+**Retention, as it actually behaves.** Rows are pruned **lazily**: each call
+deletes its own site's rows older than the hour, inside the per-site lock,
+and nothing else ever deletes them — no job, no cross-site statement. So a
+site that goes quiet keeps its last rows (at most 30) until its next call,
+or until the site is deleted (the tenant cascade). "A row lives at most an
+hour", as the first migration's header puts it, is true of what is counted,
+not of what is stored.
+
+**The hash is pseudonymous, not anonymised.** `recipient_hash =
+sha256(utf8(<tenant id> || ':' || lower(btrim(email))))`: no plaintext
+address is stored, and keying by the site stops one person's rows being
+joined across sites, but the key is not a secret and there is no salt —
+anyone holding a row who guesses an address can confirm it (the
+`visitor_hash` shape). The binding's answer discloses the same hash, and only
+to a caller who passed the function's own rule. A retained row is therefore
+personal data under a pseudonym, held until pruned as above.
+
+**Not exercised in production, deliberately:** no reservation was made; the
+behaviour is proved locally (`db/verify-gallery-email-limits.sql` for the
+pre-binding contract, `db/verify-gallery-email-recipient-binding.sql` for the
+present one). Nothing in the deployed application calls the function yet.
+
+### The reconciliation (local, 2026-11-22)
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` carry the table, its
+index, RLS, its revoke, the function **as the binding left it** (never the
+first migration's `'reserved'` body) and its grant block — every statement
+copied from the two files, in one block at the end of each (in the fixture,
+before the seed rows). Postgres reports the function's body exactly as
+written, so a copy that differs by one character is drift.
+
+`scripts/fixture-matches-migration.sh` strips both FIRST (the function, then
+the table, each by name) and replays them LAST, after the square layout, in
+order — the binding's own preflight refuses any body but the first
+migration's or its own. A fact set of its own compares
+`gallery_email_send_attempts` whole (columns by rank, constraints, indexes,
+RLS, policies, triggers, table grants, owner) and the function's definition,
+owner and ACL. `scripts/fixture-matches-migration.mjs` reads those steps from
+the shell file; it was changed only to expect the third fact set, plus three
+parser refusals and eleven fixture mutants for these objects.
+
+**A historical-stage caveat, not changed here:** `scripts/p4-local-db.mjs`'s
+stages strip nothing of client gallery v2 (as before for the cover and
+square migrations), so a historical stage now also carries this table and
+function.
+
+---
+
+## 2026-11-22 — Client gallery v2, layout_style admits 'square', DEPLOYED TO PRODUCTION
+
+The second client gallery v2 migration, independently reviewed and applied
+once to production after the cover migration (next section), from the
+hash-verified file, which has not been edited since — its bytes are the
+deployment's identity, and its "CANDIDATE — NOT DEPLOYED" header is
+historical:
+
+| | Supabase version | name | file | sha256 |
+|---|---|---|---|---|
+| square layout | `20261122233837` | `album_layout_square` | `db/migrations/2026-11-22_album_layout_square.sql` | `487555e35d61227cbb46995a1f3bbddbb290c33156d45f633785e849da489a49` |
+
+**Source of every production fact below:** the read-only postflight and an
+independent count of the totals, as relayed to Claude Code on 2026-11-22.
+**Claude Code did not read production.**
+
+### Production, as the postflight recorded it
+
+| | |
+|---|---|
+| `albums_layout_style_check` | exactly `CHECK ((layout_style = ANY (ARRAY['masonry'::text, 'grid'::text, 'single_column'::text, 'square'::text])))` — the three original values in their order, plus `square`; same name, on `albums` |
+| `albums.layout_style` | unchanged: `text NOT NULL DEFAULT 'masonry'::text` |
+| unchanged | existing rows; grants, policies, triggers and indexes |
+| totals | **37 tables · 556 columns · 32 functions · 56 policies · 162 constraints · 104 indexes**, independently counted — a replaced CHECK changes no count |
+
+The editor's "square" layout, refused before with 23514, is now admitted.
+Narrowing the check again would fail while any album is saved as `square`
+(the migration's own rollback note).
+
+### The reconciliation (local, 2026-11-22)
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` declare
+`albums_layout_style_check` with the four values, in place among albums'
+other survey-era CHECKs. Creation order is not observable for a CHECK
+(PostgreSQL evaluates them in name order), unlike the foreign keys above.
+
+`scripts/fixture-matches-migration.sh` strips it before the cover strip
+(it is newer) by putting the check back to production's three-value
+definition — the one state the migration replaces; it refuses any other —
+and replays it after the cover migration. `albums` is compared whole, so the
+check's full definition is a fact. `scripts/fixture-matches-migration.mjs`
+reads its steps from the shell file and needed no change; its parser also
+requires every listed migration to be replayed exactly once.
+
+---
+
+## 2026-11-22 — Client gallery v2, three cover columns on albums, DEPLOYED TO PRODUCTION
+
+One migration, independently reviewed by Work and applied once to production
+from the hash-verified file, which has not been edited since — its bytes are
+the deployment's identity, and its "CANDIDATE — NOT DEPLOYED" header is
+historical:
+
+| | Supabase version | name | file | sha256 |
+|---|---|---|---|---|
+| cover v2 | `20261122233150` | `album_cover_v2` | `db/migrations/2026-11-22_album_cover_v2.sql` | `645e22aab80c75f69e333032c184220d9c872b0b749f7c409cff11c43ca59c62` |
+
+**Source of every production fact below:** the read-only postflight, as
+relayed to Claude Code on 2026-11-22. **Claude Code did not read
+production**; anything "measured locally" is loopback rehearsal only.
+
+### Production, as the postflight recorded it
+
+| | |
+|---|---|
+| `albums` columns | `cover_background text NULL`, `cover_zoom numeric NULL`, `cover_secondary_photo_id uuid NULL` — no defaults, no column ACL; added by ALTER TABLE, so the table's last three columns (after `access_revision`) |
+| `albums_cover_zoom_range` | `CHECK (((cover_zoom >= 1.0) AND (cover_zoom <= 2.5)))` |
+| `albums_cover_background_hex` | `CHECK ((cover_background ~ '^#[0-9A-Fa-f]{6}$'::text))` |
+| `photos_id_album_tenant` | `UNIQUE (id, album_id, tenant_id)` — a key target only; `photos.id` is already the primary key, so it refuses nothing |
+| `albums_cover_secondary_photo_fk` | `FOREIGN KEY (cover_secondary_photo_id, id, tenant_id) REFERENCES photos(id, album_id, tenant_id) ON DELETE SET NULL (cover_secondary_photo_id)` — MATCH SIMPLE, NO ACTION on update, not deferrable, validated |
+| `albums_cover_secondary_photo` | `CREATE INDEX … ON public.albums USING btree (cover_secondary_photo_id) WHERE (cover_secondary_photo_id IS NOT NULL)` |
+| unchanged | existing data fingerprints; grants, policies and application triggers (including `albums_access_revision`) |
+| data | 9 albums · 87 photos · every new column NULL |
+
+**Totals:** the 2026-11-21 surveyed baseline (553 columns, 158 constraints,
+102 indexes) plus this migration — **556 columns, 162 constraints, 104
+indexes**; tables 37, functions 32, policies 56 unchanged. The index figure
+counts the UNIQUE's own backing index as well as the partial one, as
+`pg_indexes` does. First derived; since confirmed by an independent count
+after the square-layout migration (next section), which changes no total.
+
+**What it means for deletion.** Deleting a photograph that is some album's
+second cover photograph nulls `cover_secondary_photo_id` and nothing else;
+deleting an album still removes its photographs by `photos_album_id_fkey`'s
+cascade; `deleteSite()` (photos, then albums, explicitly) is unaffected. Moving
+such a photograph to another album or site is refused (NO ACTION on update).
+
+### The reconciliation (local, 2026-11-22)
+
+`db/schema-2026-09.sql` and `db/test-fixture.sql` declare the three columns
+last on `albums`, and the four constraints and the index in one block after
+P4 unit 2's keys — the order production created them in, since foreign-key
+triggers fire in creation order. Every statement is the migration's own DDL.
+
+`scripts/fixture-matches-migration.sh` strips this migration first (the key,
+its index, `photos_id_album_tenant`, the two CHECKs, the three columns — each
+by name) and replays it last, after the sweeper; `albums` and `photos` are
+compared whole. `scripts/fixture-matches-migration.mjs` reads its steps from
+the shell file and needed no change.
 
 ---
 

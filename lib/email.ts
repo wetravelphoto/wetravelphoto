@@ -52,9 +52,11 @@ export async function sendEmail(input: {
   replyTo?: string
   /** Shown as the sender's name: the photographer's site. */
   fromName: string
+  /** The sending address, when not MAIL_FROM_ADDRESS (the gallery email's galleries@lensgrid.co). */
+  fromAddress?: string
 }): Promise<EmailResult> {
   const key = process.env.RESEND_API_KEY
-  const from = process.env.MAIL_FROM_ADDRESS
+  const from = input.fromAddress ?? process.env.MAIL_FROM_ADDRESS
   if (!key || !from) return { ok: false, error: 'Email sending is not set up on the server yet.' }
 
   try {

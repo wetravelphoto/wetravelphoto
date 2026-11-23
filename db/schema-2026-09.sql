@@ -216,6 +216,85 @@
 -- No production row value changed: 74 assets, 105 usages, every new column
 -- NULL.
 --
+-- ── UPDATED 2026-11-22: client gallery v2 — three cover columns on albums ───
+--
+-- One migration, independently reviewed by Work and applied to production
+-- (the operator's read-only postflight; db/schema-verified.md,
+-- "Client gallery v2"). Reconciled here 2026-11-22:
+--
+--   · db/migrations/2026-11-22_album_cover_v2.sql — Supabase
+--     **20261122233150** (`album_cover_v2`), sha256
+--     **645e22aab80c75f69e333032c184220d9c872b0b749f7c409cff11c43ca59c62**.
+--     albums gains cover_background text, cover_zoom numeric and
+--     cover_secondary_photo_id uuid — NULLABLE, NO DEFAULT, no column ACL,
+--     and the LAST three columns (after access_revision) because the
+--     migration added them with ALTER TABLE; the CHECKs
+--     albums_cover_zoom_range and albums_cover_background_hex; the UNIQUE
+--     photos_id_album_tenant (id, album_id, tenant_id); the key
+--     albums_cover_secondary_photo_fk (cover_secondary_photo_id, id,
+--     tenant_id) → photos (id, album_id, tenant_id) ON DELETE SET NULL
+--     (cover_secondary_photo_id); and the partial index
+--     albums_cover_secondary_photo. No grant, policy, function or trigger
+--     changed. Its "CANDIDATE — NOT DEPLOYED" header is historical; the file
+--     is frozen at its deployed bytes.
+--
+-- Production is therefore now **37 tables, 556 columns** (553 + 3),
+-- **32 functions**, RLS on all 37, **56 policies**, **162 constraints**
+-- (158 + 4) and **104 indexes** (102 + 2: the UNIQUE's own index and the
+-- partial one) — the verified P6 baseline plus this migration's additions.
+-- Postflight: every new column NULL; 9 albums, 87 photos.
+--
+-- ── UPDATED 2026-11-22: client gallery v2 — layout_style admits 'square' ────
+--
+-- A second migration, independently reviewed and applied to production
+-- after the cover migration above (the operator's read-only postflight;
+-- db/schema-verified.md, "Client gallery v2, layout_style"). Reconciled here
+-- 2026-11-22:
+--
+--   · db/migrations/2026-11-22_album_layout_square.sql — Supabase
+--     **20261122233837** (`album_layout_square`), sha256
+--     **487555e35d61227cbb46995a1f3bbddbb290c33156d45f633785e849da489a49**.
+--     albums_layout_style_check is replaced under the same name, now
+--     admitting masonry, grid, single_column and square, in that order;
+--     the column (text NOT NULL DEFAULT 'masonry'), every existing row,
+--     grants, policies, triggers and indexes unchanged. Its "CANDIDATE —
+--     NOT DEPLOYED" header is historical; the file is frozen at its
+--     deployed bytes.
+--
+-- A replaced CHECK changes no count. Production totals, independently
+-- counted after both migrations: **37 tables, 556 columns, 32 functions,
+-- 56 policies, 162 constraints, 104 indexes**.
+--
+-- ── UPDATED 2026-11-22: client gallery v2 — the gallery email send limit ────
+--
+-- Two migrations, each reviewed by Work and applied once to production, with
+-- a read-only postflight (db/schema-verified.md, "Client gallery v2, the
+-- gallery email send limit"). Reconciled here 2026-11-22:
+--
+--   · db/migrations/2026-11-22_gallery_email_send_limits.sql — Supabase
+--     **20261123001300** (`gallery_email_send_limits`), sha256
+--     **6460b642d7ade6e3b0d5451381509579705b07da08b2e7a032f783b06c9b26a0**.
+--     The private table gallery_email_send_attempts (RLS on, NO policy, no
+--     privilege for PUBLIC, anon, authenticated or service_role; its pkey,
+--     tenant key ON DELETE CASCADE, 32-byte hash CHECK and one index) and
+--     reserve_gallery_email_send(uuid, uuid, uuid) → text — SECURITY
+--     DEFINER, VOLATILE, search_path '', lock_timeout 5s, owner postgres,
+--     EXECUTE to authenticated only.
+--   · db/migrations/2026-11-22_gallery_email_recipient_binding.sql —
+--     Supabase **20261123002952** (`gallery_email_recipient_binding`), sha256
+--     **fbea8b9fbbe73a4548e8850c61c5154585336a9d188e58db05f57014d0b9258c**.
+--     The function re-created with ONE expression changed: success returns
+--     'reserved:' || encode(<the recipient hash it charged>, 'hex'), not
+--     'reserved'. Everything else — attributes, owner, ACL, the table — as
+--     the first left it. The function at the end of this file is that
+--     CORRECTED one.
+--
+-- Both files are frozen at their deployed bytes; their "CANDIDATE — NOT
+-- DEPLOYED" headers are historical. Postflight: the table empty.
+-- Totals, DERIVED from 162 / 104 plus these additions (not independently
+-- counted): **38 tables, 560 columns, 33 functions, 56 policies, 165
+-- constraints, 106 indexes**, RLS on all 38.
+--
 -- ── How faithful this is ────────────────────────────────────────────────────
 --
 -- Columns, types, nullability, defaults, foreign keys with their delete
@@ -475,7 +554,11 @@ create table albums (
   cover_fit              text not null default 'cover'::text,
   display_order          integer not null default 0,
   allow_downloads        boolean not null default false,
-  access_revision uuid not null default gen_random_uuid()
+  access_revision uuid not null default gen_random_uuid(),
+  -- 20261122233150 (album_cover_v2): added by ALTER TABLE after F1, so last.
+  cover_background         text,
+  cover_zoom               numeric,
+  cover_secondary_photo_id uuid
 );
 
 create table blog_posts (
@@ -4370,7 +4453,10 @@ alter table albums add constraint albums_cover_fit_check           check (cover_
 alter table albums add constraint albums_cover_height_check        check (cover_height in ('full','large','medium','short'));
 alter table albums add constraint albums_cover_overlay_type_check  check (cover_overlay_type in ('none','darken','gradient','grain','darken_grain'));
 alter table albums add constraint albums_description_align_check   check (description_align in ('left','center','right'));
-alter table albums add constraint albums_layout_style_check        check (layout_style in ('masonry','grid','single_column'));
+-- albums_layout_style_check as 20261122233837 (album_layout_square) replaced
+-- it: the three original values in their order, plus 'square'. CHECKs are
+-- evaluated in name order, so where it is declared does not matter.
+alter table albums add constraint albums_layout_style_check        check (layout_style in ('masonry','grid','single_column','square'));
 alter table albums add constraint albums_privacy_type_check        check (privacy_type in ('public','unlisted','password','client_only'));
 alter table albums add constraint albums_sort_order_check          check (sort_order in ('manual','date_asc','date_desc'));
 
@@ -4544,6 +4630,26 @@ alter table public.site_images add constraint site_images_asset_fk
   foreign key (asset_id, tenant_id) references public.photo_assets (id, tenant_id);
 create index photos_asset_tenant on public.photos (asset_id, tenant_id) where asset_id is not null;
 create index site_images_asset_tenant on public.site_images (asset_id, tenant_id) where asset_id is not null;
+
+-- Client gallery v2's cover objects (Supabase 20261122233150, album_cover_v2),
+-- copied from db/migrations/2026-11-22_album_cover_v2.sql. Created HERE, after
+-- every earlier key, because that is the order production created them in
+-- (foreign-key triggers fire in creation order; see the cover-key note above).
+-- photos_id_album_tenant is only a target for the three-column key: photos.id
+-- is already the primary key, so it refuses nothing. The key holds the second
+-- cover photograph to THIS album and THIS site; deleting the photograph nulls
+-- cover_secondary_photo_id and nothing else; ON UPDATE is NO ACTION.
+alter table public.albums add constraint albums_cover_zoom_range
+          check (cover_zoom >= 1.0 and cover_zoom <= 2.5);
+alter table public.albums add constraint albums_cover_background_hex
+          check (cover_background ~ '^#[0-9A-Fa-f]{6}$');
+alter table public.photos add constraint photos_id_album_tenant
+          unique (id, album_id, tenant_id);
+alter table public.albums add constraint albums_cover_secondary_photo_fk
+          foreign key (cover_secondary_photo_id, id, tenant_id)
+          references public.photos (id, album_id, tenant_id)
+          on delete set null (cover_secondary_photo_id);
+create index albums_cover_secondary_photo on public.albums (cover_secondary_photo_id) where cover_secondary_photo_id is not null;
 
 -- Standalone indexes only. Primary keys and UNIQUE constraints create their own
 -- and are not repeated here.
@@ -5068,3 +5174,143 @@ revoke all on function public.albums_access_revision() from public, anon, authen
 create trigger albums_access_revision
   before insert or update on public.albums
   for each row execute function public.albums_access_revision();
+
+-- ── Client gallery v2: the durable send limit for gallery emails ────────────
+-- Two migrations, in production's order:
+--   20261123001300 gallery_email_send_limits
+--     (db/migrations/2026-11-22_gallery_email_send_limits.sql) — the table, its
+--     index, RLS with NO policy, the owner-only table ACL, and the function;
+--   20261123002952 gallery_email_recipient_binding
+--     (db/migrations/2026-11-22_gallery_email_recipient_binding.sql) — the
+--     function's success result, and nothing else, changed from 'reserved' to
+--     'reserved:' || <hex of the recipient hash it charged>.
+-- Every statement below is copied from those files: the table from the
+-- first's §1, the function (as the second LEFT it — never the first's body)
+-- and its grants from the second's §2. Here, at the end, because both were
+-- added last; nothing depends on the position.
+--
+-- The table is private: RLS on with no policy, every privilege revoked from
+-- PUBLIC, anon, authenticated and service_role — the owner alone reaches it,
+-- and the SECURITY DEFINER function, EXECUTE to authenticated only, is the
+-- whole interface (as for jobs and page_views). Rows are pruned LAZILY: each
+-- call deletes its own site's rows older than an hour, so a quiet site's last
+-- rows stay until its next call or the site's deletion (tenant cascade) — at
+-- most 30 per site. recipient_hash is sha256(<tenant id>:<normalised
+-- address>): PSEUDONYMOUS, not anonymised — unsalted and keyed by a
+-- non-secret, so whoever holds a row and guesses an address can confirm it.
+
+create table if not exists public.gallery_email_send_attempts (
+  id              uuid        not null default gen_random_uuid(),
+  tenant_id       uuid        not null,
+  recipient_hash  bytea       not null,
+  attempted_at    timestamptz not null,
+  constraint gallery_email_send_attempts_pkey primary key (id),
+  constraint gallery_email_send_attempts_tenant_fk
+    foreign key (tenant_id) references public.tenants (id) on delete cascade,
+  constraint gallery_email_send_attempts_hash_shape
+    check (octet_length(recipient_hash) = 32)
+);
+
+create index if not exists gallery_email_send_attempts_tenant_recipient
+  on public.gallery_email_send_attempts (tenant_id, recipient_hash, attempted_at);
+
+alter table public.gallery_email_send_attempts enable row level security;
+
+revoke all on table public.gallery_email_send_attempts from public, anon, authenticated, service_role;
+
+create or replace function public.reserve_gallery_email_send(
+  p_tenant uuid,
+  p_album  uuid,
+  p_client uuid
+)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = ''
+set lock_timeout = '5s'
+as $$
+declare
+  c_site_max      constant integer  := 30;
+  c_recipient_max constant integer  := 3;
+  c_window        constant interval := interval '1 hour';
+  v_email     text;
+  v_hash      bytea;
+  v_now       timestamptz;
+  v_site      integer;
+  v_recipient integer;
+begin
+  if p_tenant is null or p_album is null or p_client is null then
+    raise exception 'A send needs its site, its gallery and its client.' using errcode = '22023';
+  end if;
+
+  -- Who: an editor of THIS site, or a platform admin. NULL-safe.
+  if not exists (select 1 from public.tenants t where t.id = p_tenant)
+     or (exists (select 1 from public.profiles p
+                  where p.id = auth.uid()
+                    and p.tenant_id = p_tenant
+                    and p.role in ('owner', 'admin', 'editor'))
+         or public.is_platform_admin()) is not true then
+    raise exception 'That is not your site.' using errcode = '42501';
+  end if;
+
+  -- The count below is only exact under READ COMMITTED (see the header).
+  if pg_catalog.current_setting('transaction_isolation') is distinct from 'read committed' then
+    raise exception 'A send can only be reserved under READ COMMITTED.' using errcode = '55000';
+  end if;
+
+  -- What: the recipient, read here — this site's client, on this site's
+  -- gallery, which is shared with that client. One message for every miss.
+  select c.email into v_email
+    from public.clients c
+    join public.album_clients ac on ac.client_id = c.id
+    join public.albums al on al.id = ac.album_id
+   where c.id = p_client and c.tenant_id = p_tenant
+     and al.id = p_album and al.tenant_id = p_tenant;
+  if not found then
+    raise exception 'That client could not be found on this gallery.' using errcode = '42501';
+  end if;
+
+  v_email := pg_catalog.lower(pg_catalog.btrim(v_email));
+  if v_email is null or v_email = '' then
+    raise exception 'That client has no email address.' using errcode = '22023';
+  end if;
+  v_hash := pg_catalog.sha256(pg_catalog.convert_to(p_tenant::text || ':' || v_email, 'UTF8'));
+
+  -- One reservation per site at a time; released at the end of the caller's
+  -- transaction.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('public.gallery_email_send_attempts'),
+    pg_catalog.hashtext(p_tenant::text));
+
+  -- Read after the lock is granted, so it is never earlier than the previous
+  -- holder's row.
+  v_now := pg_catalog.clock_timestamp();
+
+  -- Retention: this site's expired rows, and nobody else's.
+  delete from public.gallery_email_send_attempts g
+   where g.tenant_id = p_tenant
+     and g.attempted_at <= v_now - c_window;
+
+  select count(*), count(*) filter (where g.recipient_hash = v_hash)
+    into v_site, v_recipient
+    from public.gallery_email_send_attempts g
+   where g.tenant_id = p_tenant
+     and g.attempted_at > v_now - c_window;
+
+  if v_site >= c_site_max then
+    return 'site_limited';
+  end if;
+  if v_recipient >= c_recipient_max then
+    return 'recipient_limited';
+  end if;
+
+  insert into public.gallery_email_send_attempts (tenant_id, recipient_hash, attempted_at)
+  values (p_tenant, v_hash, v_now);
+  return 'reserved:' || pg_catalog.encode(v_hash, 'hex');
+end $$;
+
+revoke all on function public.reserve_gallery_email_send(uuid, uuid, uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.reserve_gallery_email_send(uuid, uuid, uuid)
+  to authenticated;

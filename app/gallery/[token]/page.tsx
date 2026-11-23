@@ -1,17 +1,26 @@
-import { focalPosition } from '@/lib/images'
-import ClientGallery from '@/components/ClientGallery'
-import { getSiteSettings } from '@/lib/site'
+import Link from 'next/link'
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
-import { openSharedGallery } from '@/lib/photos/public'
+import ClientGallery from '@/components/ClientGallery'
+import CoverFirst, { type FirstCover } from '@/components/gallery/CoverFirst'
+import { getSiteSettings } from '@/lib/site'
+import { openSharedGallery, type SharedAlbum } from '@/lib/photos/public'
+import { albumCover, legacyCoverSettings } from '@/lib/covers/album-cover'
+import { layoutStyleOf } from '@/lib/gallery/layouts'
 import '@/app/gallery.css'
 import '@/app/lightbox.css'
 
+export const metadata = { robots: { index: false, follow: false } }
+
 export default async function ClientGalleryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const { token } = await params
+  const asked = (await searchParams).album
 
   // Everything on this page comes from one verified token. These tables are no
   // longer readable with the anon key at all, so there is no path to them that
@@ -20,7 +29,7 @@ export default async function ClientGalleryPage({
   // hands the browser a view of each, never the row.
   const shared = await openSharedGallery(token)
   if (!shared) notFound()
-  const { access, albums, favoriteIds } = shared
+  const { albums, favoriteIds } = shared
 
   const settings = await getSiteSettings()
 
@@ -40,86 +49,78 @@ export default async function ClientGalleryPage({
     )
   }
 
+  // Exactly one album: straight to its cover. Several: the chooser, then the
+  // chosen one's cover. The album id from the address is only ever looked up
+  // among the albums this token opened — anything else shows the chooser.
+  const chosen = albums.length === 1 ? albums[0]! : albums.find((a) => a.album.id === asked) ?? null
+  const shareUrl = `${await requestOrigin()}/gallery/${token}`
+
+  if (!chosen) return <AlbumChooser albums={albums} token={token} siteTitle={settings.site_title} />
+
+  const { album, cover, photos } = chosen
+  const title = String((album.cover_title_text as string) || album.title || '')
+  const styled = albumCover({ album, cover, photos, siteTitle: settings.site_title })
+  const first: FirstCover | null = styled
+    ? { kind: 'style', ...styled }
+    : cover
+      ? { kind: 'legacy', settings: legacyCoverSettings(album, cover) }
+      : null
+
+  const gallery = (
+    <>
+      {albums.length > 1 && (
+        <nav className="client-back">
+          <Link href={`/gallery/${token}`}>All galleries</Link>
+        </nav>
+      )}
+      <ClientGallery
+        photos={photos}
+        favoriteIds={favoriteIds}
+        albumId={album.id}
+        token={token}
+        galleryTitle={title}
+        siteTitle={settings.site_title}
+        layout={layoutStyleOf(album.layout_style)}
+        heroFirst={album.gallery_hero === true}
+        shareUrl={shareUrl}
+        // `=== true`, not `!== false`. The two download paths used to disagree
+        // about the default; one question, asked the same way everywhere —
+        // and the routes now ask it too.
+        allowDownloads={album.allow_downloads === true}
+      />
+    </>
+  )
+
+  return <main style={{ minHeight: '100vh' }}>{first ? <CoverFirst cover={first}>{gallery}</CoverFirst> : gallery}</main>
+}
+
+/** Several albums on one link: their covers and titles, nothing else. */
+function AlbumChooser({ albums, token, siteTitle }: { albums: SharedAlbum[]; token: string; siteTitle: string }) {
   return (
-    <main style={{ minHeight: '100vh' }}>
-      <header
-        style={{
-          padding: 'clamp(2.5rem, 6vw, 4rem) clamp(1.25rem, 4vw, 3rem) 2rem',
-          borderBottom: '0.5px solid var(--line)',
-        }}
-      >
-        <p className="eyebrow" style={{ margin: '0 0 0.6rem' }}>
-          {settings.site_title} — private gallery
-        </p>
-        <h1 className="display" style={{ fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', margin: 0, lineHeight: 1 }}>
-          Hello, {access.clientName}
-        </h1>
-        <p className="meta" style={{ marginTop: '0.75rem', maxWidth: '46ch' }}>
-          Star the photos you like so I know which ones stood out, and download anything you want to keep.
-        </p>
-      </header>
-
-      {albums.map(({ album, cover, photos }) => {
-
-        return (
-          <section key={album.id as string} style={{ marginBottom: '2rem' }}>
-            {cover && (
-              <div style={{ position: 'relative', height: 'min(45vh, 380px)', overflow: 'hidden', background: 'var(--ink)' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={cover.src}
-                  {...(cover.srcSet ? { srcSet: cover.srcSet } : {})}
-                  alt={cover.alt}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    objectPosition: focalPosition(
-                      album.cover_focal_x as number | null,
-                      album.cover_focal_y as number | null
-                    ),
-                  }}
-                />
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(to top, rgba(20,16,14,0.55), transparent 55%)',
-                  }}
-                />
-                <h2
-                  className="display"
-                  style={{
-                    position: 'absolute',
-                    bottom: '1.25rem',
-                    left: 'clamp(1.25rem, 4vw, 3rem)',
-                    color: '#faf9f6',
-                    fontSize: 'clamp(1.3rem, 3vw, 2rem)',
-                    margin: 0,
-                  }}
-                >
-                  {(album.cover_title_text as string) || (album.title as string)}
-                </h2>
-              </div>
-            )}
-
-            <ClientGallery
-              photos={photos}
-              favoriteIds={favoriteIds}
-              albumId={album.id as string}
-              token={token}
-              galleryTitle={(album.cover_title_text as string) || (album.title as string)}
-              siteTitle={settings.site_title}
-              // `=== true`, not `!== false`. The two download paths used to
-              // disagree about the default — the zip gate demanded true, this
-              // showed the button unless it was explicitly false — so a null
-              // or missing value opened one door and not the other. One
-              // question, asked the same way in both places.
-              allowDownloads={album.allow_downloads === true}
-            />
-          </section>
-        )
-      })}
+    <main className="client-chooser">
+      <p className="client-chooser-name">{siteTitle}</p>
+      <ul>
+        {albums.map(({ album, cover }) => (
+          <li key={album.id}>
+            <Link href={`/gallery/${token}?album=${encodeURIComponent(album.id)}`}>
+              <span className="client-chooser-cover">
+                {cover && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={cover.src} srcSet={cover.srcSet} sizes="(max-width: 700px) 100vw, 50vw" alt="" loading="lazy" />
+                )}
+              </span>
+              <span className="client-chooser-title">{String((album.cover_title_text as string) || album.title || '')}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </main>
   )
+}
+
+/** The link as the client reached it — never NEXT_PUBLIC_SITE_URL, which is unset often enough to offer localhost. */
+async function requestOrigin(): Promise<string> {
+  const host = (await headers()).get('host') ?? ''
+  const scheme = host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https'
+  return `${scheme}://${host}`
 }

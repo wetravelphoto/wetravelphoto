@@ -58,8 +58,25 @@ export default function CoverRenderer({
   const scale = settings.titleScale ?? 1
 
   const onLight = !!layout.lightText
-  const textColor = onLight ? '#14100E' : settings.color || '#FAF9F6'
-  const softColor = onLight ? 'rgba(20,16,14,0.6)' : `${settings.color || '#FAF9F6'}`
+  /*
+   * THE TITLE COLOUR APPLIES ON EVERY LAYOUT. The light layouts (text on a
+   * cream panel) used to hard-code dark ink and ignore the chosen colour, so
+   * changing it did nothing — in the live preview or on the page (fixed in
+   * client-gallery-v2). They now use the chosen colour exactly, light ones
+   * included — white on the panel is the photographer's call, and a preview
+   * that swaps it for dark ink is a control that does nothing.
+   *
+   * The one exception is the column default. `albums.cover_title_color` is
+   * NOT NULL DEFAULT '#FAF9F6' and the save action writes '#FAF9F6' when the
+   * field is blank, so "never chose a colour" is stored as that cream — and
+   * so is choosing the cream swatch. The two cannot be told apart; the
+   * default keeps the dark ink it always had on these layouts, so an album
+   * that never chose a colour renders exactly as before.
+   */
+  const chosen = settings.color || LEGACY_DEFAULT_COLOR
+  const unedited = isLegacyDefaultColor(chosen)
+  const textColor = onLight && unedited ? '#14100E' : chosen
+  const softColor = onLight && unedited ? 'rgba(20,16,14,0.6)' : chosen
 
   const titleStyle: React.CSSProperties = {
     fontFamily: font.stack,
@@ -372,6 +389,14 @@ export default function CoverRenderer({
       )}
     </div>
   )
+}
+
+/** `albums.cover_title_color`'s column default, and what the save action writes for a blank field. */
+export const LEGACY_DEFAULT_COLOR = '#FAF9F6'
+
+/** True for the stored default title colour — indistinguishable from choosing that swatch. */
+export function isLegacyDefaultColor(hex: string): boolean {
+  return hex.trim().toUpperCase() === LEGACY_DEFAULT_COLOR
 }
 
 function abs(extra: React.CSSProperties): React.CSSProperties {

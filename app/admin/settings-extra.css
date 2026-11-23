@@ -136,3 +136,119 @@
   inset: 0;
   background: var(--admin-accent);
 }
+
+/* ── Album settings, client-gallery-v2 ─────────────────────────────────── */
+
+/* The live preview: a device drawn at its true width, scaled (DevicePreview). */
+.album-preview-frame > div { border: 0.5px solid var(--admin-line); background: #faf9f6; }
+
+/* Cover styles: each thumbnail is the real cover component, scaled. */
+.cover-style-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+.cover-style-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  background: none;
+  border: 0.5px solid var(--admin-line);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.cover-style-swatch[data-active='true'] { border: 2px solid var(--admin-accent); padding: calc(0.35rem - 1.5px); }
+.cover-style-thumb { display: block; pointer-events: none; }
+.cover-style-name { font-size: 0.75rem; }
+.cover-style-note { font-size: 0.68rem; color: #9a5b00; }
+
+/* Gallery layouts, previewed with the album's own photographs. */
+.layout-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; }
+.layout-pick { display: flex; flex-direction: column; gap: 0.35rem; text-align: left; }
+.layout-pick:disabled { opacity: 0.55; cursor: not-allowed; }
+.layout-pick-thumb { display: block; pointer-events: none; min-height: 60px; }
+
+/* Diptych: the second photograph. */
+.second-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 0.35rem; }
+.second-photo-grid button {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0.5px solid var(--admin-line);
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+.second-photo-grid button img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.second-photo-grid button[data-active='true'] { border: 2px solid var(--admin-accent); }
+.second-photo-auto { font-size: 0.7rem; color: inherit; }
+
+/* Reframe (Reframe.dc.html). */
+.reframe {
+  display: flex;
+  width: min(1180px, 96vw);
+  max-height: 92vh;
+  background: #ecebe6;
+  overflow: auto;
+}
+.reframe-side {
+  width: 320px;
+  flex: none;
+  background: var(--admin-panel, #fff);
+  border-right: 0.5px solid var(--admin-line);
+  padding: 1.75rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.reframe-stage { flex: 1; min-width: 0; padding: 2rem; display: flex; flex-wrap: wrap; gap: 2rem; align-items: flex-start; }
+.reframe-photo { position: absolute !important; inset: 0; width: 100%; height: 100%; }
+@media (max-width: 860px) {
+  .reframe { flex-direction: column; }
+  .reframe-side { width: auto; border-right: 0; }
+}
+
+/* Sharing tab. */
+.privacy-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.privacy-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem;
+  border: 0.5px solid var(--admin-line);
+  cursor: pointer;
+  position: relative;
+}
+.privacy-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.privacy-choice[data-active='true'] { border: 2px solid var(--admin-accent); padding: calc(0.7rem - 1.5px) calc(0.8rem - 1.5px); }
+.privacy-choice:focus-within { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+.privacy-choice-label { font-size: 0.9rem; font-weight: 500; }
+
+.share-clients { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; }
+.share-clients li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0;
+  border-top: 0.5px solid var(--admin-line);
+  font-size: 0.85rem;
+}
+.share-client-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.share-add { border-top: 0.5px solid var(--admin-line); padding-top: 1rem; }
+
+/* The email composer and its live preview. */
+.composer {
+  display: flex;
+  flex-wrap: wrap;
+  width: min(1100px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  background: var(--admin-panel, #fff);
+}
+.composer-form { flex: 1 1 340px; padding: 1.5rem; min-width: 0; }
+.composer-preview { flex: 1.3 1 420px; padding: 1.5rem; background: #f3f0ea; min-width: 0; }
+.composer-frame { width: 100%; height: min(68vh, 720px); border: 0.5px solid var(--admin-line); background: #f3f0ea; }

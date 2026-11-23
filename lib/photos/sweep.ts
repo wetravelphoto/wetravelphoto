@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ownsKey } from '@/lib/storage-keys'
 import { isSamplePhoto } from '@/lib/images'
-import type { PhotoStorage } from '@/lib/photos/storage'
 import {
   HISTORY_SOURCES,
   SOURCES,
@@ -16,8 +15,54 @@ import {
 } from '@/lib/photos/deletion'
 
 /**
- * THE SWEEPER — the only thing on the platform that deletes a stored file
+ * THE SWEEPER — OBSERVATION ONLY. IT CANNOT DELETE A FILE.
  * ═════════════════════════════════════════════════════════════════════════
+ *
+ * ── WHY IT NO LONGER DELETES (Work, gate P6-20261121-sweeper-application-01)
+ *
+ * Work blocked the deleting version on two reproduced defects:
+ *
+ * B1  A canonical save between the evidence read and the storage delete left
+ *     only `photo_usages` — a best-effort projection — between a current
+ *     reference and the loss of its file. Re-reading closer to the delete only
+ *     narrows that window. Closing it needs every reference writer and restore
+ *     (replaceSections, patchSiteSettings, the draft store, versions, blog
+ *     saves, looks) excluded while removal runs. They share no lock, and R2
+ *     sits outside every database transaction.
+ * B2  Storage went before the marker. When the marker write failed, the next
+ *     run could take the referenced branch, clear the clock and never record
+ *     that the files were gone. Fixing that needs durable purge intent written
+ *     BEFORE the delete, which ordinary reads and writers then have to honour.
+ *
+ * Neither fix fits inside the current schema and writers. Each one is a
+ * cross-cutting protocol: a purge-intent state, a reference-write fence, and
+ * reconciliation after a partial delete. That protocol is a later cleanup
+ * phase with its own design, migration and review. Inventing it here would be
+ * claiming a guarantee the architecture does not give.
+ *
+ * So this module can no longer delete, and that is enforced by what it is
+ * able to reach rather than by a flag:
+ *
+ * - `sweep()` takes no storage. It imports nothing that can reach the bucket:
+ *   not `lib/photos/storage`, not `lib/r2`, not the S3 SDK.
+ * - It never writes `swept_at` or `deleted_at`. Every update goes through one
+ *   helper, and that helper refuses any column outside `BOOKKEEPING_COLUMNS`.
+ * - An asset that the old rule would have purged is reported as
+ *   `purge_deferred` and left exactly as it is, apart from `sweep_checked_at`.
+ *
+ * `.mk/sweep.ts` holds all of this to account with source scans, an S3
+ * tripwire, a patch allow-list and deterministic interleavings, including both
+ * of Work's probes. Each check has a mutation that must turn it red.
+ *
+ * A CLOCK RECORDED BY THIS BUILD IS AN OBSERVATION, NOT PERMISSION. Any future
+ * cleanup phase has to establish its own durable purge intent and its own
+ * fence. It must never treat `unreferenced_since` from here as proof that a
+ * file is safe to remove.
+ *
+ * Everything below describes the observation as it was designed. Where it
+ * talks about purging, read it as "what a future phase would act on".
+ *
+ * ── HISTORY ─────────────────────────────────────────────────────────────────
  *
  * P6's second half. Design and the three corrections that produced it:
  * .ai-handoff/p6-sweeper-design-claude.md, then Codex's review of 2026-11-03
@@ -45,14 +90,14 @@ import {
  *
  *     unreferenced_since   when it first saw the asset referenced by nothing
  *     sweep_checked_at     when it last examined it
- *     swept_at             its files are gone
+ *     swept_at             its files are gone (never written by this build)
  *
  * `archived_at` and `original_purged_at` stay unwritten by this phase.
- * `deleted_at` is written at the moment of a PURGE and nowhere else: by then
- * it is true, and it is what makes every deployed reader stop offering an
- * asset whose files are gone. Writing it while a clock merely runs is the
- * withdrawn design and must not come back — `.mk/sweep.ts` asserts that every
- * write containing it also contains `swept_at`.
+ * `deleted_at` belongs at the moment of a PURGE and nowhere else. Then it is
+ * true, and it makes every deployed reader stop offering an asset whose files
+ * are gone. Writing it while a clock merely runs is the withdrawn design and
+ * must not come back. In this observation-only build it is never written at
+ * all, and `.mk/sweep.ts` asserts that.
  *
  * Discovery is also strictly better than marking: it finds an asset orphaned
  * by ANY path — a section edited, a draft discarded, an upload forgotten — and
@@ -104,10 +149,24 @@ import {
  *   and the fact that a file referenced by anything at all is never a
  *   candidate. That is mitigation, not prevention, and it is why the grace
  *   period is thirty days and not thirty minutes.
- * - Partial deletion is not atomic. A key the bucket refuses leaves the asset
- *   unmarked, so a later run retries every key — deleting an object that is
- *   already gone succeeds, which is what makes that safe.
+ * - Partial deletion is not atomic. (Superseded: Work's B2 showed that
+ *   "a later run retries" was false once a reference appeared. That is one
+ *   of the two reasons this module no longer deletes.)
  */
+
+/**
+ * The only values this build can be. A literal type rather than a boolean, so
+ * no option, environment variable or argument can switch deletion back on.
+ * Turning it back on means changing this file and passing review again.
+ */
+export const PHYSICAL_DELETION = 'disabled' as const
+
+/**
+ * EVERY COLUMN THIS MODULE MAY WRITE. All of them belong to the sweeper and no
+ * deployed reader reads them. `swept_at` and `deleted_at` are absent on
+ * purpose: with nothing deleted, both would be false.
+ */
+export const BOOKKEEPING_COLUMNS: readonly string[] = ['sweep_checked_at', 'unreferenced_since']
 
 /** Service-role client. There is no signed-in user when this runs. */
 export type SweepDb = SupabaseClient
@@ -370,7 +429,7 @@ export async function usageCount(db: SweepDb, tenantId: string, assetId: string)
 // ── The run ────────────────────────────────────────────────────────────────
 
 export type SweepOutcome =
-  | 'purged'
+  | 'purge_deferred'
   | 'clock_started'
   | 'clock_cleared'
   | 'waiting_out_grace'
@@ -379,13 +438,24 @@ export type SweepOutcome =
   | 'kept_evidence_incomplete'
   | 'kept_usages_present'
   | 'kept_usage_check_failed'
-  | 'kept_storage_failed'
-  | 'kept_write_failed'
 
 export type SweepReport = {
+  /** Always 'disabled'. Here so every log line and response says it. */
+  physicalDeletion: typeof PHYSICAL_DELETION
   examined: number
-  purged: number
-  filesDeleted: number
+  /**
+   * Assets the withdrawn rule would have purged on this run. NOTHING was
+   * deleted and no purge marker was written for them. Under concurrency the
+   * observation can already be out of date by the time it is reported. That
+   * is harmless while nothing acts on it, and it is why nothing may.
+   */
+  deferred: number
+  /**
+   * The file paths those assets record. None was deleted by this run; that is
+   * all this number says. The sweeper reads no storage, so whether each file
+   * is actually present in the bucket is not observed here.
+   */
+  deferredFiles: number
   clocksStarted: number
   clocksCleared: number
   /** True when it stopped because it ran out of time rather than work. */
@@ -411,23 +481,20 @@ export type SweepOptions = {
   graceDays?: number
   maxAssets?: number
   budgetMs?: number
-  /** Decide and report, write nothing and delete nothing. The CLI's --dry-run. */
+  /** Decide and report, write nothing at all. The CLI's --dry-run. */
   dryRun?: boolean
 }
 
 /**
- * ONE PASS over the least recently examined assets.
+ * ONE PASS of observation over the least recently examined assets.
  *
- * Writes are batched by outcome where they can be — most assets on a healthy
- * site are referenced, and that case is one evidence read plus one update for
- * the whole group rather than a round trip each. A purge is per asset, because
- * each one deletes its own files.
+ * There is no storage parameter. That is the boundary, not a convenience: a
+ * caller has no way to hand this function the bucket.
+ *
+ * Without `dryRun`, the only writes are the sweeper's own bookkeeping columns,
+ * batched by outcome. With it, nothing is written.
  */
-export async function sweep(
-  db: SweepDb,
-  storage: PhotoStorage,
-  options: SweepOptions = {}
-): Promise<SweepReport> {
+export async function sweep(db: SweepDb, options: SweepOptions = {}): Promise<SweepReport> {
   const {
     now = new Date(),
     graceDays = GRACE_DAYS,
@@ -438,9 +505,10 @@ export async function sweep(
 
   const deadline = Date.now() + budgetMs
   const report: SweepReport = {
+    physicalDeletion: PHYSICAL_DELETION,
     examined: 0,
-    purged: 0,
-    filesDeleted: 0,
+    deferred: 0,
+    deferredFiles: 0,
     clocksStarted: 0,
     clocksCleared: 0,
     outOfTime: false,
@@ -451,7 +519,7 @@ export async function sweep(
 
   const record = (assetId: string, outcome: SweepOutcome, detail?: string) => {
     report.outcomes[outcome] = (report.outcomes[outcome] ?? 0) + 1
-    if (outcome !== 'purged' && outcome !== 'clock_started' && outcome !== 'clock_cleared') {
+    if (outcome !== 'clock_started' && outcome !== 'clock_cleared') {
       report.notes.push({ assetId, outcome, detail })
     }
   }
@@ -508,8 +576,7 @@ export async function sweep(
       const finding = examine(evidence, asset)
 
       if (finding.state === 'incomplete') {
-        // Conclude nothing. An existing clock is neither started nor cleared,
-        // because a purge re-checks it from fresh evidence anyway.
+        // Conclude nothing. An existing clock is neither started nor cleared.
         checkedOnly.push(asset.id)
         record(asset.id, 'kept_evidence_incomplete', finding.incomplete.map((i) => `${i.source}:${i.reason}`).join(', '))
         continue
@@ -539,7 +606,7 @@ export async function sweep(
         continue
       }
 
-      // Unreferenced. First sighting starts the clock and purges nothing.
+      // Unreferenced. First sighting starts the clock.
       if (!asset.unreferencedSince) {
         startClock.push(asset.id)
         record(asset.id, 'clock_started')
@@ -552,7 +619,8 @@ export async function sweep(
         continue
       }
 
-      // Due. The veto is re-read now rather than trusted from the batch.
+      // Due under the withdrawn rule. The usage veto is still read so the
+      // report separates "would have purged" from "the projection objects".
       const usages = await usageCount(db, tenantId, asset.id)
       if (usages === null) {
         checkedOnly.push(asset.id)
@@ -565,64 +633,29 @@ export async function sweep(
         continue
       }
 
-      if (dryRun) {
-        report.purged += 1
-        report.filesDeleted += asset.paths.length
-        record(asset.id, 'purged', 'dry run')
-        continue
-      }
-
-      const failed = asset.paths.length > 0 ? await storage.remove(asset.paths) : []
-      if (failed.length > 0) {
-        checkedOnly.push(asset.id)
-        record(asset.id, 'kept_storage_failed', `${failed.length} of ${asset.paths.length} key(s)`)
-        continue
-      }
-
       /*
-       * `deleted_at` IS WRITTEN HERE, AND ONLY HERE.
-       *
-       * The withdrawn design wrote it to START a thirty-day clock, which was
-       * wrong: the deployed reader
-       * (`2026-10-08_photo_render_record_fix.sql`) and the picker
-       * (`lib/photos/library.ts`) both treat a non-null value as
-       * "unavailable", so the photograph would have vanished thirty days
-       * early. Written at PURGE time it is simply true — the files are gone —
-       * and it makes every already-deployed reader hide the asset without a
-       * line of new code anywhere.
-       *
-       * The alternative was teaching the picker, the library and the render
-       * reader about `swept_at` one at a time, where the failure mode is
-       * missing one and offering a photographer a photograph that no longer
-       * exists. Reusing the filter that already ships is the smaller risk.
+       * DEFERRED. Before Work's review the files were deleted here and then
+       * marked with `swept_at` and `deleted_at`. Now only the count changes.
+       * The clock is LEFT RUNNING: not cleared, not marked. A later reviewed
+       * protocol therefore sees the same observation and makes its own
+       * decision. (When a purge does exist again, `deleted_at` belongs at
+       * purge time and nowhere else. The deployed reader and picker treat it
+       * as "unavailable". See the history above.)
        */
-      let error: { message: string } | null = null
-      try {
-        const answer = await db
-          .from('photo_assets')
-          .update({ swept_at: stamp, sweep_checked_at: stamp, deleted_at: stamp })
-          .eq('id', asset.id)
-          .eq('tenant_id', tenantId)
-        error = answer.error
-      } catch (e) {
-        error = { message: e instanceof Error ? e.message : 'the purge marker could not be written' }
-      }
-
-      if (error) {
-        // The files are gone and the row does not say so. A later run deletes
-        // keys that are already deleted, which succeeds, and marks again.
-        record(asset.id, 'kept_write_failed', error.message)
-        continue
-      }
-
-      report.purged += 1
-      report.filesDeleted += asset.paths.length
-      record(asset.id, 'purged')
+      checkedOnly.push(asset.id)
+      report.deferred += 1
+      report.deferredFiles += asset.paths.length
+      record(asset.id, 'purge_deferred', `${asset.paths.length} recorded file(s) not deleted; physical deletion is disabled`)
     }
 
     if (dryRun) continue
 
     /*
+     * THE ONLY WRITE PATH IN THIS MODULE. It refuses any column outside
+     * BOOKKEEPING_COLUMNS before it calls the database. That makes a
+     * `swept_at` or `deleted_at` slipped into a patch a run error, not a
+     * write.
+     *
      * Each write is wrapped in its own async function rather than pushed as a
      * builder. A PostgREST builder is a THENABLE, not a Promise — pushing one
      * into an `Array<Promise<…>>` is TS2345, which is what Codex's typecheck
@@ -631,6 +664,10 @@ export async function sweep(
      */
     const write = (patch: Record<string, unknown>, ids: string[]) =>
       (async (): Promise<{ error: { message: string } | null }> => {
+        const stray = Object.keys(patch).filter((k) => !BOOKKEEPING_COLUMNS.includes(k))
+        if (stray.length > 0) {
+          return { error: { message: `refused to write non-bookkeeping column(s): ${stray.join(', ')}` } }
+        }
         try {
           const { error } = await db
             .from('photo_assets')

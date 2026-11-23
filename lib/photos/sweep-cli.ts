@@ -1,5 +1,4 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { r2Storage } from '@/lib/photos/storage'
 import { GRACE_DAYS, SWEEP_ASSETS, SWEEP_BUDGET_MS, sweep, type SweepDb, type SweepReport } from '@/lib/photos/sweep'
 
 /**
@@ -8,10 +7,23 @@ import { GRACE_DAYS, SWEEP_ASSETS, SWEEP_BUDGET_MS, sweep, type SweepDb, type Sw
  *
  * Runs the photo sweeper by hand. An INTERNAL tool: no browser action, no
  * route, no page. The same `sweep()` the nightly drain calls, with the same
- * service-role client and the same bucket.
+ * service-role client. It is given NO bucket, because `sweep()` takes none.
  *
  *   npx tsx --env-file=.env.local scripts/sweep-photos.ts --dry-run
- *   npx tsx --env-file=.env.local scripts/sweep-photos.ts --apply
+ *   npx tsx --env-file=.env.local scripts/sweep-photos.ts --record
+ *
+ * ── OBSERVATION ONLY (Work, gate P6-20261121-sweeper-application-01) ───────
+ *
+ * Physical deletion is disabled by construction (see `lib/photos/sweep.ts`).
+ * `--apply`, which used to delete the files that were due, is REFUSED with
+ * exit 2 and says why. Retyping it is not a way back. `--record` writes the
+ * sweeper's own bookkeeping columns and nothing else, exactly as the drain
+ * does. `--dry-run` writes nothing.
+ *
+ * The thirty-day floor on `--apply` went with it. Grace now changes only
+ * which assets are REPORTED as `purge_deferred` rather than
+ * `waiting_out_grace`. Both outcomes write the same timestamp, so no window
+ * can cause anything to happen.
  *
  * ── WHY THIS EXISTS AT ALL ──────────────────────────────────────────────────
  *
@@ -32,7 +44,7 @@ import { GRACE_DAYS, SWEEP_ASSETS, SWEEP_BUDGET_MS, sweep, type SweepDb, type Sw
  * It was claimed that, once deployed, `select count(*) from photo_assets where
  * sweep_checked_at is not null` would settle the cron question for free. That
  * is only true while NOTHING ELSE writes that column — and this command writes
- * it, on every `--apply` run. So a non-null `sweep_checked_at` proves that
+ * it, on every `--record` run. So a non-null `sweep_checked_at` proves that
  * SOMETHING swept, not that the drain did.
  *
  * To use it as a cron probe, either run this CLI only with `--dry-run` (which
@@ -42,25 +54,26 @@ import { GRACE_DAYS, SWEEP_ASSETS, SWEEP_BUDGET_MS, sweep, type SweepDb, type Sw
  *
  * ── THERE IS NO DEFAULT MODE, ON PURPOSE ────────────────────────────────────
  *
- * Exactly one of `--dry-run` or `--apply`, the same discipline
- * `rebuild-photo-usages` applies to `--tenant` / `--all`. This is the one
- * command on the platform that deletes a photographer's files; typing it with
- * no arguments must not be able to delete anything.
+ * Exactly one of `--dry-run` or `--record`, the same discipline
+ * `rebuild-photo-usages` applies to `--tenant` / `--all`. Typing it with no
+ * arguments must not be able to write anything.
  *
  * Exit codes: 0 it ran and nothing went wrong; 1 it ran and something was held
- * back by a FAILURE rather than by a decision (a key the bucket refused, a
- * write that did not land, an unanswerable usage count, evidence that could
- * not be read); 2 the command was wrong or could not start, and no work was
- * done. An asset kept because something still references it is an ordinary
- * outcome and is not a failure.
+ * back by a FAILURE rather than by a decision (an unanswerable usage count,
+ * evidence that could not be read, a bookkeeping write that did not land);
+ * 2 the command was wrong or could not start, and no work was done. That
+ * includes `--apply`. An asset kept because something still references it, or
+ * one whose purge is deferred, is an ordinary outcome and not a failure.
  */
 
 export const USAGE =
-  'usage: sweep-photos --dry-run            (decide and report, change nothing)\n' +
-  '       sweep-photos --apply              (delete the files that are due)\n' +
+  'usage: sweep-photos --dry-run            (observe and report, change nothing)\n' +
+  '       sweep-photos --record             (observe and write the sweeper\'s own timestamps)\n' +
+  '\n' +
+  'Physical deletion is disabled in this build; --apply is refused.\n' +
   '\n' +
   'options:\n' +
-  `       --grace <days>                    days unreferenced before a purge (default ${GRACE_DAYS})\n` +
+  `       --grace <days>                    days unreferenced before an asset is reported purge_deferred (default ${GRACE_DAYS})\n` +
   `       --max <n>                         most assets to examine (default ${SWEEP_ASSETS})\n` +
   `       --budget <ms>                     time this run may spend (default ${SWEEP_BUDGET_MS})`
 
@@ -78,22 +91,14 @@ const positive = (raw: string) => {
   return Number.isSafeInteger(n) && n > 0 ? n : null
 }
 
+/** Why `--apply` is refused. Exported so the suite can match it exactly. */
+export const APPLY_REFUSED =
+  '--apply is refused: physical deletion is disabled in this build (Work gate ' +
+  'P6-20261121-sweeper-application-01, B1/B2). Use --dry-run or --record to observe.'
+
 /**
- * Pure. Exactly one of `--dry-run` or `--apply`; never a default.
- *
- * ── THE GRACE FLOOR ─────────────────────────────────────────────────────────
- *
- * An earlier version refused `--grace 0` and stopped thinking, which left
- * `--apply --grace 1` accepted: a one-day window defeats the thirty-day rule
- * just as completely as a zero-day one, and that is the whole protection
- * against a file being purged before anybody notices it was wanted. Codex
- * caught it.
- *
- * So the floor is the design's own `GRACE_DAYS`, and it applies **only to
- * `--apply`**. `--dry-run` may take any positive number, because it deletes
- * nothing and "what would be due if the window were seven days?" is a
- * legitimate question to ask of a report. A longer-than-default grace is
- * always allowed: more waiting is never the dangerous direction.
+ * Pure. Exactly one of `--dry-run` or `--record`; never a default; `--apply`
+ * refused wherever it appears.
  */
 export function parseArgs(argv: readonly string[]): Parsed {
   let dryRun: boolean | null = null
@@ -101,12 +106,15 @@ export function parseArgs(argv: readonly string[]): Parsed {
   let maxAssets = SWEEP_ASSETS
   let budgetMs = SWEEP_BUDGET_MS
 
+  // Checked before anything else, so no combination of flags can get past it.
+  if (argv.includes('--apply')) return { ok: false, error: APPLY_REFUSED }
+
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!
-    if (arg === '--dry-run' || arg === '--apply') {
+    if (arg === '--dry-run' || arg === '--record') {
       const asked = arg === '--dry-run'
       if (dryRun !== null) {
-        return { ok: false, error: dryRun === asked ? `${arg} was given twice.` : 'Give --dry-run OR --apply, not both.' }
+        return { ok: false, error: dryRun === asked ? `${arg} was given twice.` : 'Give --dry-run OR --record, not both.' }
       }
       dryRun = asked
       continue
@@ -125,18 +133,8 @@ export function parseArgs(argv: readonly string[]): Parsed {
     return { ok: false, error: `Unknown argument "${arg}".` }
   }
 
-  if (dryRun === false && graceDays < GRACE_DAYS) {
-    return {
-      ok: false,
-      error:
-        `--apply will not accept a grace period under ${GRACE_DAYS} days (you gave ${graceDays}). ` +
-        `An asset must be seen unreferenced twice, ${GRACE_DAYS} days apart, before its files go. ` +
-        `Use --dry-run with a shorter window to see what WOULD be due.`,
-    }
-  }
-
   if (dryRun === null) {
-    return { ok: false, error: 'Give --dry-run or --apply. There is no default, because this one deletes files.' }
+    return { ok: false, error: 'Give --dry-run or --record. There is no default.' }
   }
   return { ok: true, command: { dryRun, graceDays, maxAssets, budgetMs } }
 }
@@ -150,11 +148,11 @@ export type SweepDeps = {
 /**
  * The outcomes that mean something went WRONG, as opposed to the sweeper
  * deciding not to purge. Named here rather than inferred from a prefix so
- * adding an outcome has to be thought about.
+ * adding an outcome has to be thought about. (`kept_storage_failed` and
+ * `kept_write_failed` went with physical deletion. Nothing here can produce
+ * them now.)
  */
 const FAILURES = [
-  'kept_storage_failed',
-  'kept_write_failed',
   'kept_usage_check_failed',
   'kept_evidence_incomplete',
 ] as const
@@ -172,8 +170,9 @@ const FAILURES = [
 
 export function report(r: SweepReport, dryRun: boolean, out: (line: string) => void): number {
   out(
-    `${dryRun ? 'dry run' : 'applied'}  examined ${r.examined}  purged ${r.purged}  ` +
-      `files ${r.filesDeleted}  clocks started ${r.clocksStarted}  cleared ${r.clocksCleared}` +
+    `${dryRun ? 'dry run' : 'recorded'}  physical deletion ${r.physicalDeletion}  examined ${r.examined}  ` +
+      `purge deferred ${r.deferred} (${r.deferredFiles} recorded file path(s))  ` +
+      `clocks started ${r.clocksStarted}  cleared ${r.clocksCleared}` +
       (r.outOfTime ? '  (out of time — more remains)' : '')
   )
 
@@ -216,13 +215,13 @@ export async function runSweep(command: SweepCommand, deps: SweepDeps): Promise<
 
 /**
  * The real dependencies: the service-role client (which throws without
- * SUPABASE_SERVICE_ROLE_KEY) and the real bucket.
+ * SUPABASE_SERVICE_ROLE_KEY). No bucket: `sweep()` has no parameter for one.
  */
 export function serviceDeps(out: (line: string) => void = console.log): SweepDeps {
   const admin = createAdminClient()
   return {
     sweep: (command) =>
-      sweep(admin as unknown as SweepDb, r2Storage, {
+      sweep(admin as unknown as SweepDb, {
         now: new Date(),
         graceDays: command.graceDays,
         maxAssets: command.maxAssets,
@@ -235,7 +234,7 @@ export function serviceDeps(out: (line: string) => void = console.log): SweepDep
 
 /**
  * The whole command: parse, and only then build the dependencies and run.
- * Nothing touches a database or a bucket until the arguments are valid.
+ * Nothing touches the database until the arguments are valid.
  */
 export async function main(
   argv: readonly string[],

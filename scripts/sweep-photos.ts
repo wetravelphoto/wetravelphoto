@@ -1,13 +1,14 @@
 /**
- * Runs the photo sweeper by hand — the only command on the platform that
- * deletes a photographer's stored files.
+ * Runs the photo sweeper by hand. OBSERVATION ONLY: physical deletion is
+ * disabled by construction, and `--apply` is refused (exit 2).
  *
  *   npx tsx --env-file=.env.local scripts/sweep-photos.ts --dry-run
- *   npx tsx --env-file=.env.local scripts/sweep-photos.ts --apply
+ *   npx tsx --env-file=.env.local scripts/sweep-photos.ts --record
  *
- * There is no default mode: without --dry-run or --apply it refuses and does
- * nothing. `--dry-run` decides and reports, touching neither the bucket nor a
- * timestamp.
+ * There is no default mode: without --dry-run or --record it refuses and does
+ * nothing. `--dry-run` observes and reports and writes nothing. `--record`
+ * also writes the sweeper's own two bookkeeping timestamps. Neither can reach
+ * the bucket.
  *
  * Needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY. Internal only.
  * Everything it does is in lib/photos/sweep-cli.ts; this file only runs it.

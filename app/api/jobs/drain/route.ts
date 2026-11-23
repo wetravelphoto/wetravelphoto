@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { drain } from '@/lib/jobs/run'
-import { r2Storage } from '@/lib/photos/storage'
-import { SWEEP_BUDGET_MS, sweep } from '@/lib/photos/sweep'
+import { SWEEP_BUDGET_MS, sweep, type SweepOutcome } from '@/lib/photos/sweep'
 
 /**
  * Scheduled job: runs whatever is waiting in the queue, for every site.
@@ -28,8 +27,11 @@ import { SWEEP_BUDGET_MS, sweep } from '@/lib/photos/sweep'
  *
  * ── AND IT SWEEPS (P6) ──────────────────────────────────────────────────────
  *
- * After the queue, this runs the photo sweeper: the only thing on the platform
- * that deletes a stored file. It is NOT a job kind, deliberately — `jobs`
+ * After the queue, this runs the photo sweeper, which is OBSERVATION ONLY. It
+ * cannot delete a stored file: `sweep()` takes no storage, and this route
+ * imports none (Work gate P6-20261121-sweeper-application-01, B1/B2 deferred
+ * to a future cleanup phase). It writes only the sweeper's own two bookkeeping
+ * timestamps. It is NOT a job kind, deliberately — `jobs`
  * grants INSERT to nobody, `enqueue_jobs` is the only door and allow-lists one
  * kind, and widening that door would cost a migration and hand a browser the
  * ability to queue sweeps. See `lib/photos/sweep.ts` and
@@ -60,6 +62,17 @@ export const maxDuration = 300
  */
 const RUN_ERRORS_SHOWN = 10
 const RUN_ERROR_CHARS = 300
+
+/*
+ * The per-asset outcomes that mean the sweeper could not conclude: evidence
+ * that could not be read whole, a usage count that could not be read, or a
+ * path not provably this site's. Every other outcome is an ordinary finding.
+ */
+const FAILURE_OUTCOMES: ReadonlySet<SweepOutcome> = new Set<SweepOutcome>([
+  'kept_evidence_incomplete',
+  'kept_usage_check_failed',
+  'kept_unprovable',
+])
 
 function runErrorSummary(errors: string[]) {
   return {
@@ -110,24 +123,35 @@ export async function GET(request: NextRequest) {
   let swept = null
   let runErrors = null
   if (sweepBudget >= 5_000) {
-    swept = await sweep(db, r2Storage, { budgetMs: sweepBudget })
+    swept = await sweep(db, { budgetMs: sweepBudget })
     runErrors = runErrorSummary(swept.runErrors)
     if (runErrors.total > 0) {
       console.error('[p6] sweep run failed', runErrors)
     }
-    if (swept.notes.length > 0) {
-      console.error('[p6] sweep did not purge', swept.notes.slice(0, 20))
+    /*
+     * Only a note that records a failure to conclude is an error. The rest —
+     * `purge_deferred` above all, which is the expected outcome while physical
+     * deletion is disabled — are ordinary observations and go to the info log.
+     */
+    const failed = swept.notes.filter((n) => FAILURE_OUTCOMES.has(n.outcome))
+    const ordinary = swept.notes.filter((n) => !FAILURE_OUTCOMES.has(n.outcome))
+    if (failed.length > 0) {
+      console.error('[p6] sweep failure notes', failed.slice(0, 20))
+    }
+    if (ordinary.length > 0) {
+      console.log('[p6] sweep notes', ordinary.slice(0, 20))
     }
     /*
-     * `examined` is also the answer to whether this cron ran at all: every
-     * examined asset gets a `sweep_checked_at`, so
-     * `select count(*) from photo_assets where sweep_checked_at is not null`
-     * settles natural cron execution without a monitor or a job invocation.
+     * This line is the run's own record. It is not proof of which caller ran
+     * a sweep: `sweep_checked_at` is written by any recording sweep, the CLI's
+     * `--record` included, so that column alone cannot settle whether the
+     * natural cron executed.
      */
     console.log('[p6] sweep', {
+      physicalDeletion: swept.physicalDeletion,
       examined: swept.examined,
-      purged: swept.purged,
-      filesDeleted: swept.filesDeleted,
+      deferred: swept.deferred,
+      deferredFiles: swept.deferredFiles,
       clocksStarted: swept.clocksStarted,
       clocksCleared: swept.clocksCleared,
       outOfTime: swept.outOfTime,
@@ -143,9 +167,10 @@ export async function GET(request: NextRequest) {
     outOfTime: report.outOfTime,
     sweep: swept
       ? {
+          physicalDeletion: swept.physicalDeletion,
           examined: swept.examined,
-          purged: swept.purged,
-          filesDeleted: swept.filesDeleted,
+          deferred: swept.deferred,
+          deferredFiles: swept.deferredFiles,
           clocksStarted: swept.clocksStarted,
           clocksCleared: swept.clocksCleared,
           outOfTime: swept.outOfTime,
